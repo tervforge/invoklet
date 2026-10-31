@@ -7,6 +7,10 @@
     <RootNamespace>Invoklet.NonUI.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- A real provider for the tests of Invoklet.Connectors.EfCore, which a local file can stand in for a server. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Split out to cut CI time — this project is Invoklet.Runtime.UI.Tests' non-Avalonia half:
          every test here exercises language hosts/IntelliSense/decompiler/DAP/view-model logic that
          never touches a live Avalonia Application, so it doesn't reference Avalonia.Headless(.XUnit)

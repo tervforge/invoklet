@@ -16,7 +16,8 @@ Notable changes in each Invoklet release. Downloads are on the
   button for the database file.
 - PostgreSQL and SQL Server connections: one connection string (with `${secret:…}` for the password) and an optional schema. The script gets an
   Entity Framework Core context with a set per table and view, rows with typed columns, keys and navigation properties for foreign keys, and
-  Tools → Connections browses the tables, columns and keys. Not yet checked against live servers.
+  Tools → Connections browses the tables, columns and keys. The database is read with Entity Framework Core's own reverse engineering, and each
+  provider is a library of its own. Not yet checked against live servers.
   A PostgreSQL connection can leave the password out and use the pgpass file; a SQL Server one can use `Integrated Security=true`. The form says
   so, and a failed sign-in names the pgpass line looked for or the Kerberos ticket needed.
 - A new connection type, **OpenAPI/Swagger**, has the settings of an HTTP connection (base address, headers, timeout) and finds the API's OpenAPI or Swagger

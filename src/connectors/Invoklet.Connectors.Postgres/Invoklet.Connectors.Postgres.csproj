@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- PostgreSQL connections: the provider's package brings Npgsql and its design-time services, and nothing of any other database. -->
+  <PropertyGroup>
+    <RootNamespace>Invoklet.Connectors.Postgres</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Invoklet.NonUI.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Invoklet.Connectors.EfCore\Invoklet.Connectors.EfCore.csproj" />
+  </ItemGroup>
+</Project>

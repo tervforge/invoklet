@@ -1,8 +1,9 @@
 using Invoklet.Build.Core.Secrets;
 using Invoklet.Connectors.Grpc;
 using Invoklet.Connectors.Http;
-using Invoklet.Connectors.Sql;
+using Invoklet.Connectors.Postgres;
 using Invoklet.Connectors.Sqlite;
+using Invoklet.Connectors.SqlServer;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Languages.CSharp;

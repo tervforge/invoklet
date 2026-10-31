@@ -1,0 +1,83 @@
+using Invoklet.Connectors.Postgres;
+using Invoklet.Format.MdRun;
+using Invoklet.Languages.DotnetCommon.Sdk;
+using Invoklet.NonUI.Tests.Connectors.EfCore.Fixtures;
+using Xunit;
+
+namespace Invoklet.NonUI.Tests.Connectors.Postgres;
+
+public class PostgresConnectionDriverTests
+{
+    private static MdRunConnection Connection(string? connectionString) => new()
+    {
+        Name = "shop",
+        Driver = "postgres",
+        Params = connectionString is null ? new(StringComparer.Ordinal) : new(StringComparer.Ordinal) { ["connectionString"] = MdRunValue.Of(connectionString) },
+    };
+
+    [Fact]
+    public void Params_AreAConnectionStringAndAnOptionalSchema_AndTheFormSaysHowToSignInWithoutAPassword()
+    {
+        var sut = new PostgresConnectionDriver();
+
+        Assert.Equal(["connectionString", "schema"], sut.Params.Select(p => p.Key));
+        Assert.True(sut.Params[0].Required);
+        Assert.False(sut.Params[1].Required);
+        Assert.Contains("pgpass", sut.Params[0].Description);
+    }
+
+    [Fact]
+    public void Validate_AConnectionString_IsCheckedAsPostgresOwn()
+    {
+        var sut = new PostgresConnectionDriver();
+
+        Assert.Equal(["The connection string is missing."], sut.Validate(Connection(null)));
+        Assert.Empty(sut.Validate(Connection("Host=localhost;Database=shop;Username=app;Password=${secret:pg}")));
+        Assert.Empty(sut.Validate(Connection("Host=localhost;Database=shop;Username=app")));
+        Assert.Single(sut.Validate(Connection("Host=localhost;Bogus=1")));
+    }
+
+    [Theory]
+    [InlineData("net8.0", "8.0.11")]
+    [InlineData("net9.0", "9.0.4")]
+    [InlineData("net10.0", PostgresConnectionDriver.EntityFrameworkVersion)]
+    [InlineData("latest", PostgresConnectionDriver.EntityFrameworkVersion)]
+    [InlineData(null, PostgresConnectionDriver.EntityFrameworkVersion)]
+    public void PackagesFor_TheTargetFramework_PicksTheProviderThatRunsThere(string? framework, string expected)
+        => Assert.Equal(expected, new PostgresConnectionDriver().PackagesFor(framework)["Npgsql.EntityFrameworkCore.PostgreSQL"]);
+
+    [Fact]
+    public void Explain_NoPassword_SaysWhichPgpassLineIsLookedFor()
+    {
+        var failure = new Npgsql.PostgresException("password authentication failed", "FATAL", "FATAL", "28P01");
+
+        var message = PostgresConnectionDriver.Explain("Host=db.local;Port=5433;Database=shop;Username=app", failure);
+
+        Assert.Contains("The connection string has none, and no line of the pgpass file matches db.local:5433:shop:app", message);
+        Assert.Contains("Passfile= or PGPASSFILE", message);
+    }
+
+    [Fact]
+    public void Explain_ARefusedPassword_NamesTheUser()
+    {
+        var failure = new Npgsql.PostgresException("password authentication failed", "FATAL", "FATAL", "28P01");
+
+        Assert.StartsWith("The server refused the password of user 'app'.", PostgresConnectionDriver.Explain("Host=db;Database=shop;Username=app;Password=x", failure));
+    }
+
+    [Fact]
+    public void Explain_AnotherFailure_IsReportedAsItIs()
+        => Assert.Equal("The database can't be read: boom", PostgresConnectionDriver.Explain("Host=db", new Npgsql.NpgsqlException("boom")));
+
+    [Fact]
+    [Trait("Category", "RealBuild")]
+    public async Task TheGeneratedContext_Should_CompileAgainstTheNpgsqlProvider()
+    {
+        if (!new DotnetSdkProvider().Get().Any()) return;
+        using var fixture = new ProviderCompileFixture();
+
+        var output = await fixture.RunAsync(new PostgresConnectionDriver(), "Host=localhost;Database=shop", ProviderCompileFixture.ModelScript);
+
+        Assert.Equal(["Id", "Customer", "True"], output.TakeLast(3));
+    }
+}

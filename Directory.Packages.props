@@ -41,9 +41,18 @@
     <PackageVersion Include="Grpc.Tools" Version="2.84.0" />
     <!-- SQLite connections: Invoklet reads the schema (Invoklet.Connectors.Sqlite); scripts get EF Core. -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <!-- PostgreSQL and SQL Server connections: Invoklet reads the schema (Invoklet.Connectors.Sql); scripts get EF Core. -->
-    <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <!-- PostgreSQL and SQL Server connections: Entity Framework Core's reverse engineering reads the database (Invoklet.Connectors.EfCore); each
+         provider is a library of its own. The design package's T4 and MSBuild parts are listed so that build/EfCoreDesign.props can leave them out. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Mono.TextTemplating" Version="3.0.0" />
+    <PackageVersion Include="System.CodeDom" Version="6.0.0" />
+    <PackageVersion Include="Microsoft.Build.Framework" Version="18.0.2" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.VisualStudio.SolutionPersistence" Version="1.0.52" />
     <!-- Roslyn / Build (versions pinned to real preview/stable releases) -->
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
