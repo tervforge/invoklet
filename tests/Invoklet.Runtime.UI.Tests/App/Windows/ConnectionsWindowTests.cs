@@ -152,6 +152,35 @@ public class ConnectionsWindowTests
         finally { schemaRoot.Delete(true); }
     }
 
+    // A server's tables are named with their schema.
+    [AvaloniaFact]
+    public void ForAServer_Should_NameTheTablesWithTheirSchema()
+    {
+        var connection = new MdRunConnection { Name = "shop", Driver = "postgres" };
+        var store = new Mock<IConnectionStore>();
+        store.Setup(s => s.LoadSnapshot()).Returns(new ConnectionStoreSnapshot([connection], null));
+        store.Setup(s => s.FilePath).Returns("/data/connections.json");
+        var secrets = new Mock<ISecretStore>();
+        secrets.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
+        var drivers = new ConnectionDriverRegistry();
+        drivers.Register(new SchemaDriver(id: "postgres"));
+        var schemaRoot = Directory.CreateTempSubdirectory("Invoklet-connection-browser");
+        try
+        {
+            var schemas = new ConnectionSchemas(drivers, schemaRoot.FullName,
+                new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
+            schemas.Cache.Put(connection, new ConnectionSchema("1 table", [],
+                "[{\"Schema\":\"sales\",\"Name\":\"orders\",\"IsView\":false,\"Columns\":[{\"Name\":\"id\",\"Type\":\"int4\",\"NotNull\":true,\"PrimaryKey\":1}],"
+                + "\"ForeignKeys\":[{\"ReferencedSchema\":\"public\",\"Table\":\"customers\",\"Columns\":[\"customer_id\"],\"ReferencedColumns\":[\"id\"]}]}]"));
+            using var vm = new ConnectionsWindowViewModel(store.Object, drivers, secrets.Object, schemas);
+
+            var table = Assert.Single(vm.Resources);
+            Assert.Equal("sales.orders", table.Name);
+            Assert.Equal("int4 · not null · primary key", table.Children[0].Details);
+        }
+        finally { schemaRoot.Delete(true); }
+    }
+
     [AvaloniaFact]
     public void ARelativePath_Should_NeedAFolderFirst_ThenShowItsSchema()
     {
