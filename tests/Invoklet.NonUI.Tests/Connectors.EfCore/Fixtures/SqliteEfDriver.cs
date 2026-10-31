@@ -26,7 +26,22 @@ internal sealed class SqliteEfDriver : EfCoreConnectionDriver
 
     protected override string? CheckConnectionString(string text) => null;
 
-    protected override void UseProvider(DbContextOptionsBuilder options, string connectionString) => options.UseSqlite(connectionString);
+    // How many reads were started, and a gate a test can hold them at.
+    public int Reads => Volatile.Read(ref _reads);
+
+    public ManualResetEventSlim Started { get; } = new();
+
+    public ManualResetEventSlim? Gate { get; set; }
+
+    private int _reads;
+
+    protected override void UseProvider(DbContextOptionsBuilder options, string connectionString)
+    {
+        Interlocked.Increment(ref _reads);
+        Started.Set();
+        Gate?.Wait();
+        options.UseSqlite(connectionString);
+    }
 
     protected override void AddDesignTimeServices(IServiceCollection services)
     {

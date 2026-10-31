@@ -66,4 +66,41 @@ public sealed class EfModelReaderTests : IDisposable
 
         Assert.Equal(new ConnectionTestResult(false, "The connection string is missing."), result);
     }
+
+    // A read can't be stopped: callers that give up stop waiting, and the next one joins the read that is going, so a slow database is read once.
+    [Fact]
+    public async Task TestAsync_ReadsStillRunning_AreJoinedNotRepeated_AndACancelledCallerStopsWaiting()
+    {
+        // Arrange
+        using var gate = new ManualResetEventSlim();
+        var sut = new SqliteEfDriver { Gate = gate };
+        var resolved = Resolved(_shop.ConnectionString);
+        var first = sut.TestAsync(resolved, TestContext.Current.CancellationToken);
+        await Task.Run(() => sut.Started.Wait(TestContext.Current.CancellationToken), TestContext.Current.CancellationToken);
+        using var giveUp = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var second = sut.TestAsync(resolved, giveUp.Token);
+
+        // Act
+        await giveUp.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second);
+        var third = sut.TestAsync(resolved, TestContext.Current.CancellationToken);
+        gate.Set();
+        var results = await Task.WhenAll(first, third);
+
+        // Assert
+        Assert.All(results, r => Assert.True(r.Succeeded, r.Message));
+        Assert.Equal(1, sut.Reads);
+    }
+
+    [Fact]
+    public async Task TestAsync_AfterAReadHasFinished_ReadsAgain()
+    {
+        var sut = new SqliteEfDriver();
+        var resolved = Resolved(_shop.ConnectionString);
+
+        await sut.TestAsync(resolved, TestContext.Current.CancellationToken);
+        await sut.TestAsync(resolved, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, sut.Reads);
+    }
 }

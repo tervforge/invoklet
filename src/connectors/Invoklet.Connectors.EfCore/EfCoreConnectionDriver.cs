@@ -127,8 +127,10 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         var (connectionString, schema) = ReadingTarget(resolvedParams, scriptDirectory);
         try
         {
-            // The reverse engineering is synchronous: it runs on the thread pool and is abandoned, not cancelled, when the caller gives up.
-            return await Task.Run(() => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel), cancellationToken).ConfigureAwait(false);
+            // The reverse engineering is synchronous and can't be stopped: a caller that gives up stops waiting, and the next one joins the read
+            // that is still going instead of starting another on the same database.
+            return await JoinRead(connectionString + "\n" + schema, () => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel))
+                .WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -137,6 +139,27 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         catch (Exception ex)
         {
             throw new EfConnectionException(Explain(connectionString, ex));
+        }
+    }
+
+    private readonly object _readsLock = new();
+    private readonly Dictionary<string, Task<List<EfEntity>>> _reads = [];
+
+    private Task<List<EfEntity>> JoinRead(string key, Func<List<EfEntity>> read)
+    {
+        lock (_readsLock)
+        {
+            if (_reads.TryGetValue(key, out var running) && !running.IsCompleted) return running;
+            var task = Task.Run(read);
+            _reads[key] = task;
+            // Looks at the outcome, so that a read nobody waits for any more doesn't leave an unobserved failure behind.
+            _ = task.ContinueWith(finished =>
+            {
+                _ = finished.Exception;
+                lock (_readsLock)
+                    if (_reads.TryGetValue(key, out var current) && current == finished) _reads.Remove(key);
+            }, TaskScheduler.Default);
+            return task;
         }
     }
 
