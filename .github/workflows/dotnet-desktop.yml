@@ -251,10 +251,14 @@ jobs:
         run: dotnet build --no-restore --configuration Release -warnaserror
 
       - name: 🧪 Test
+        run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      # The drivers against the real servers started above; the step before skips these tests (no variable names a server there).
+      - name: 🧪 Test (database servers)
         env:
           INVOKLET_TEST_POSTGRES: Host=localhost;Port=5432;Database=shop;Username=postgres;Password=invoklet
           INVOKLET_TEST_SQLSERVER: Server=localhost,1433;Database=master;User Id=sa;Password=Invoklet_Passw0rd!;TrustServerCertificate=true
-        run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+        run: dotnet test tests/Invoklet.Connectors.IntegrationTests --no-build --configuration Release --verbosity normal
 
       - name: 📊 Upload coverage
         uses: actions/upload-artifact@v4

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The connection drivers against real database servers. A test runs where its INVOKLET_TEST_* variable names a server and skips itself elsewhere; the CI's
+       Linux job starts PostgreSQL and SQL Server containers for a step of its own. The unit tests (Invoklet.NonUI.Tests) never reach a server. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Invoklet.Connectors.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" VersionOverride="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\connectors\Invoklet.Connectors.Postgres\Invoklet.Connectors.Postgres.csproj" />
+    <ProjectReference Include="..\..\src\connectors\Invoklet.Connectors.SqlServer\Invoklet.Connectors.SqlServer.csproj" />
+  </ItemGroup>
+</Project>

@@ -103,4 +103,21 @@ public sealed class EfModelReaderTests : IDisposable
 
         Assert.Equal(2, sut.Reads);
     }
+
+    [Fact]
+    public async Task TestAsync_TwoInstancesOfADriver_ShareTheReadThatIsGoing()
+    {
+        using var gate = new ManualResetEventSlim();
+        var first = new SqliteEfDriver { Gate = gate };
+        var second = new SqliteEfDriver { Gate = gate };
+        var resolved = Resolved(_shop.ConnectionString);
+        var started = first.TestAsync(resolved, TestContext.Current.CancellationToken);
+        await Task.Run(() => first.Started.Wait(TestContext.Current.CancellationToken), TestContext.Current.CancellationToken);
+
+        var joined = second.TestAsync(resolved, TestContext.Current.CancellationToken);
+        gate.Set();
+        await Task.WhenAll(started, joined);
+
+        Assert.Equal((1, 0), (first.Reads, second.Reads));
+    }
 }

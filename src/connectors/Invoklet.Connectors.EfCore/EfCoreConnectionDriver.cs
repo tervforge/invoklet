@@ -129,7 +129,7 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         {
             // The reverse engineering is synchronous and can't be stopped: a caller that gives up stops waiting, and the next one joins the read
             // that is still going instead of starting another on the same database.
-            return await JoinRead(connectionString + "\n" + schema, () => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel))
+            return await JoinRead(Id + "\n" + connectionString + "\n" + schema, () => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel))
                 .WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -142,22 +142,23 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         }
     }
 
-    private readonly object _readsLock = new();
-    private readonly Dictionary<string, Task<List<EfEntity>>> _reads = [];
+    // Shared by every instance, so two instances of a driver (a registry may make them) still read one database once at a time.
+    private static readonly object ReadsLock = new();
+    private static readonly Dictionary<string, Task<List<EfEntity>>> Reads = [];
 
     private Task<List<EfEntity>> JoinRead(string key, Func<List<EfEntity>> read)
     {
-        lock (_readsLock)
+        lock (ReadsLock)
         {
-            if (_reads.TryGetValue(key, out var running) && !running.IsCompleted) return running;
+            if (Reads.TryGetValue(key, out var running) && !running.IsCompleted) return running;
             var task = Task.Run(read);
-            _reads[key] = task;
+            Reads[key] = task;
             // Looks at the outcome, so that a read nobody waits for any more doesn't leave an unobserved failure behind.
             _ = task.ContinueWith(finished =>
             {
                 _ = finished.Exception;
-                lock (_readsLock)
-                    if (_reads.TryGetValue(key, out var current) && current == finished) _reads.Remove(key);
+                lock (ReadsLock)
+                    if (Reads.TryGetValue(key, out var current) && current == finished) Reads.Remove(key);
             }, TaskScheduler.Default);
             return task;
         }

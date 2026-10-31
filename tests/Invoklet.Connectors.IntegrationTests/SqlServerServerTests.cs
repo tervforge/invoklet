@@ -5,11 +5,10 @@ using Invoklet.Format.MdRun;
 using Microsoft.Data.SqlClient;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.SqlServer;
+namespace Invoklet.Connectors.IntegrationTests;
 
 // The reverse engineering against a real SQL Server: the registration of the provider's design-time services, the version of the provider and what the
 // server reports. Runs where INVOKLET_TEST_SQLSERVER names a server (the CI's Linux job starts one); skipped otherwise.
-[Trait("Category", "Integration")]
 public sealed class SqlServerServerTests : IAsyncLifetime
 {
     private const string Variable = "INVOKLET_TEST_SQLSERVER";

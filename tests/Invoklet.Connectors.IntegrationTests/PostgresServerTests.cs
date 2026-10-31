@@ -5,11 +5,10 @@ using Invoklet.Format.MdRun;
 using Npgsql;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Postgres;
+namespace Invoklet.Connectors.IntegrationTests;
 
 // The reverse engineering against a real PostgreSQL server: the registration of the provider's design-time services, the version of the provider
 // and what the server reports. Runs where INVOKLET_TEST_POSTGRES names a server (the CI's Linux job starts one); skipped otherwise.
-[Trait("Category", "Integration")]
 public sealed class PostgresServerTests : IAsyncLifetime
 {
     private const string Variable = "INVOKLET_TEST_POSTGRES";
