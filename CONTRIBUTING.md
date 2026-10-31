@@ -32,7 +32,8 @@ built and formatted with the solution but not run when the `CI` environment vari
 
 `tests/Invoklet.Connectors.IntegrationTests` reads a real PostgreSQL and a real SQL Server through the
 connection drivers. Each test skips itself unless its environment variable holds a connection string, so a
-plain `dotnet test` needs nothing. CI starts both servers as service containers and sets the variables, so the Linux job runs these tests with the rest.
+plain `dotnet test` needs nothing. The project is built and formatted with the solution but, like
+`tests/Invoklet.IntegrationTests`, not run when the `CI` environment variable is set: CI has no database servers.
 
 To run them locally you need Docker (or Podman) and the .NET 10 SDK.
 

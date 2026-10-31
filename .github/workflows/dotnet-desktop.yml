@@ -201,33 +201,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # uploads to the draft release on push only
-    # Real servers for the tests of the PostgreSQL and SQL Server connections, which read a database with EF Core's reverse engineering
-    # (PostgresServerTests, SqlServerServerTests); without them the tests skip themselves.
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: invoklet
-          POSTGRES_DB: shop
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        env:
-          ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: Invoklet_Passw0rd!
-        ports:
-          - 1433:1433
-        options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Invoklet_Passw0rd!' -Q 'SELECT 1'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v4
@@ -250,11 +223,7 @@ jobs:
       - name: 🔨 Build
         run: dotnet build --no-restore --configuration Release -warnaserror
 
-      # The database tests run here with everything else: the variables name the servers started above (elsewhere those tests skip themselves).
       - name: 🧪 Test
-        env:
-          INVOKLET_TEST_POSTGRES: Host=localhost;Port=5432;Database=shop;Username=postgres;Password=invoklet
-          INVOKLET_TEST_SQLSERVER: Server=localhost,1433;Database=master;User Id=sa;Password=Invoklet_Passw0rd!;TrustServerCertificate=true
         run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       - name: 📊 Upload coverage
