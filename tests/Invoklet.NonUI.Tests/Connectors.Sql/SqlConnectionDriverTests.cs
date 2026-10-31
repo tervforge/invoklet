@@ -146,4 +146,46 @@ public class SqlConnectionDriverTests
     [Fact]
     public void Summary_TablesAndViews_AreCounted()
         => Assert.Equal("3 tables and 1 view: customers, orders, orders, customer_view.", SqlConnectionDriver.Summary(Shop()));
+
+    [Fact]
+    public void Explain_NoPasswordForPostgres_SaysWhichPgpassLineIsLookedFor()
+    {
+        var failure = new Npgsql.PostgresException("password authentication failed", "FATAL", "FATAL", "28P01");
+
+        var message = PostgresConnectionDriver.Explain("Host=db.local;Port=5433;Database=shop;Username=app", failure);
+
+        Assert.Contains("The connection string has none, and no line of the pgpass file matches db.local:5433:shop:app", message);
+        Assert.Contains("Passfile= or PGPASSFILE", message);
+    }
+
+    [Fact]
+    public void Explain_ARefusedPasswordForPostgres_NamesTheUser()
+    {
+        var failure = new Npgsql.PostgresException("password authentication failed", "FATAL", "FATAL", "28P01");
+
+        var message = PostgresConnectionDriver.Explain("Host=db;Database=shop;Username=app;Password=x", failure);
+
+        Assert.StartsWith("The server refused the password of user 'app'.", message);
+    }
+
+    [Fact]
+    public void Explain_AnotherFailureOfPostgres_IsReportedAsItIs()
+        => Assert.Equal("The database can't be read: boom", PostgresConnectionDriver.Explain("Host=db", new Npgsql.NpgsqlException("boom")));
+
+    [Fact]
+    public void Explain_IntegratedSecurityOffWindows_MentionsKerberos()
+    {
+        var message = SqlServerConnectionDriver.Explain("Server=db;Database=Shop;Integrated Security=true", "Cannot generate SSPI context.");
+
+        if (OperatingSystem.IsWindows()) Assert.Equal("The database can't be read: Cannot generate SSPI context.", message);
+        else Assert.Contains("kinit", message);
+        Assert.Equal("The database can't be read: x", SqlServerConnectionDriver.Explain("Server=db;User Id=a;Password=b", "x"));
+    }
+
+    [Fact]
+    public void Params_TheConnectionStringSaysHowToSignInWithoutAPassword()
+    {
+        Assert.Contains("pgpass", new PostgresConnectionDriver().Params[0].Description);
+        Assert.Contains("Integrated Security=true", new SqlServerConnectionDriver().Params[0].Description);
+    }
 }

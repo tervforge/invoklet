@@ -22,6 +22,9 @@ public sealed class SqlServerConnectionDriver : SqlConnectionDriver
 
     internal override string ConnectionStringExample => "Server=localhost;Database=Shop;User Id=app;Password=${secret:shop-password};TrustServerCertificate=true";
 
+    internal override string AuthenticationHint =>
+        "For your Windows account use Integrated Security=true (on macOS and Linux it needs a Kerberos ticket: kinit).";
+
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string>
     {
         ["Microsoft.EntityFrameworkCore.SqlServer"] = EntityFrameworkVersion,
@@ -101,12 +104,21 @@ public sealed class SqlServerConnectionDriver : SqlConnectionDriver
         }
         catch (SqlException ex)
         {
-            throw new SqlConnectionException($"The database can't be read: {ex.Message}");
+            throw new SqlConnectionException(Explain(connectionString, ex.Message));
         }
         catch (Exception ex) when (ex is System.Net.Sockets.SocketException or TimeoutException or InvalidOperationException)
         {
             throw new SqlConnectionException($"The database can't be reached: {ex.Message}");
         }
+    }
+
+    // Integrated security signs in as the Windows account; elsewhere it depends on Kerberos, which is the usual reason it fails.
+    internal static string Explain(string connectionString, string message)
+    {
+        var integrated = new SqlConnectionStringBuilder(connectionString).IntegratedSecurity;
+        return integrated && !OperatingSystem.IsWindows()
+            ? $"The database can't be read: {message} Integrated Security signs in with a Kerberos ticket on macOS and Linux: get one with kinit, or use a user name and password."
+            : $"The database can't be read: {message}";
     }
 
     private static SqlCommand Command(SqlConnection connection, string text, string? schema)

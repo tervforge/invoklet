@@ -22,6 +22,9 @@ public sealed class PostgresConnectionDriver : SqlConnectionDriver
 
     internal override string ConnectionStringExample => "Host=localhost;Database=shop;Username=app;Password=${secret:shop-password}";
 
+    internal override string AuthenticationHint =>
+        "Leave the password out to take it from your pgpass file (~/.pgpass, or the file named by Passfile= or PGPASSFILE).";
+
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string>
     {
         ["Npgsql.EntityFrameworkCore.PostgreSQL"] = EntityFrameworkVersion,
@@ -105,12 +108,24 @@ public sealed class PostgresConnectionDriver : SqlConnectionDriver
         }
         catch (NpgsqlException ex)
         {
-            throw new SqlConnectionException($"The database can't be read: {ex.Message}");
+            throw new SqlConnectionException(Explain(connectionString, ex));
         }
         catch (Exception ex) when (ex is System.Net.Sockets.SocketException or TimeoutException or InvalidOperationException)
         {
             throw new SqlConnectionException($"The database can't be reached: {ex.Message}");
         }
+    }
+
+    // A refused or missing password says where Invoklet looked for one.
+    internal static string Explain(string connectionString, NpgsqlException ex)
+    {
+        var refused = ex is PostgresException { SqlState: "28P01" or "28000" } || ex.Message.Contains("No password has been provided", StringComparison.Ordinal);
+        if (!refused) return $"The database can't be read: {ex.Message}";
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        return string.IsNullOrEmpty(builder.Password)
+            ? $"The server asked for a password. The connection string has none, and no line of the pgpass file matches {builder.Host}:{builder.Port}:{builder.Database}:{builder.Username} "
+              + "(~/.pgpass, or the file named by Passfile= or PGPASSFILE; each line is host:port:database:user:password). " + ex.Message
+            : $"The server refused the password of user '{builder.Username}'. {ex.Message}";
     }
 
     private static NpgsqlCommand Command(NpgsqlConnection connection, string text, string? schema)

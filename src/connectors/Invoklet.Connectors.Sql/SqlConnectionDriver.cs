@@ -35,6 +35,9 @@ public abstract class SqlConnectionDriver : IConnectionSchemaDriver
 
     internal abstract string ConnectionStringExample { get; }
 
+    // What the form says about signing in without a password in the text.
+    internal abstract string AuthenticationHint { get; }
+
     // Null when the text is a connection string of this server, otherwise why it is not.
     internal abstract string? CheckConnectionString(string text);
 
@@ -43,7 +46,7 @@ public abstract class SqlConnectionDriver : IConnectionSchemaDriver
     public IReadOnlyList<ConnectionParam> Params =>
     [
         new(ConnectionStringKey, "Connection string", Required: true, Example: ConnectionStringExample,
-            Description: "Write the password as ${secret:name} to keep it in the Secret Store."),
+            Description: "Write the password as ${secret:name} to keep it in the Secret Store. " + AuthenticationHint),
         new(SchemaKey, "Schema", Description: "Optional. Read only the tables of this schema; without it all schemas are read."),
     ];
 
