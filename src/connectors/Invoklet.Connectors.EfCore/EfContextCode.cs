@@ -17,8 +17,9 @@ internal static class EfContextCode
         "SavingChanges", "Set", "ToString", "Update", "UpdateRange",
     ];
 
+    /// <param name="constructorStatements">C# statements, indented for the constructor, that assign <c>ConnectionString</c>.</param>
     /// <param name="useCall">The EF Core provider's extension that takes the options builder and the connection string.</param>
-    public static string Generate(MdRunConnection connection, ConnectionCodeContext context, string kind, string connectionString, string useCall,
+    public static string Generate(MdRunConnection connection, ConnectionCodeContext context, string kind, string constructorStatements, string useCall,
         IReadOnlyList<EfEntity> entities)
     {
         const string ef = "global::Microsoft.EntityFrameworkCore";
@@ -35,7 +36,7 @@ internal static class EfContextCode
             .Append("': an Entity Framework Core context with a set per table.</summary>\n")
             .Append("public sealed class ").Append(context.ClassName).Append(" : ").Append(ef).Append(".DbContext\n{\n")
             .Append("    internal ").Append(context.ClassName).Append("()\n    {\n")
-            .Append("        ConnectionString = ").Append(context.Text(connectionString)).Append(";\n")
+            .Append(constructorStatements)
             .Append("    }\n\n")
             .Append("    /// <summary>What the context opens the database with.</summary>\n")
             .Append("    public string ConnectionString { get; }\n\n")

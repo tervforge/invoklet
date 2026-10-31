@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Scaffolding;
+using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Invoklet.Connectors.EfCore;
@@ -14,7 +15,7 @@ namespace Invoklet.Connectors.EfCore;
 internal static class EfModelReader
 {
     public static List<EfEntity> Read(string connectionString, string? schema, Action<DbContextOptionsBuilder, string> useProvider,
-        Action<IServiceCollection> addProviderServices)
+        Action<IServiceCollection> addProviderServices, Action<DatabaseModel, string>? adjust = null)
     {
         var services = new ServiceCollection();
         services.AddEntityFrameworkDesignTimeServices();
@@ -27,6 +28,7 @@ internal static class EfModelReader
 
         var database = provider.GetRequiredService<IDatabaseModelFactory>()
             .Create(connectionString, new DatabaseModelFactoryOptions(schemas: schema is null ? [] : [schema]));
+        adjust?.Invoke(database, connectionString);
         var model = provider.GetRequiredService<IScaffoldingModelFactory>().Create(database, new ModelReverseEngineerOptions());
         return From(model);
     }
@@ -45,10 +47,12 @@ internal static class EfModelReader
             {
                 var clr = property.ClrType;
                 var underlying = Nullable.GetUnderlyingType(clr) ?? clr;
+                // A column the database computes without telling how (a SQLite generated column) is an empty expression: it is never written.
+                var computed = property.GetComputedColumnSql();
                 columns.Add(new EfColumn(
                     property.GetColumnName(), property.Name, property.GetColumnType(), CsType(underlying), underlying.IsValueType, !property.IsNullable,
                     key is null ? 0 : key.Properties.ToList().IndexOf(property) + 1,
-                    property.ValueGenerated switch
+                    computed is not null ? "OnAddOrUpdate" : property.ValueGenerated switch
                     {
                         ValueGenerated.OnAdd => "OnAdd",
                         ValueGenerated.OnAddOrUpdate or ValueGenerated.OnUpdate => "OnAddOrUpdate",
@@ -56,7 +60,7 @@ internal static class EfModelReader
                     },
                     // The type is spelled out only where the provider would not choose it from the C# type.
                     property.FindAnnotation(RelationalAnnotationNames.ColumnType)?.Value as string,
-                    property.GetDefaultValueSql(), property.GetComputedColumnSql()));
+                    property.GetDefaultValueSql() is { Length: > 0 } defaultSql ? defaultSql : null, computed is { Length: > 0 } ? computed : null));
             }
             var foreignKeys = entityType.GetForeignKeys().Select(fk => new EfForeignKey(
                 fk.PrincipalEntityType.GetSchema() ?? fk.PrincipalEntityType.GetViewSchema() ?? "",

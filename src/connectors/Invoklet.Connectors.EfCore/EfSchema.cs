@@ -33,4 +33,4 @@ internal sealed record EfForeignKey(string ReferencedSchema, string Table, List<
     List<string> Properties, List<string> PrincipalProperties, string? Reference, string? Collection);
 
 /// <summary>A failure to read the database, in words for the user.</summary>
-internal sealed class EfConnectionException(string message) : Exception(message);
+public sealed class EfConnectionException(string message) : Exception(message);

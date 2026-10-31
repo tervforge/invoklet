@@ -12,6 +12,9 @@ Notable changes in each Invoklet release. Downloads are on the
 - `Util.Highlight`, `Util.HighlightIf`, `Util.WithStyle` and `Util.WithHeading` (LINQPad-compatible) dress a value in the output of
   `.Dump()`: a highlight, CSS declarations, or a heading above it. They work on their own and inside what is dumped, such as a
   column of a table.
+- SQLite connections are read with Entity Framework Core's reverse engineering too, as PostgreSQL and SQL Server are, so the sets, rows and navigation
+  properties of a database are named as EF Core names them (`order_items` is `OrderItems`, a table `log` is `Logs`): a script that uses a set by its old name
+  needs the new one.
 - SQLite connections: foreign keys become navigation properties (`order.Customer`, `customer.Orders`), and the connection form has a **Browse...**
   button for the database file.
 - PostgreSQL and SQL Server connections: one connection string (with `${secret:…}` for the password) and an optional schema. The script gets an

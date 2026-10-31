@@ -23,7 +23,8 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
 
     public ConnectionCategory Category => ConnectionCategory.Database;
 
-    public string SchemaVersion => "1";
+    /// <summary>Change when cached descriptions need to be read again after a driver update.</summary>
+    public virtual string SchemaVersion => "1";
 
     /// <summary>The provider's EF Core package in the release Invoklet is built with.</summary>
     public abstract IReadOnlyDictionary<string, string> Packages { get; }
@@ -51,17 +52,42 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     /// <summary>Adds the provider's design-time services (its <c>IDesignTimeServices</c>).</summary>
     protected abstract void AddDesignTimeServices(IServiceCollection services);
 
+    /// <summary>Changes what the database was read as before the model is made from it: a provider corrects what it knows its database reports wrongly.</summary>
+    protected virtual void AdjustDatabaseModel(Microsoft.EntityFrameworkCore.Scaffolding.Metadata.DatabaseModel database, string connectionString)
+    {
+    }
+
     /// <summary>The words for a failure to read the database; a driver adds what it knows about signing in.</summary>
     protected virtual string Explain(string connectionString, Exception exception) => $"The database can't be read: {exception.Message}";
 
-    public IReadOnlyList<ConnectionParam> Params =>
+    public virtual IReadOnlyList<ConnectionParam> Params =>
     [
         new(ConnectionStringKey, "Connection string", Required: true, Example: ConnectionStringExample,
             Description: "Write the password as ${secret:name} to keep it in the Secret Store. " + AuthenticationHint),
         new(SchemaKey, "Schema", Description: "Optional. Read only the tables of this schema; without it all schemas are read."),
     ];
 
-    public IReadOnlyList<string> Validate(MdRunConnection connection)
+    /// <summary>Whether the description depends on the script's folder, as a database file given by a relative path does.</summary>
+    public virtual bool UsesScriptDirectory(MdRunConnection connection) => false;
+
+    /// <summary>
+    /// What the database is read with: the connection string and the schema to limit it to, from the connection's parameters with the placeholders replaced.
+    /// Throws <see cref="EfConnectionException"/> with the words for the user when the parameters can't name a database.
+    /// </summary>
+    protected virtual (string ConnectionString, string? Schema) ReadingTarget(IReadOnlyDictionary<string, MdRunValue> resolvedParams, string? scriptDirectory)
+    {
+        if (!resolvedParams.TryGetValue(ConnectionStringKey, out var text) || text.Text is not { Length: > 0 } connectionString)
+            throw new EfConnectionException("The connection string is missing.");
+        if (CheckConnectionString(connectionString) is { } problem) throw new EfConnectionException(problem);
+        var schema = resolvedParams.TryGetValue(SchemaKey, out var s) && !string.IsNullOrWhiteSpace(s.Text) ? s.Text.Trim() : null;
+        return (connectionString, schema);
+    }
+
+    /// <summary>The statements of the generated context's constructor that assign <c>ConnectionString</c>.</summary>
+    protected virtual string ConstructorStatements(MdRunConnection connection, ConnectionCodeContext context) =>
+        "        ConnectionString = " + context.Text(connection.Params[ConnectionStringKey].Text!.Trim()) + ";\n";
+
+    public virtual IReadOnlyList<string> Validate(MdRunConnection connection)
     {
         var errors = new List<string>();
         if (!connection.Params.TryGetValue(ConnectionStringKey, out var text) || string.IsNullOrWhiteSpace(text.Text))
@@ -75,7 +101,7 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     {
         try
         {
-            return new ConnectionTestResult(true, Summary(await ReadAsync(resolvedParams, cancellationToken).ConfigureAwait(false)));
+            return new ConnectionTestResult(true, Summary(await ReadAsync(resolvedParams, null, cancellationToken).ConfigureAwait(false)));
         }
         catch (EfConnectionException ex)
         {
@@ -86,26 +112,23 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     public async Task<ConnectionSchema> FetchSchemaAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, ConnectionTools tools,
         CancellationToken cancellationToken)
     {
-        var entities = await ReadAsync(resolvedParams, cancellationToken).ConfigureAwait(false);
+        var entities = await ReadAsync(resolvedParams, tools.ScriptDirectory, cancellationToken).ConfigureAwait(false);
         return new ConnectionSchema(Summary(entities), [], JsonSerializer.Serialize(entities));
     }
 
     public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context)
     {
         var entities = context.Schema is { } schema ? JsonSerializer.Deserialize<List<EfEntity>>(schema.Data) ?? [] : [];
-        return new ConnectionClientCode(EfContextCode.Generate(connection, context, Kind, connection.Params[ConnectionStringKey].Text!.Trim(), UseCall, entities));
+        return new ConnectionClientCode(EfContextCode.Generate(connection, context, Kind, ConstructorStatements(connection, context), UseCall, entities));
     }
 
-    private async Task<List<EfEntity>> ReadAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, CancellationToken cancellationToken)
+    private async Task<List<EfEntity>> ReadAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, string? scriptDirectory, CancellationToken cancellationToken)
     {
-        if (!resolvedParams.TryGetValue(ConnectionStringKey, out var text) || text.Text is not { Length: > 0 } connectionString)
-            throw new EfConnectionException("The connection string is missing.");
-        if (CheckConnectionString(connectionString) is { } problem) throw new EfConnectionException(problem);
-        var schema = resolvedParams.TryGetValue(SchemaKey, out var s) && !string.IsNullOrWhiteSpace(s.Text) ? s.Text.Trim() : null;
+        var (connectionString, schema) = ReadingTarget(resolvedParams, scriptDirectory);
         try
         {
             // The reverse engineering is synchronous: it runs on the thread pool and is abandoned, not cancelled, when the caller gives up.
-            return await Task.Run(() => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices), cancellationToken).ConfigureAwait(false);
+            return await Task.Run(() => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
