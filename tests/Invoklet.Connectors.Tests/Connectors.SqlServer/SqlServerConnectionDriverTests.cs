@@ -1,10 +1,10 @@
 using Invoklet.Connectors.SqlServer;
+using Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.DotnetCommon.Sdk;
-using Invoklet.NonUI.Tests.Connectors.EfCore.Fixtures;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.SqlServer;
+namespace Invoklet.Connectors.Tests.Connectors.SqlServer;
 
 public class SqlServerConnectionDriverTests
 {

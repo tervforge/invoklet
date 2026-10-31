@@ -5,7 +5,7 @@ using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Http;
+namespace Invoklet.Connectors.Tests.Connectors.Http;
 
 // An OpenAPI connection has the parameters of an HTTP one and nothing more; its document is looked for at the usual addresses under the base address.
 public class OpenApiConnectionDriverTests

@@ -103,6 +103,8 @@ jobs:
           done
           dotnet test tests/Invoklet.NonUI.Tests --no-build --configuration Release --verbosity normal \
             --filter "Category!=RealBuild"
+          dotnet test tests/Invoklet.Connectors.Tests --no-build --configuration Release --verbosity normal \
+            --filter "Category!=RealBuild"
 
       # RealBuild is skipped above, but ScriptCompilerTests'/ScriptPackageRestoreTests' cleanup (deleting
       # a script's output directory right after its process exits) failed on Windows only — a DLL the
@@ -343,6 +345,8 @@ jobs:
             dotnet test "$proj" --no-build --configuration Release --verbosity normal
           done
           dotnet test tests/Invoklet.NonUI.Tests --no-build --configuration Release --verbosity normal \
+            --filter "Category!=RealBuild"
+          dotnet test tests/Invoklet.Connectors.Tests --no-build --configuration Release --verbosity normal \
             --filter "Category!=RealBuild"
 
       - name: 🧪 Test (full suite)

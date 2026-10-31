@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- The connection drivers against real database servers. A test runs where its INVOKLET_TEST_* variable names a server and skips itself elsewhere.
        The project is built with the solution but not run when CI is set (IsTestProject is false then): run it by hand against local servers, see
-       CONTRIBUTING.md. The unit tests (Invoklet.NonUI.Tests) never reach a server. -->
+       CONTRIBUTING.md. The unit tests (Invoklet.Connectors.Tests) never reach a server. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

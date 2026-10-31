@@ -1,10 +1,10 @@
 using Invoklet.Connectors.EfCore;
+using Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
-using Invoklet.NonUI.Tests.Connectors.EfCore.Fixtures;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.EfCore;
+namespace Invoklet.Connectors.Tests.Connectors.EfCore;
 
 // Entity Framework Core's reverse engineering reads a database file here as it reads a server: the names, types, keys and navigation properties are its own.
 public sealed class EfModelReaderTests : IDisposable

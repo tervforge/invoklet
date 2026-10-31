@@ -8,6 +8,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Invoklet.NonUI.Tests" />
+    <InternalsVisibleTo Include="Invoklet.Connectors.Tests" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Invoklet.Connectors.EfCore\Invoklet.Connectors.EfCore.csproj" />

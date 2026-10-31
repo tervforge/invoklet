@@ -1,15 +1,15 @@
 using System.Collections.Concurrent;
+using Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
-using Invoklet.NonUI.Tests.Connectors.EfCore.Fixtures;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.EfCore;
+namespace Invoklet.Connectors.Tests.Connectors.EfCore;
 
 // The context written from EF Core's own model is compiled and used: queries, navigation properties, a write, a view and a composite key.
 public sealed class EfContextScriptTests : IDisposable

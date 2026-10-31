@@ -110,6 +110,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Invoklet.Connectors.SqlServ
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Invoklet.Connectors.IntegrationTests", "tests\Invoklet.Connectors.IntegrationTests\Invoklet.Connectors.IntegrationTests.csproj", "{55B7AD81-45B4-4F84-98B0-1241F0579766}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Invoklet.Connectors.Tests", "tests\Invoklet.Connectors.Tests\Invoklet.Connectors.Tests.csproj", "{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -576,6 +578,18 @@ Global
 		{55B7AD81-45B4-4F84-98B0-1241F0579766}.Release|x64.Build.0 = Release|Any CPU
 		{55B7AD81-45B4-4F84-98B0-1241F0579766}.Release|x86.ActiveCfg = Release|Any CPU
 		{55B7AD81-45B4-4F84-98B0-1241F0579766}.Release|x86.Build.0 = Release|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Debug|x64.Build.0 = Debug|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Debug|x86.Build.0 = Debug|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Release|x64.ActiveCfg = Release|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Release|x64.Build.0 = Release|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Release|x86.ActiveCfg = Release|Any CPU
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -626,6 +640,7 @@ Global
 		{64CF625B-686C-4869-B974-6B98EC61F063} = {A328B835-4990-6931-34B9-ABE689D5831A}
 		{C1BFDEF0-591D-4D80-92C5-EB22831AFADF} = {A328B835-4990-6931-34B9-ABE689D5831A}
 		{55B7AD81-45B4-4F84-98B0-1241F0579766} = {4D09A6D7-118A-446D-B707-6A5C9F74E57F}
+		{C782D5F4-63AE-4AEC-ABAA-D2FB1F2FA3B8} = {4D09A6D7-118A-446D-B707-6A5C9F74E57F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {21803269-54D2-403D-887A-3B75DFF7625B}

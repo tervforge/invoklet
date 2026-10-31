@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
 
-namespace Invoklet.NonUI.Tests.Connectors.EfCore.Fixtures;
+namespace Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
 
 // A small shop in a SQLite file: tables with keys, a foreign key, a view, a column with a default and a composite key.
 internal sealed class ShopDatabaseFixture : IDisposable

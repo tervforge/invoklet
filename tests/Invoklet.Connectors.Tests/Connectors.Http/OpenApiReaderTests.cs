@@ -1,7 +1,7 @@
 using Invoklet.Connectors.Http;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Http;
+namespace Invoklet.Connectors.Tests.Connectors.Http;
 
 public class OpenApiReaderTests
 {
