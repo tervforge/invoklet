@@ -54,6 +54,9 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
     internal static readonly string[] DocumentPaths =
         ["openapi.json", "swagger.json", "swagger/v1/swagger.json", "v3/api-docs", "v2/api-docs", "api-docs", "docs/openapi.json"];
 
+    // A document is read whole into memory, and the 15 seconds bound only the time.
+    private const long MaxDocumentBytes = 20 * 1024 * 1024;
+
     public async Task<ConnectionSchema> FetchSchemaAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, ConnectionTools tools,
         CancellationToken cancellationToken)
     {
@@ -65,7 +68,11 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
             .Concat(DocumentPaths.Select(path => new Uri(root, path)))
             .Distinct().ToList();
 
-        using var client = new HttpClient(_handler?.Invoke() ?? new HttpClientHandler(), disposeHandler: true) { Timeout = TimeSpan.FromSeconds(15) };
+        using var client = new HttpClient(_handler?.Invoke() ?? new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: true)
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+            MaxResponseContentBufferSize = MaxDocumentBytes,
+        };
         string? lastProblem = null;
         foreach (var uri in candidates)
         {

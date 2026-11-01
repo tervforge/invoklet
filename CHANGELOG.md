@@ -15,6 +15,10 @@ Notable changes in each Invoklet release. Downloads are on the
 - Opening a script no longer reads the schema of a connection that uses `${secret:…}` or `${env:…}`, so a file from elsewhere cannot make Invoklet send
   a secret to the server it names merely by being opened. Run the script, or press Refresh in the Connections window, to read it.
 
+- The Test button and the OpenAPI schema read no longer follow a redirect, which would have sent a connection's headers, a secret among them, to
+  whatever host the server named.
+- A script's saved output (`run-output.json`) is readable by its owner only on macOS and Linux.
+
 ## [0.11.0] — 2026-10-31
 
 ### Added

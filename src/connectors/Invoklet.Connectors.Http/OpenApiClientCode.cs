@@ -44,7 +44,7 @@ internal static class OpenApiClientCode
             .Append("    private static void AddQuery(global::System.Collections.Generic.List<string> query, string name, object? value)\n    {\n")
             .Append("        if (Fmt(value) is { } text) query.Add(global::System.Uri.EscapeDataString(name) + \"=\" + global::System.Uri.EscapeDataString(text));\n    }\n\n")
             .Append("    private static void AddCookie(global::System.Collections.Generic.List<string> cookies, string name, object? value)\n    {\n")
-            .Append("        if (Fmt(value) is { } text) cookies.Add(name + \"=\" + global::System.Uri.EscapeDataString(text));\n    }\n\n")
+            .Append("        if (Fmt(value) is { } text) cookies.Add(global::System.Uri.EscapeDataString(name) + \"=\" + global::System.Uri.EscapeDataString(text));\n    }\n\n")
             .Append("    private async global::System.Threading.Tasks.Task<string> SendJsonAsync(string method, string path, global::System.Collections.Generic.List<string> query,\n")
             .Append("        global::System.Collections.Generic.Dictionary<string, string?>? headers, object? body, global::System.Threading.CancellationToken cancellationToken)\n    {\n")
             .Append("        using var request = new global::System.Net.Http.HttpRequestMessage(new global::System.Net.Http.HttpMethod(method), query.Count == 0 ? path : path + \"?\" + string.Join(\"&\", query));\n")
