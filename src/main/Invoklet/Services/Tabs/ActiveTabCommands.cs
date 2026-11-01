@@ -43,6 +43,7 @@ internal sealed class ActiveTabCommands
             [KeyCommands.Format] = () => _ = _active.Target?.FormatAsync(),
             [KeyCommands.ClearResults] = () => _active.Target?.ClearResults(),
             [KeyCommands.ExportResults] = () => _ = _active.Target?.ExportResultsAsync(),
+            [KeyCommands.ExportResultsExcel] = () => _ = _active.Target?.ExportResultsExcelAsync(),
             [KeyCommands.FormatSelection] = () => _ = _active.Target?.FormatSelectionAsync(),
             [KeyCommands.GoToLine] = () => _active.Target?.ShowGoToLine(),
             [KeyCommands.ResolveAllUsings] = () => _ = _active.Target?.ResolveAllUsingsAsync(),

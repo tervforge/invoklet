@@ -10,7 +10,6 @@ Planned work for Invoklet. Missing something? [Open an issue](https://github.com
 
 ## Scripts and results
 
-- Exporting results (HTML, Excel).
 - Database connections for querying data from scripts.
 
 ## Plugins

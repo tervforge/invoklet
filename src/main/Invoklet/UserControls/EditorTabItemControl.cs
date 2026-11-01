@@ -1010,6 +1010,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     internal Task ExportResultsAsync() => _resultsExporter?.ExportAsync() ?? Task.CompletedTask;
 
+    internal Task ExportResultsExcelAsync() => _resultsExporter?.ExportExcelAsync() ?? Task.CompletedTask;
+
     internal async Task FormatAsync()
     {
         if (_intelliSense is null) return;
@@ -1715,6 +1717,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         OutputSettingsButton.Flyout?.Hide();
         await ExportResultsAsync();
+    }
+
+    private async void ExportResultsExcelButton_Click(object? sender, RoutedEventArgs e)
+    {
+        OutputSettingsButton.Flyout?.Hide();
+        await ExportResultsExcelAsync();
     }
 
     private void OnResultsWrapCheckBoxChanged(object? sender, RoutedEventArgs e)

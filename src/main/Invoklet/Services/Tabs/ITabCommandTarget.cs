@@ -31,6 +31,9 @@ internal interface ITabCommandTarget
     /// <summary>Saves the results panel as an HTML file.</summary>
     Task ExportResultsAsync();
 
+    /// <summary>Saves the tables of the results panel as an Excel workbook.</summary>
+    Task ExportResultsExcelAsync();
+
     /// <summary>Empties the results panel.</summary>
     void ClearResults();
 

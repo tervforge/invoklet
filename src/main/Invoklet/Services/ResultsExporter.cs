@@ -22,28 +22,59 @@ internal static class ResultsHtml
 /// <summary>Saves the results panel of a tab as an HTML file: asks where, writes it, and says so when there is nothing to save or the file cannot be written.</summary>
 internal sealed class ResultsExporter(
     IWindowService windows, Func<string> css, Func<string> content, Func<string?> scriptPath, Func<string> startFolder,
-    Func<string, string, CancellationToken, Task>? write = null)
+    Func<string, string, CancellationToken, Task>? write = null, Func<string, byte[], CancellationToken, Task>? writeBytes = null)
 {
     private readonly Func<string, string, CancellationToken, Task> _write = write ?? ((path, text, ct) => File.WriteAllTextAsync(path, text, new UTF8Encoding(false), ct));
+    private readonly Func<string, byte[], CancellationToken, Task> _writeBytes = writeBytes ?? ((path, bytes, ct) => File.WriteAllBytesAsync(path, bytes, ct));
 
     public async Task ExportAsync(CancellationToken ct = default)
     {
         var html = content();
         if (html.Length == 0)
         {
-            await windows.ShowErrorAsync("Export Results", "There are no results to export.");
+            await NothingToExportAsync();
             return;
         }
 
+        if (await ChooseAsync(".html", windows.ShowSaveHtmlFileDialogAsync) is not { } target) return;
+        await WriteAsync(target.Path, () => _write(target.Path, ResultsHtml.Build(css(), html, target.Name + " — results"), ct));
+    }
+
+    /// <summary>Every table of the results as a sheet of an Excel workbook, the rest of the output as a last sheet.</summary>
+    public async Task ExportExcelAsync(CancellationToken ct = default)
+    {
+        var sheets = ResultsTables.Parse(content());
+        if (sheets.Count == 0)
+        {
+            await NothingToExportAsync();
+            return;
+        }
+
+        if (await ChooseAsync(".xlsx", windows.ShowSaveExcelFileDialogAsync) is not { } target) return;
+        await WriteAsync(target.Path, () =>
+        {
+            using var workbook = new MemoryStream();
+            XlsxWriter.Write(workbook, sheets);
+            return _writeBytes(target.Path, workbook.ToArray(), ct);
+        });
+    }
+
+    private Task NothingToExportAsync() => windows.ShowErrorAsync("Export Results", "There are no results to export.");
+
+    // The file to write and the script's name, or null when the dialog was cancelled.
+    private async Task<(string Path, string Name)?> ChooseAsync(string extension, Func<string, string, Task<string?>> dialog)
+    {
         var script = scriptPath();
         var name = script is null ? "Results" : Path.GetFileNameWithoutExtension(script);
         var folder = script is null ? startFolder() : Path.GetDirectoryName(script) ?? startFolder();
-        var path = await windows.ShowSaveHtmlFileDialogAsync(name + ".html", folder);
-        if (path is null) return;
+        return await dialog(name + extension, folder) is { } path ? (path, name) : null;
+    }
 
+    private async Task WriteAsync(string path, Func<Task> write)
+    {
         try
         {
-            await _write(path, ResultsHtml.Build(css(), html, name + " — results"), ct);
+            await write();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

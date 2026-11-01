@@ -109,4 +109,68 @@ public sealed class ResultsExporterTests
         // Assert
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "</style", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
     }
+
+    [Fact]
+    public async Task ExportExcelAsync_ResultsWithATable_AreOfferedAsAWorkbookAndWrittenAsAZip()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { Content = "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>" };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowSaveExcelFileDialogAsync("Report.xlsx", "scripts"), Times.Once);
+        var (path, bytes) = Assert.Single(fixture.WrittenBytes);
+        Assert.Equal("chosen.xlsx", path);
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes));
+        Assert.NotNull(zip.GetEntry("xl/worksheets/sheet1.xml"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("<style>a { }</style>")]
+    public async Task ExportExcelAsync_NothingToPutInASheet_SaysSoAndAsksNothing(string content)
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { Content = content };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Results", "There are no results to export."), Times.Once);
+        fixture.Windows.Verify(w => w.ShowSaveExcelFileDialogAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        Assert.Empty(fixture.WrittenBytes);
+    }
+
+    [Fact]
+    public async Task ExportExcelAsync_TheDialogCancelled_WritesNothing()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { ChosenExcelPath = null };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Empty(fixture.WrittenBytes);
+    }
+
+    [Fact]
+    public async Task ExportExcelAsync_TheFileCannotBeWritten_ReportsIt()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { WriteFails = new IOException("disk full") };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Results Failed", It.Is<string>(m => m.Contains("chosen.xlsx") && m.Contains("disk full"))), Times.Once);
+    }
 }

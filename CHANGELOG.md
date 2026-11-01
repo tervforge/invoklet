@@ -5,6 +5,11 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ## [Unreleased]
 
+### Added
+
+- Export Results as Excel (File menu, or "Save tables as Excel..." in the output settings of the results panel) saves the tables of the results as an
+  Excel workbook: every table `.Dump()` showed is a sheet with bold column names and typed cells, and the rest of the output goes to a last sheet.
+
 ### Fixed
 
 - The Secret Store's key is given only to a script that can ask for secrets. It used to stay in Invoklet's environment after the first such run, so
