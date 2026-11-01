@@ -29,7 +29,22 @@ public sealed class SetupInstallerService(ISetupDownloader downloader, ISetupPro
             ? new Uri(SetupConstants.DotnetInstallScriptUrlWindows)
             : new Uri(SetupConstants.DotnetInstallScriptUrlUnix);
 
-        var scriptPath = Path.Combine(Path.GetTempPath(), isWindows ? "Invoklet-dotnet-install.ps1" : "Invoklet-dotnet-install.sh");
+        // A folder of its own, made for this user alone: a fixed name in the shared temp folder could be planted by another user of the machine
+        // before bash or PowerShell runs what is in it.
+        var work = Directory.CreateTempSubdirectory("Invoklet-setup-");
+        try
+        {
+            return await InstallDotnetSdkAsync(progress, isWindows, scriptUrl, Path.Combine(work.FullName, isWindows ? "dotnet-install.ps1" : "dotnet-install.sh"), ct);
+        }
+        finally
+        {
+            try { work.Delete(recursive: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private async Task<string> InstallDotnetSdkAsync(IProgress<SetupProgress> progress, bool isWindows, Uri scriptUrl, string scriptPath, CancellationToken ct)
+    {
         const string downloadingScriptMessage = "Downloading the official .NET install script...";
         progress.Report(new SetupProgress(downloadingScriptMessage));
         var scriptDownloadPercent = new Progress<double>(percent =>
@@ -45,8 +60,9 @@ public sealed class SetupInstallerService(ISetupDownloader downloader, ISetupPro
         }
         else
         {
-            File.SetUnixFileMode(scriptPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(scriptPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             exe = "bash";
             args = [scriptPath, "--channel", "10.0"];
         }
@@ -78,23 +94,38 @@ public sealed class SetupInstallerService(ISetupDownloader downloader, ISetupPro
     {
         var (assetName, downloadUrl) = ResolveNetcoredbgAsset();
 
-        var archivePath = Path.Combine(Path.GetTempPath(), assetName);
+        var work = Directory.CreateTempSubdirectory("Invoklet-setup-");
+        try
+        {
+            return await InstallNetcoredbgAsync(progress, assetName, downloadUrl, Path.Combine(work.FullName, assetName), ct);
+        }
+        finally
+        {
+            try { work.Delete(recursive: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private async Task<string> InstallNetcoredbgAsync(IProgress<SetupProgress> progress, string assetName, Uri downloadUrl, string archivePath, CancellationToken ct)
+    {
         var downloadingMessage = $"Downloading {assetName}...";
         progress.Report(new SetupProgress(downloadingMessage));
         var downloadPercent = new Progress<double>(percent =>
             progress.Report(new SetupProgress(downloadingMessage, percent)));
         await downloader.DownloadFileAsync(downloadUrl, archivePath, downloadPercent, ct);
 
+        // Unpacked beside the install and moved over it only when it holds a debugger, so a failed update leaves the one that works.
         var installDir = _netcoredbgInstallDir;
-        if (Directory.Exists(installDir))
-            Directory.Delete(installDir, recursive: true);
-        Directory.CreateDirectory(installDir);
+        var stagingDir = installDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + ".new";
+        if (Directory.Exists(stagingDir))
+            Directory.Delete(stagingDir, recursive: true);
+        Directory.CreateDirectory(stagingDir);
 
         // Extraction is local and fast enough that a byte-counted percentage isn't worth tracking
         // entry-by-entry — the progress bar stays indeterminate for this step.
         progress.Report(new SetupProgress("Extracting..."));
         if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-            ZipFile.ExtractToDirectory(archivePath, installDir);
+            ZipFile.ExtractToDirectory(archivePath, stagingDir);
         else
         {
             // TarFile.ExtractToDirectoryAsync(string, ...) does NOT auto-decompress gzip — the
@@ -104,7 +135,7 @@ public sealed class SetupInstallerService(ISetupDownloader downloader, ISetupPro
             // EndOfStreamException, caught by SetupInstallerServiceTests before this ever shipped).
             await using var fileStream = File.OpenRead(archivePath);
             await using var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress);
-            await TarFile.ExtractToDirectoryAsync(gzipStream, installDir, overwriteFiles: true, ct);
+            await TarFile.ExtractToDirectoryAsync(gzipStream, stagingDir, overwriteFiles: true, ct);
         }
 
         progress.Report(new SetupProgress("Extracting done"));
@@ -115,8 +146,16 @@ public sealed class SetupInstallerService(ISetupDownloader downloader, ISetupPro
         // never find the exe. Search instead of hardcoding that one extra path segment so a future
         // archive-layout change doesn't quietly reintroduce the same "wasn't found" failure.
         var exeName = OperatingSystem.IsWindows() ? "netcoredbg.exe" : "netcoredbg";
-        var exePath = Directory.GetFiles(installDir, exeName, SearchOption.AllDirectories).FirstOrDefault()
-            ?? throw new InvalidOperationException($"netcoredbg archive extracted but no {exeName} was found under {installDir}.");
+        var stagedExe = Directory.GetFiles(stagingDir, exeName, SearchOption.AllDirectories).FirstOrDefault();
+        if (stagedExe is null)
+        {
+            Directory.Delete(stagingDir, recursive: true);
+            throw new InvalidOperationException($"netcoredbg archive extracted but no {exeName} was found in it.");
+        }
+        var exePath = Path.Combine(installDir, Path.GetRelativePath(stagingDir, stagedExe));
+        if (Directory.Exists(installDir))
+            Directory.Delete(installDir, recursive: true);
+        Directory.Move(stagingDir, installDir);
 
         if (!OperatingSystem.IsWindows())
             File.SetUnixFileMode(exePath,
