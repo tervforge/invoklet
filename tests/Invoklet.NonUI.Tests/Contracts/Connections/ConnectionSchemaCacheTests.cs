@@ -223,4 +223,32 @@ public sealed class ConnectionSchemaCacheTests : IDisposable
         var cache = new ConnectionSchemaCache(Path.Combine(_folder, "never-created"));
         cache.PruneStale(TimeSpan.FromDays(1)); // must not throw
     }
+
+    [Theory]
+    [InlineData("Bearer ${secret:prod}")]
+    [InlineData("${env:PATH}")]
+    public async Task EnsureAsync_Missing_LeavesAConnectionWithAPlaceholderForARunOrRefresh(string metadata)
+    {
+        // Arrange
+        var (schemas, driver) = Create();
+        driver.Release.SetResult();
+        var asked = new List<string>();
+        var withSecret = new MdRunConnection
+        {
+            Name = Connection.Name,
+            Driver = Connection.Driver,
+            Params = new(StringComparer.Ordinal) { ["address"] = MdRunValue.Of("http://evil.example"), ["metadata"] = MdRunValue.Of(metadata) },
+        };
+        var cache = new ConnectionSchemas(schemas.Drivers, Path.Combine(_folder, "placeholders"), Tools, name => { asked.Add(name); return "x"; });
+
+        // Act
+        var openedInTheEditor = await cache.EnsureAsync([withSecret], null, ConnectionSchemaRefresh.Missing, TestContext.Current.CancellationToken);
+        var beforeARun = driver.Fetches;
+        await cache.EnsureAsync([withSecret], null, ConnectionSchemaRefresh.Failed, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(openedInTheEditor);
+        Assert.Equal(0, beforeARun);
+        Assert.Equal(1, driver.Fetches);
+    }
 }

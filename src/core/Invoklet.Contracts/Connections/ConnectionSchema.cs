@@ -53,7 +53,8 @@ public interface IConnectionSchemaDriver : IConnectionDriver
 public enum ConnectionSchemaRefresh
 {
     /// <summary>Those never read and never failed: what the editor does in the background, so an
-    /// unreachable server isn't asked again on every edit.</summary>
+    /// unreachable server isn't asked again on every edit. A connection with a <c>${secret:…}</c> or <c>${env:…}</c>
+    /// is left to a run or a Refresh, so opening a script never sends one to the server it names.</summary>
     Missing,
 
     /// <summary>Those not cached, failed ones included: before a run.</summary>
@@ -260,6 +261,9 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
             if (drivers.Find(connection.Driver) is not IConnectionSchemaDriver driver || driver.Validate(connection).Count > 0) continue;
             if (refresh != ConnectionSchemaRefresh.All && Get(connection, scriptDirectory) is not null) continue;
             if (refresh == ConnectionSchemaRefresh.Missing && ErrorFor(connection, scriptDirectory) is not null) continue;
+            // What the editor reads on its own, as a script is opened, must not send a secret or a variable to the server the file names: that
+            // waits for a run or a Refresh, which the user asked for.
+            if (refresh == ConnectionSchemaRefresh.Missing && UsesPlaceholders(connection)) continue;
             var key = KeyOf(connection, scriptDirectory);
             var resolved = ConnectionPlaceholderResolver.Resolve(connection.Params, secret, Environment.GetEnvironmentVariable);
             if (resolved.Errors.Count > 0)
@@ -274,6 +278,13 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
                 changed = true;
         }
         return changed;
+    }
+
+    private static bool UsesPlaceholders(MdRunConnection connection)
+    {
+        var used = false;
+        ConnectionPlaceholderResolver.Resolve(connection.Params, _ => { used = true; return ""; }, _ => { used = true; return ""; });
+        return used;
     }
 
     // The read under way for this key, or a new one. It runs on the thread pool, as some drivers read

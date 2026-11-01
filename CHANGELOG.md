@@ -12,6 +12,8 @@ Notable changes in each Invoklet release. Downloads are on the
 - On macOS and Linux Invoklet's NuGet configuration, which keeps the password of a package source in clear text, is readable by its owner only.
 - The first-run setup downloads into a folder of its own instead of fixed names in the shared temp folder, and a failed netcoredbg update keeps the
   debugger that was installed.
+- Opening a script no longer reads the schema of a connection that uses `${secret:…}` or `${env:…}`, so a file from elsewhere cannot make Invoklet send
+  a secret to the server it names merely by being opened. Run the script, or press Refresh in the Connections window, to read it.
 
 ## [0.11.0] — 2026-10-31
 
