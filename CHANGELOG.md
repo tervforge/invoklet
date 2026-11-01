@@ -3,6 +3,13 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- The Secret Store's key is given only to a script that can ask for secrets. It used to stay in Invoklet's environment after the first such run, so
+  every program started later, scripts that never mention a secret among them, inherited it.
+
 ## [0.11.0] — 2026-10-31
 
 ### Added

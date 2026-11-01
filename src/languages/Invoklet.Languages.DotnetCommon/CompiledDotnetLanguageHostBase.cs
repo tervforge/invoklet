@@ -242,9 +242,9 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
         try
         {
-            await ExportSecretKeyIfNeededAsync(code);
+            var executionOptions = await ExecutionOptionsForRunAsync(code);
             await using var process = _executionProcessFactory(
-                _options.ExecutionOptions,
+                executionOptions,
                 binaryPath,
                 Environment.ProcessId.ToString(),
                 _options.CurrentQueryPath,
@@ -283,8 +283,13 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
     // The key of the Secret Store is read from the system keychain, which may ask the user to unlock it, only for a script that can ask for a
     // secret; off the calling thread, as reading it starts a process.
-    private Task ExportSecretKeyIfNeededAsync(string code)
-        => ExportSecretKey is { } export && SecretKeys.ScriptMayUseSecrets(code, _options.ConnectionSource) ? Task.Run(export) : Task.CompletedTask;
+    // The options this run starts its process with: they carry the key only for such a script, so no other program gets it.
+    private async Task<ExecutionOptions> ExecutionOptionsForRunAsync(string code)
+    {
+        if (!SecretKeys.ScriptMayUseSecrets(code, _options.ConnectionSource)) return _options.ExecutionOptions.WithSecretKey(null);
+        if (ExportSecretKey is { } export) await Task.Run(export);
+        return _options.ExecutionOptions.WithSecretKey(SecretKeys.ScriptKey);
+    }
 
     // Stop: a script that listens for it (Util.CancellationToken) is asked to finish and given
     // StopGracePeriod to exit; then — or at once, for any other script — the run is ended.
@@ -330,8 +335,8 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
         try
         {
-            await ExportSecretKeyIfNeededAsync(code);
-            await using var process = _debuggerProcessFactory(_options.ExecutionOptions);
+            var executionOptions = await ExecutionOptionsForRunAsync(code);
+            await using var process = _debuggerProcessFactory(executionOptions);
             var sessionOptions = new DapSessionOptions(
                 ProgramPath: binaryPath,
                 WorkingDirectory: _options.OutputDirectory,
