@@ -20,7 +20,7 @@ public sealed class SqlServerServerTests : IAsyncLifetime
     {
         await using var connection = new SqlConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
-        foreach (var batch in text.Split("\nGO\n", StringSplitOptions.RemoveEmptyEntries))
+        foreach (var batch in System.Text.RegularExpressions.Regex.Split(text, @"^GO\s*$", System.Text.RegularExpressions.RegexOptions.Multiline).Where(b => b.Trim().Length > 0))
         {
             await using var command = connection.CreateCommand();
             command.CommandText = batch;
