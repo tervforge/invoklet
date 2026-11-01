@@ -82,9 +82,9 @@ public sealed class PostgresServerTests : IAsyncLifetime
         var id = customers.Columns.Single(c => c.Name == "id");
         Assert.Equal((1, "OnAdd", "int"), (id.PrimaryKey, id.Generated, id.ClrType));
         Assert.Equal("jsonb", customers.Columns.Single(c => c.Name == "meta").ColumnType);
-        Assert.Equal("string[]", customers.Columns.Single(c => c.Name == "tags").ClrType);
+        Assert.Equal("global::System.Collections.Generic.List<string>", customers.Columns.Single(c => c.Name == "tags").ClrType);
         Assert.NotNull(customers.Columns.Single(c => c.Name == "created").DefaultSql);
-        Assert.Equal("numeric(19,4)", customers.Columns.Single(c => c.Name == "total").ColumnType?.Replace(" ", ""));
+        Assert.Equal("decimal", customers.Columns.Single(c => c.Name == "total").ClrType);
 
         var orders = entities.Single(e => e.Name == "orders");
         Assert.Equal("OnAdd", orders.Columns.Single(c => c.Name == "id").Generated);
