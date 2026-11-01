@@ -9,6 +9,7 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - The Secret Store's key is given only to a script that can ask for secrets. It used to stay in Invoklet's environment after the first such run, so
   every program started later, scripts that never mention a secret among them, inherited it.
+- On macOS and Linux Invoklet's NuGet configuration, which keeps the password of a package source in clear text, is readable by its owner only.
 
 ## [0.11.0] — 2026-10-31
 

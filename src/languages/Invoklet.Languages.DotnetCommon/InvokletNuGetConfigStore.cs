@@ -163,8 +163,13 @@ public sealed class InvokletNuGetConfigStore : INuGetSourceStore
         if (withCredentials.Count > 0)
             root.Add(new XElement("packageSourceCredentials", withCredentials.Select(CredentialsElement)));
 
+        // A source's password is in the file (clear text outside Windows): readable by its owner only, from the moment it exists.
         var tempPath = path + ".tmp";
-        new XDocument(new XDeclaration("1.0", "utf-8", null), root).Save(tempPath);
+        File.Delete(tempPath);
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using (var stream = new FileStream(tempPath, options))
+            new XDocument(new XDeclaration("1.0", "utf-8", null), root).Save(stream);
         File.Move(tempPath, path, overwrite: true);
     }
 
