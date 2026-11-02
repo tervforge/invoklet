@@ -2462,18 +2462,25 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     /// Undo brings back the text it replaced — and leaves the tab saved. The caller decides whether
     /// unsaved edits may go.
     /// </summary>
-    internal DiskReload ReloadFromDisk()
+    internal DiskReload ReloadFromDisk() => ReloadFromDisk(_vm.FilePath is { } path ? TryReadBytes(path) : null);
+
+    // Null when the file cannot be read. Safe off the UI thread.
+    internal static byte[]? TryReadBytes(string path)
     {
-        if (_disposed || _vm.FilePath is not { } path) return DiskReload.Unavailable;
-        byte[] bytes;
         try
         {
-            bytes = File.ReadAllBytes(path);
+            return File.ReadAllBytes(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return DiskReload.Unavailable;
+            return null;
         }
+    }
+
+    /// <summary>The same, with the bytes of the file already read (null: it could not be), for a caller that read them off the UI thread.</summary>
+    internal DiskReload ReloadFromDisk(byte[]? bytes)
+    {
+        if (_disposed || _vm.FilePath is null || bytes is null) return DiskReload.Unavailable;
 
         // This tab's editor services, grammar and snippets are its language's; a script that is now
         // in another language needs a tab of its own.

@@ -38,11 +38,88 @@ public sealed class TabLifecycleManagerTests
         sut.Rebalance();
 
         // Assert
-        fixture.Views[tabs[0]].View.Verify(v => v.TryReleaseContent(), Times.Once);
-        fixture.Views[tabs[1]].View.Verify(v => v.TryReleaseContent(), Times.Once);
-        fixture.Views[tabs[2]].View.Verify(v => v.TryReleaseContent(), Times.Never);
+        fixture.Views[tabs[0]].View.Verify(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>()), Times.Once);
+        fixture.Views[tabs[1]].View.Verify(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>()), Times.Once);
+        fixture.Views[tabs[2]].View.Verify(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>()), Times.Never);
         Assert.False(sut.IsContentLoaded(tabs[0]));
         Assert.True(sut.IsContentLoaded(tabs[2]));
+    }
+
+    // The text is written off the UI thread: while that goes on, the tab is still loaded and not one to give up a second time.
+    [Fact]
+    public async Task Rebalance_ATabIsBeingReleased_IsNotReleasedAgainAndIdleWaitsForIt()
+    {
+        // Arrange
+        var fixture = new TabLifecycleManagerFixture();
+        var sut = fixture.CreateSut();
+        var tabs = Open(fixture, sut, "a", "b");
+        var view = fixture.Views[tabs[0]];
+        view.ReleaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.PolicyGivesUp(tabs[0]);
+
+        // Act
+        sut.Rebalance();
+        sut.Rebalance();
+        var idle = sut.WhenIdleAsync();
+        var idleEarly = idle.IsCompleted;
+        var releasedEarly = view.Released;
+        view.ReleaseGate.SetResult(true);
+        await idle.WaitAsync(Limit, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(idleEarly);
+        Assert.False(releasedEarly);
+        Assert.True(view.Released);
+        view.View.Verify(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>()), Times.Once);
+    }
+
+    // Looked at, run or closed while its text was being written, a tab keeps its text.
+    [Fact]
+    public async Task Rebalance_TheTabIsNeededAgainWhileItsTextIsWritten_KeepsItsText()
+    {
+        // Arrange
+        var fixture = new TabLifecycleManagerFixture();
+        var sut = fixture.CreateSut();
+        var tabs = Open(fixture, sut, "a", "b");
+        var view = fixture.Views[tabs[0]];
+        view.ReleaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.PolicyGivesUp(tabs[0]);
+        sut.Rebalance();
+
+        // Act
+        fixture.Active = tabs[0]; // the user went back to it
+        view.ReleaseGate.SetResult(true);
+        await sut.WhenIdleAsync().WaitAsync(Limit, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(view.Released);
+        Assert.True(sut.IsContentLoaded(tabs[0]));
+    }
+
+    [Fact]
+    public async Task Rebalance_TheTabRunsOrIsClosedWhileItsTextIsWritten_KeepsItsText()
+    {
+        // Arrange
+        var fixture = new TabLifecycleManagerFixture();
+        var sut = fixture.CreateSut();
+        var tabs = Open(fixture, sut, "a", "b", "c");
+        var running = fixture.Views[tabs[0]];
+        var closed = fixture.Views[tabs[1]];
+        running.ReleaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        closed.ReleaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.PolicyGivesUp(tabs[0], tabs[1]);
+        sut.Rebalance();
+
+        // Act
+        tabs[0].RunState = RunState.Run;
+        sut.Unregister(tabs[1]);
+        running.ReleaseGate.SetResult(true);
+        closed.ReleaseGate.SetResult(true);
+        await sut.WhenIdleAsync().WaitAsync(Limit, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(running.Released);
+        Assert.False(closed.Released);
     }
 
     [Fact]
@@ -58,7 +135,7 @@ public sealed class TabLifecycleManagerTests
         sut.Rebalance();
 
         // Assert
-        fixture.Views[tabs[1]].View.Verify(v => v.TryReleaseContent(), Times.Never);
+        fixture.Views[tabs[1]].View.Verify(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>()), Times.Never);
     }
 
     [Fact]
@@ -75,7 +152,7 @@ public sealed class TabLifecycleManagerTests
         sut.Rebalance();
 
         // Assert
-        fixture.Views[tabs[0]].View.Verify(v => v.TryReleaseContent(), Times.Never);
+        fixture.Views[tabs[0]].View.Verify(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>()), Times.Never);
     }
 
     [Fact]

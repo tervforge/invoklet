@@ -9,7 +9,7 @@ public partial class EditorsTabItemControl : ITabView
 
     bool ITabView.IsContentReleased => IsContentReleased;
 
-    bool ITabView.TryReleaseContent() => TryReleaseContent();
+    Task<bool> ITabView.TryReleaseContentAsync(Func<bool> stillWanted) => TryReleaseContentAsync(stillWanted);
 
     Task<bool> ITabView.TryRestoreContentAsync() => TryRestoreContentAsync();
 

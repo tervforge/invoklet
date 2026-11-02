@@ -18,15 +18,38 @@ public partial class EditorsTabItemControl
 
     internal bool IsContentReleased => _contentReleased;
 
-    internal bool TryReleaseContent()
+    /// <summary>
+    /// What is to be kept is taken on the UI thread, written to disk off it (a large output, or a slow disk, must not freeze the window), and
+    /// the tab lets go of its text only if it is still one to give up when that is done: edited, run, saved or looked at meanwhile, it keeps
+    /// what it has. A write that failed also leaves the text where it is.
+    /// </summary>
+    internal async Task<bool> TryReleaseContentAsync(Func<bool> stillWanted)
     {
         if (_disposed || _contentReleased || HasRunningProcess || SpillStore is not { } store) return false;
         var editor = State.Editor;
-        // The output of a run waits in the folder of that run; only an output without one goes to the spill.
-        var spilledOutput = SaveRunOutput() ? null : CaptureOutput();
-        if (!store.TryWrite(_vm.RecoveryId, new ReleasedContent(editor.Text, CaptureViewState(), spilledOutput)))
-            return false;
+        var document = editor.Document;
+        var version = document.Version;
+        var text = editor.Text;
+        var viewState = CaptureViewState();
+        var output = CaptureOutput();
+        var folder = State.OutputDirectory;
+        var id = _vm.RecoveryId;
 
+        var written = await Task.Run(() =>
+        {
+            // The output of a run waits in the folder of that run; only an output without one goes to the spill.
+            var keptInFolder = folder is not null && SaveRunOutputOf(folder, output);
+            return store.TryWrite(id, new ReleasedContent(text, viewState, keptInFolder ? null : output));
+        });
+        if (!written || _disposed || _contentReleased || HasRunningProcess || !stillWanted()
+            || !ReferenceEquals(editor.Document, document) || document.Version.CompareAge(version) != 0)
+            return false;
+        ReleaseNow(editor);
+        return true;
+    }
+
+    private void ReleaseNow(Invoklet.Avalonia.CodeTextEditor.CodeTextEditor editor)
+    {
         var dirty = _vm.IsDirty;
         // Set first: the IntelliSense service must not be told the script became empty.
         _contentReleased = true;
@@ -36,7 +59,6 @@ public partial class EditorsTabItemControl
         State.Output.Clear();
         State.DumpContainerBlocks.Clear();
         _vm.IsDirty = dirty;
-        return true;
     }
 
     /// <summary>
@@ -61,10 +83,22 @@ public partial class EditorsTabItemControl
         {
             var store = SpillStore;
             var id = _vm.RecoveryId;
-            var content = store is null ? null : await Task.Run(() => store.TryRead(id));
+            var path = _vm.FilePath;
+            var outputFolder = State.OutputDirectory;
+            // What a saved tab needs besides its text is read with it, off the UI thread: its file (a slow or network disk) and the output
+            // of its last run (large). A tab with unsaved edits needs neither its file nor, if it was spilled, the output's folder.
+            var looksSaved = !_vm.IsDirty && path is not null;
+            var read = store is null ? null : await Task.Run(() =>
+            {
+                var spilled = store.TryRead(id);
+                if (spilled is null) return null;
+                var output = spilled.Output ?? (outputFolder is not null ? RunOutputFile.TryLoad(outputFolder) : null);
+                return new RestoredContent(spilled, output, looksSaved ? TryReadBytes(path!) : null);
+            });
             if (_disposed) return false;
             if (!_contentReleased) return true;
-            if (content is null) return false;
+            if (read is null) return false;
+            var content = read.Spilled;
 
             var dirty = _vm.IsDirty;
             // A script that was saved is read again, so a change made to its file meanwhile is not hidden.
@@ -74,11 +108,12 @@ public partial class EditorsTabItemControl
             editor.IsReadOnly = false;
             editor.Document = new TextDocument(content.Text);
             if (saved)
-                KeepTextIfFileIsGone(ReloadFromDisk());
+                // The bytes read meanwhile are of this file, if the tab still has the path it had; else it is read now.
+                KeepTextIfFileIsGone(looksSaved && _vm.FilePath == path ? ReloadFromDisk(read.FileBytes) : ReloadFromDisk());
             else
                 _vm.IsDirty = dirty;
 
-            RestoreOutput(content.Output ?? (State.OutputDirectory is { } folder ? RunOutputFile.TryLoad(folder) : null));
+            RestoreOutput(read.Output);
             RestoreViewState(content.Editor);
             return true;
         }
@@ -88,6 +123,9 @@ public partial class EditorsTabItemControl
             if (_contentReleased) editor.Opacity = 1; // not restored: the empty read-only editor, as the error says
         }
     }
+
+    // What a restore reads off the UI thread: the spilled content, the output of the last run, and the bytes of the script's file.
+    private sealed record RestoredContent(ReleasedContent Spilled, TabOutputState? Output, byte[]? FileBytes);
 
     // The file of a saved script was read again and could not give a script of this tab's language: what
     // the tab showed stays on screen, and it no longer matches a file, so it is unsaved.
@@ -103,20 +141,7 @@ public partial class EditorsTabItemControl
 
     // The output of the last run, beside the library it ran: written when a run ends, and when the content
     // of the tab is released. False when the tab has no such folder yet.
-    private bool SaveRunOutput()
-    {
-        if (State.OutputDirectory is not { } folder) return false;
-        try
-        {
-            RunOutputFile.Save(folder, CaptureOutput());
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _runLogger.LogWarning("Could not keep the output of a run ({ErrorType})", ex.GetType().Name);
-            return false;
-        }
-    }
+    private bool SaveRunOutput() => State.OutputDirectory is { } folder && SaveRunOutputOf(folder, CaptureOutput());
 
     // The tab moved to another file (Save As, a rename): its runs are built, and their output kept, in the
     // folder of that file from now on. The folder of the old file keeps the output of the runs it saw, so
@@ -132,15 +157,18 @@ public partial class EditorsTabItemControl
             SaveRunOutputOf(folder, waiting); // the output is still waiting in the old folder: it moves along
     }
 
-    private void SaveRunOutputOf(string folder, TabOutputState output)
+    // True when the output is in the folder now. Safe off the UI thread: it touches the file and the logger only.
+    private bool SaveRunOutputOf(string folder, TabOutputState output)
     {
         try
         {
             RunOutputFile.Save(folder, output);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _runLogger.LogWarning("Could not keep the output of a run ({ErrorType})", ex.GetType().Name);
+            return false;
         }
     }
 

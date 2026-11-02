@@ -31,11 +31,19 @@ public class EditorTabsControlResidencyTests
         public string? SessionFolder => folder;
     }
 
-    // Reads can be made to fail, as a deleted or damaged file would.
+    // Reads can be made to fail, as a deleted or damaged file would, and writes to fail or to wait (a slow disk).
     private sealed class FlakySpill(ITabSpillStore inner) : ITabSpillStore
     {
         public bool FailReads { get; set; }
-        public bool TryWrite(Guid tab, ReleasedContent content) => inner.TryWrite(tab, content);
+        public bool FailWrites { get; set; }
+        public ManualResetEventSlim? WritesWait { get; set; }
+
+        public bool TryWrite(Guid tab, ReleasedContent content)
+        {
+            WritesWait?.Wait(TimeSpan.FromSeconds(30));
+            return !FailWrites && inner.TryWrite(tab, content);
+        }
+
         public ReleasedContent? TryRead(Guid tab) => FailReads ? null : inner.TryRead(tab);
         public void Delete(Guid tab) => inner.Delete(tab);
         public void DeleteAll() => inner.DeleteAll();
@@ -499,6 +507,100 @@ public class EditorTabsControlResidencyTests
             Assert.Same(first, second);
             Assert.True(await first);
             Assert.Equal("var unsaved = 1;", control.State.Editor.Text);
+        }
+        finally { tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
+    // The text is written off the UI thread: while the disk is slow the tab is still there, and is let go of only if nothing needed it meanwhile.
+    private static async Task<(EditorTabItemViewModel First, EditorsTabItemControl Control)> OpenThreeThenAFourthAsync(
+        EditorTabsControl tabs, MainWindowViewModel vm, FlakySpill spill)
+    {
+        var first = await FirstTabAsync(tabs, vm);
+        await AddTabsAsync(tabs, vm, 2);
+        var control = tabs.ControlForTests(first)!;
+        control.State.Editor.Text = "var first = 1;";
+        spill.WritesWait = new ManualResetEventSlim(false);
+
+        // The fourth tab makes the first one the one to give up; its write waits.
+        var count = vm.Tabs.Count;
+        vm.NewMdRunFile();
+        await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
+        return (first, control);
+    }
+
+    [AvaloniaFact]
+    public async Task ATabWhoseTextIsBeingWritten_Should_StayUsableAndBeReleasedWhenTheWriteIsDone()
+    {
+        var (tabs, vm, folder, spill) = CreateHarness();
+        try
+        {
+            var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
+
+            // The UI thread is free (this test runs on it) and the tab still has its text while the write waits.
+            await Task.Delay(100);
+            Assert.False(control.IsContentReleased);
+            Assert.Equal("var first = 1;", control.State.Editor.Text);
+            spill.WritesWait!.Set();
+            await tabs.IdleForTests();
+
+            Assert.True(control.IsContentReleased);
+            Assert.False(tabs.IsLoadedForTests(first));
+        }
+        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task ATabEditedWhileItsTextIsBeingWritten_Should_KeepTheNewText()
+    {
+        var (tabs, vm, folder, spill) = CreateHarness();
+        try
+        {
+            var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
+
+            control.State.Editor.Text = "var edited = 2;";
+            spill.WritesWait!.Set();
+            await tabs.IdleForTests();
+
+            Assert.False(control.IsContentReleased);
+            Assert.True(tabs.IsLoadedForTests(first));
+            Assert.Equal("var edited = 2;", control.State.Editor.Text);
+        }
+        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task ATabSelectedWhileItsTextIsBeingWritten_Should_KeepItsText()
+    {
+        var (tabs, vm, folder, spill) = CreateHarness();
+        try
+        {
+            var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
+
+            vm.ActiveTab = first;
+            spill.WritesWait!.Set();
+            await tabs.IdleForTests();
+
+            Assert.False(control.IsContentReleased);
+            Assert.Equal("var first = 1;", control.State.Editor.Text);
+        }
+        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public async Task AWriteThatFails_Should_LeaveTheTabWithItsText()
+    {
+        var (tabs, vm, folder, spill) = CreateHarness();
+        try
+        {
+            spill.FailWrites = true;
+            var first = await FirstTabAsync(tabs, vm);
+            tabs.ControlForTests(first)!.State.Editor.Text = "var kept = 3;";
+
+            await AddTabsAsync(tabs, vm, 4);
+
+            var control = tabs.ControlForTests(first)!;
+            Assert.False(control.IsContentReleased);
+            Assert.Equal("var kept = 3;", control.State.Editor.Text);
         }
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }
