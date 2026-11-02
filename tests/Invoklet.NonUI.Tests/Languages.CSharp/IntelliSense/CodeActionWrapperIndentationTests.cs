@@ -14,6 +14,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // method's own closing brace moved, a member line shifted right. The result must be what the same
 // action gives for the same code without the hidden class.
 [Collection(CodeActionAllocationCollection.Name)]
+[Trait("Platform", "Independent")]
 public sealed class CodeActionWrapperIndentationTests
 {
     private static CSharpIntelliSenseService CreateService(MdRunKind kind)

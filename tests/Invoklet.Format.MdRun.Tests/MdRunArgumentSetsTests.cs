@@ -4,6 +4,7 @@ namespace Invoklet.Format.MdRun.Tests;
 
 // Declared arguments (arguments:), sets of their values (argumentSets:, selectedArgumentSet:) and the
 // args a run gets from them (MdRunArguments).
+[Trait("Platform", "Independent")]
 public class MdRunArgumentSetsTests
 {
     private const string Script = """

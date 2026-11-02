@@ -9,6 +9,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // (editor.Text) on every keystroke, on the UI thread. It now hands a lazy getter over an immutable
 // snapshot; the service calls it only for the notification that's still the latest once the debounce
 // ends, off the caller's thread.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseLazyTextTests
 {
     [Fact]

@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Features;
 
+[Trait("Platform", "Independent")]
 public sealed class DocumentFormatterTests
 {
     [Fact]
@@ -184,6 +185,7 @@ public sealed class DocumentFormatterTests
     }
 }
 
+[Trait("Platform", "Independent")]
 public sealed class BreakpointConditionAnalyzerTests
 {
     private const string Code = "var x = 1;\nvar y = 2;\n";

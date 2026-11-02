@@ -82,6 +82,9 @@ jobs:
       - name: 🔨 Build
         run: dotnet build --no-restore --configuration Release -warnaserror
 
+      # Tests marked [Trait("Platform", "Independent")] run only in build-linux, the cheapest lane, on every PR and push: their outcome
+      # does not depend on the OS (logic over memory: parsing, IntelliSense, view models). The filter on this lane and on macOS leaves them out.
+      #
       # PRs pay per-minute for Windows runners (2x the Linux rate) — build-linux already runs the
       # FULL suite on every PR, so this lane skips only the expensive, redundant-on-this-OS parts:
       # Invoklet.Runtime.UI.Tests (215 headless-Avalonia tests, forced fully serial, since
@@ -99,12 +102,13 @@ jobs:
           for proj in tests/Invoklet.Format.MdRun.Tests tests/Invoklet.Runtime.Tests \
                       tests/Invoklet.Avalonia.HtmlRenderer.Tests tests/Invoklet.Cli.Tests tests/AvaloniaEdit.Tests \
                       tests/MarkView.Avalonia.Tests tests/MarkView.Avalonia.SyntaxHighlighting.Tests; do
-            dotnet test "$proj" --no-build --configuration Release --verbosity normal
+            dotnet test "$proj" --no-build --configuration Release --verbosity normal \
+              --filter "Platform!=Independent"
           done
           dotnet test tests/Invoklet.NonUI.Tests --no-build --configuration Release --verbosity normal \
-            --filter "Category!=RealBuild"
+            --filter "Category!=RealBuild&Platform!=Independent"
           dotnet test tests/Invoklet.Connectors.Tests --no-build --configuration Release --verbosity normal \
-            --filter "Category!=RealBuild"
+            --filter "Category!=RealBuild&Platform!=Independent"
 
       # RealBuild is skipped above, but ScriptCompilerTests'/ScriptPackageRestoreTests' cleanup (deleting
       # a script's output directory right after its process exits) failed on Windows only — a DLL the
@@ -125,9 +129,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: dotnet test tests/Invoklet.Runtime.UI.Tests --no-build --configuration Release --verbosity normal
 
+      # Not the tests marked Platform=Independent (see UNIT-TESTING-RULES.md): their outcome does not depend on the OS, and build-linux runs them.
       - name: 🧪 Test (full suite)
         if: github.event_name != 'pull_request'
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Platform!=Independent"
 
       # Release assets go straight to one draft GitHub Release (the Actions artifact quota is
       # exhausted). The draft is tagged after
@@ -342,16 +347,18 @@ jobs:
           for proj in tests/Invoklet.Format.MdRun.Tests tests/Invoklet.Runtime.Tests \
                       tests/Invoklet.Avalonia.HtmlRenderer.Tests tests/Invoklet.Cli.Tests tests/AvaloniaEdit.Tests \
                       tests/MarkView.Avalonia.Tests tests/MarkView.Avalonia.SyntaxHighlighting.Tests; do
-            dotnet test "$proj" --no-build --configuration Release --verbosity normal
+            dotnet test "$proj" --no-build --configuration Release --verbosity normal \
+              --filter "Platform!=Independent"
           done
           dotnet test tests/Invoklet.NonUI.Tests --no-build --configuration Release --verbosity normal \
-            --filter "Category!=RealBuild"
+            --filter "Category!=RealBuild&Platform!=Independent"
           dotnet test tests/Invoklet.Connectors.Tests --no-build --configuration Release --verbosity normal \
-            --filter "Category!=RealBuild"
+            --filter "Category!=RealBuild&Platform!=Independent"
 
+      # Not the tests marked Platform=Independent (see UNIT-TESTING-RULES.md): their outcome does not depend on the OS, and build-linux runs them.
       - name: 🧪 Test (full suite)
         if: github.event_name != 'pull_request'
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Platform!=Independent"
 
       # Release assets — only built on an actual merge to main, not on every PR. Bundled as a real
       # Invoklet.app (Contents/MacOS + Info.plist + icon), not just a raw publish folder, so it's

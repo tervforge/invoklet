@@ -14,6 +14,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // top-level local function nobody ever invoked — a textbook, correctly-reported CS8321 ("declared but
 // never used") that nonetheless made every Program-kind script's entry point look broken in the
 // editor. UpdateKind(MdRunKind.Program) makes SyncDocument mirror that same prefix.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseKindAwarenessTests
 {
     private const string ProgramKindScript = "void Main()\n{\n    Console.WriteLine(\"hi\");\n}\n";

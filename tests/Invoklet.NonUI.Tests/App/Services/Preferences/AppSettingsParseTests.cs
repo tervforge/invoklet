@@ -5,6 +5,7 @@ using Xunit;
 namespace Invoklet.NonUI.Tests.App.Services.Preferences;
 
 // A settings file that is valid JSON but holds null where a group of settings should be must not stop Invoklet from starting.
+[Trait("Platform", "Independent")]
 public sealed class AppSettingsParseTests
 {
     [Theory]

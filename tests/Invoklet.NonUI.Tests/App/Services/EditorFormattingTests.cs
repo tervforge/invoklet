@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class EditorFormattingTests
 {
     private static readonly IReadOnlyList<TextEdit> OneEdit = [new TextEdit(5, 0, " ")];

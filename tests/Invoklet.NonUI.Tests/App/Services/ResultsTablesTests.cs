@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class ResultsTablesTests
 {
     private sealed record Person(string Name, int Age, bool Active, string? Note);

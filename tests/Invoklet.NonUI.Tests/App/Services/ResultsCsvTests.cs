@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class ResultsCsvTests
 {
     private static string Build(params string[][] rows) => ResultsCsv.Build(new ResultsTable(rows));

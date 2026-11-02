@@ -13,6 +13,7 @@ namespace Invoklet.NonUI.Tests.Avalonia.CodeEditor;
 // Both methods take the trigger/identifier-char sets as parameters rather than hardcoding any
 // particular language's lexical rules (e.g. '.' for member access, '_' as an identifier character) —
 // CodeTextEditor is language-agnostic; EditorTabItemControl is what configures those sets for C#/VB.
+[Trait("Platform", "Independent")]
 public class CodeTextEditorAutoInvokeTests
 {
     private static readonly HashSet<char> CSharpIdentifierChars = ['_'];

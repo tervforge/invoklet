@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Logging;
 
+[Trait("Platform", "Independent")]
 public sealed class AppLoggingTests
 {
     private static void LogEverything(ILogger logger)

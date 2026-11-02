@@ -11,6 +11,7 @@ namespace Invoklet.NonUI.Tests.App.UserControls.Models;
 // stub ShowDialog in this codebase — see ShowGoToLine/GoToLineDialog, which has no test coverage
 // for the same reason). Symbol resolution itself (which spans to replace) is covered separately by
 // CSharpIntelliSenseRenameTests.cs.
+[Trait("Platform", "Independent")]
 public class EditorTabItemControlRenameEditsTests
 {
     private sealed record TestSpan(int Start, int Length) : IDocumentHighlightSpan;

@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Invoklet.Connectors.Tests.Connectors.Http;
 
+[Trait("Platform", "Independent")]
 public class ConnectionPlaceholderResolverTests
 {
     [Fact]
@@ -51,6 +52,7 @@ public class ConnectionPlaceholderResolverTests
     }
 }
 
+[Trait("Platform", "Independent")]
 public class HttpConnectionDriverTests
 {
     private static MdRunConnection Http(params (string Key, MdRunValue Value)[] parameters) => new()

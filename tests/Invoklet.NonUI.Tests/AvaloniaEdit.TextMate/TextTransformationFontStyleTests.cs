@@ -10,6 +10,7 @@ namespace Invoklet.NonUI.Tests.AvaloniaEdit.TextMate;
 // including the default Dark+) mark the comment scope's tokenColors fontStyle as italic, mirroring
 // VS Code's own built-in themes — TextTransformation.GetFontStyle() used to translate that straight
 // into Avalonia.Media.FontStyle.Italic. Now always Normal, regardless of what the active theme says.
+[Trait("Platform", "Independent")]
 public class TextTransformationFontStyleTests
 {
     [Fact]

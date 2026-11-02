@@ -9,6 +9,7 @@ namespace Invoklet.Runtime.Tests;
 // ChildProcess.StartInfoForTests). Not [Collection(ConsoleTestCollection.Name)]: doesn't touch
 // Console.Out/In. Every test disposes whatever tokens it took out, in a finally, so a failing
 // assertion can't leak a live token (and its foreground thread) into later tests in the same run.
+[Trait("Platform", "Independent")]
 public class UtilKeepRunningTests
 {
     [Fact]

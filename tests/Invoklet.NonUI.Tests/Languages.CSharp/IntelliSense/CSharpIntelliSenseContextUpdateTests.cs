@@ -12,6 +12,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // The editor's execution context (references, generated connection classes) is replaced from a
 // worker thread while the user keeps typing: a request that is overtaken must not be applied over
 // the newer one, and analysis of an obsolete solution must not reach the editor.
+[Trait("Platform", "Independent")]
 public sealed class CSharpIntelliSenseContextUpdateTests
 {
     private static CSharpIntelliSenseService Create()

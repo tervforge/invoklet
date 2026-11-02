@@ -5,6 +5,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 
 // Typing "override " (like VS/Rider) lists the base type's
 // overridable members and, on accept, inserts a ready-to-edit stub — not just the bare method name.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseOverrideStubTests
 {
     [Fact]

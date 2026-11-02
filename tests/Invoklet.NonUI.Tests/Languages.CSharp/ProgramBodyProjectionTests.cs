@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp;
 
+[Trait("Platform", "Independent")]
 public class ProgramBodyProjectionTests
 {
     private static readonly CSharpParseOptions Options = CSharpScriptCompiler.ParseOptions(10, 0);

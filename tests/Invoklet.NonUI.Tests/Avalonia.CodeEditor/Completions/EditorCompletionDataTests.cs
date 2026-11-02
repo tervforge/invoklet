@@ -7,6 +7,7 @@ namespace Invoklet.NonUI.Tests.Avalonia.CodeEditor.Completions;
 // construction via DisplaySegmentRenderer) eagerly for every completion item — up to ~584 of them
 // on a single 24/7 auto-invoke — was the main perceived-latency contributor, since only one item's
 // Description is ever visible (whichever is currently highlighted in the list).
+[Trait("Platform", "Independent")]
 public class EditorCompletionDataTests
 {
     [Fact]

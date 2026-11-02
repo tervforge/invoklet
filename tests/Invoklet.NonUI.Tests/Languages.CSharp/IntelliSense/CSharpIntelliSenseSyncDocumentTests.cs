@@ -12,6 +12,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // math directly (see ComputeMinimalChange's own doc comment for why a common-prefix/suffix span is
 // enough for this call pattern) rather than only indirectly through a live SyncDocument call, since a
 // wrong span here would silently corrupt every completion/diagnostic built on top of it.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseSyncDocumentTests
 {
     private static string Apply(string oldText, TextChange change) =>

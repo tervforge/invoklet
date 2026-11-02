@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 
+[Trait("Platform", "Independent")]
 public sealed class CSharpUtilArgsCompletionTests
 {
     private static CSharpIntelliSenseService CreateService(CSharpReferenceService references) =>

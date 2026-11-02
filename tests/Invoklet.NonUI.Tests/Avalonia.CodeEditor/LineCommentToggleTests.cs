@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Avalonia.CodeEditor;
 
+[Trait("Platform", "Independent")]
 public class LineCommentToggleTests
 {
     // '|' marks the caret, '[' and ']' the selection; the markers are removed before toggling.

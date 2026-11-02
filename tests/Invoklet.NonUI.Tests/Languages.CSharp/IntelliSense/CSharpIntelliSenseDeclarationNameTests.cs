@@ -10,6 +10,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // not referenced", so the fix is a dedicated syntax check (IsDeclarationNamePosition) that returns
 // null completions — and therefore no window for IsCommitCharacter to clobber — whenever the caret
 // sits inside the name of a method/class/property/variable/parameter/type-parameter declaration.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseDeclarationNameTests
 {
     // The user's own reported reproduction: "void Main" — caret right after "Main" while still typing

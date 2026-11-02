@@ -4,6 +4,7 @@ using static Invoklet.NonUI.Tests.App.Services.QuickOpen.Fixtures.QuickOpenMatch
 
 namespace Invoklet.NonUI.Tests.App.Services.QuickOpen;
 
+[Trait("Platform", "Independent")]
 public sealed class QuickOpenMatcherTests
 {
     [Fact]

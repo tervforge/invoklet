@@ -8,6 +8,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // decompiling needed, single-file scratchpad); anything from outside the script (framework/NuGet
 // metadata) resolves to enough identifying info for CSharpDecompilerService (Invoklet.Languages.
 // DotnetCommon) to decompile it on demand — see CSharpDecompilerServiceTests.cs for that half.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseGoToDefinitionTests
 {
     [Fact]

@@ -8,6 +8,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // suggested inside an ordinary method body, nowhere near a LINQ query. Fixed via two syntax-position
 // checks (IsInsideQueryExpression/IsInsideAccessorContext), same double-boundary-check pattern as
 // IsInsideComment/IsDeclarationNamePosition.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseContextualKeywordTests
 {
     [Theory]

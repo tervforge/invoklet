@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseDisposeTests
 {
     [Fact]

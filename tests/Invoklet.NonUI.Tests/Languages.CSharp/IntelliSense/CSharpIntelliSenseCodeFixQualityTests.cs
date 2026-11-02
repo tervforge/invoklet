@@ -9,6 +9,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // CodeFixProviders/CodeRefactoringProviders, not mocked — same rationale as every other
 // CSharpIntelliSense*Tests file: the thing under test is whether Invoklet's synthetic preamble/kind-
 // wrapped document survives real provider execution intact).
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseCodeFixQualityTests
 {
     private static readonly TimeSpan BackgroundAnalysisTimeout = TimeSpan.FromSeconds(30);

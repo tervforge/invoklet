@@ -11,6 +11,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.Compiler;
 // (CSharpLanguageHostProgramKindCompileTests.
 // CompileAsync_Should_Succeed_ForAStaticMain_WithAPrivateHelperMethod covers the full pipeline, including
 // the build, but is Category=RealBuild and only exercises this through it).
+[Trait("Platform", "Independent")]
 public class CSharpScriptCompilerDiagnosticFilterTests
 {
     private static Diagnostic[] DiagnosticsFor(string code, string id)

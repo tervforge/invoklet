@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services.Tabs;
 
+[Trait("Platform", "Independent")]
 public sealed class TabLifecycleManagerTests
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);

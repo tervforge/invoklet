@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Contracts.IntelliSense;
 
+[Trait("Platform", "Independent")]
 public class BreakpointConditionAnalysisTests
 {
     [Theory]

@@ -2,6 +2,7 @@ using Xunit;
 
 namespace Invoklet.Format.MdRun.Tests;
 
+[Trait("Platform", "Independent")]
 public class MdRunParserWriterTests
 {
     // ── Round-trip ────────────────────────────────────────────────────────────

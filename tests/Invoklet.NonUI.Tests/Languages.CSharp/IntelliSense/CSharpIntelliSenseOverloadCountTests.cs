@@ -9,6 +9,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // no indication there was anything else under that name at all. ICompletionItem.OverloadCount now
 // carries how many Method-kind candidates shared the DisplayText, so the UI can annotate the row with
 // "(+N overloads)" instead of silently hiding the rest.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseOverloadCountTests
 {
     [Fact]

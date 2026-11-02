@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services.QuickOpen;
 
+[Trait("Platform", "Independent")]
 public sealed class QuickOpenContentSearchTests
 {
     private static readonly QuickOpenEntry[] Entries =

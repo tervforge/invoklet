@@ -7,6 +7,7 @@ using EditorBreakpoint = Invoklet.Avalonia.CodeTextEditor.Breakpoints.Breakpoint
 
 namespace Invoklet.NonUI.Tests.App.UserControls.Models;
 
+[Trait("Platform", "Independent")]
 public sealed class BreakpointHostBridgeTests
 {
     [Fact]

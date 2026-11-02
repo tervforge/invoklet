@@ -8,6 +8,7 @@ using Xunit;
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 
 // Which kind of place each completion list was built for, and where its items came from.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseCompletionContextTests
 {
     private static async Task<SimpleCompletionList?> CompleteAsync(

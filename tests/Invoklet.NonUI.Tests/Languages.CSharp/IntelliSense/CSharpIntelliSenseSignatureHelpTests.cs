@@ -8,6 +8,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // see ObjectExtensions.cs. This guards that design choice at the signature-help level: whatever
 // overload CSharpIntelliSenseService's custom signature-help resolves to for "x.Dump(" should never
 // balloon back into a many-parameter wall.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseSignatureHelpTests
 {
     [Fact]

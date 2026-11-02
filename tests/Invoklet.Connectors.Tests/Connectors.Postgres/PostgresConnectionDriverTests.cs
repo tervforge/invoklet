@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.Connectors.Tests.Connectors.Postgres;
 
+[Trait("Platform", "Independent")]
 public class PostgresConnectionDriverTests
 {
     private static MdRunConnection Connection(string? connectionString) => new()

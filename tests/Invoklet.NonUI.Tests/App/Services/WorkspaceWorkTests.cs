@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class WorkspaceWorkTests
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);

@@ -7,6 +7,7 @@ using Xunit;
 namespace Invoklet.NonUI.Tests.Languages.CSharp;
 
 // What a script's code becomes when it switches to the Program kind (ILanguageHostFactory.CodeForKind).
+[Trait("Platform", "Independent")]
 public class ProgramTemplateTests
 {
     private static readonly CSharpLanguageHostFactory CSharp = new(NullLoggerFactory.Instance);

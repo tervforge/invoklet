@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Analysis;
 
+[Trait("Platform", "Independent")]
 public sealed class BackgroundAnalysisTests
 {
     [Fact]

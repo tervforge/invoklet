@@ -11,6 +11,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // package too (ReSharper-style), tagged with the namespace EditorTabItemControl should add as a
 // `using` if the item is accepted (see EditorCompletionDataTests for the generic accept-side
 // plumbing). Framework types are offered too, once three letters are typed.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseAutoImportTests
 {
     private static CSharpIntelliSenseService CreateServiceWithNewtonsoftJson()

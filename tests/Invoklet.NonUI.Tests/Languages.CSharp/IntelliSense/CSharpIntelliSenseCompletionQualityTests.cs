@@ -8,6 +8,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // 1. Completion/signature-help/quick-info showed up while typing prose inside a comment.
 // 2. Scope ordering was pure alphabetical — a nearby local could sort behind an unrelated,
 //    merely-imported type or a keyword.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseCompletionQualityTests
 {
     [Fact]

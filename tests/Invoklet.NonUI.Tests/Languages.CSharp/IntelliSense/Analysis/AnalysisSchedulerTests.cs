@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Analysis;
 
+[Trait("Platform", "Independent")]
 public sealed class AnalysisSchedulerTests
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);

@@ -3,6 +3,7 @@ using Xunit;
 namespace Invoklet.Format.MdRun.Tests;
 
 // The document's stable identity, the front matter's id: key.
+[Trait("Platform", "Independent")]
 public class MdRunDocumentIdTests
 {
     private const string Legacy = "---\nversion: \"1.0\"\nlanguage: csharp\ntargetSdk: latest\nkind: Statements\n---\n\n# Old\n\n```csharp run\n1.Dump();\n```\n";

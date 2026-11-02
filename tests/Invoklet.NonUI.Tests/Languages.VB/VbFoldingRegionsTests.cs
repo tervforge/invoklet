@@ -9,6 +9,7 @@ namespace Invoklet.NonUI.Tests.Languages.VB;
 // free (plain string in, (Start, End) character-offset pairs out), so these tests need no
 // TextDocument/FoldingManager/live editor at all — line numbers are derived from raw offsets with a
 // plain string scan instead.
+[Trait("Platform", "Independent")]
 public class VbFoldingRegionsTests
 {
     private static int LineNumberAtOffset(string text, int offset)

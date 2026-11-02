@@ -15,6 +15,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // single synthetic space appended once after the user's own code in the synced document, so no
 // legitimate query position (always <= the user's own code length) ever coincides with the document's
 // new true end again.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseEndOfBufferTests
 {
     [Fact]

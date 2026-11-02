@@ -8,6 +8,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // fields — alongside actual types, exactly like the general "expression position" fallback. Only
 // type-ish symbols (named types, type parameters, namespaces — so a namespace can still be typed
 // through with '.' to reach a nested type) and the predefined-type keywords are legal there.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseGenericArgumentTests
 {
     [Fact]

@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Syntax;
 
+[Trait("Platform", "Independent")]
 public sealed class SourcePositionsTests
 {
     private static bool InComment(string code, int position)
