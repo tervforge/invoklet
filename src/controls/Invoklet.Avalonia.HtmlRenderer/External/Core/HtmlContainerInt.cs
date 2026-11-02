@@ -338,6 +338,11 @@ public sealed class HtmlContainerInt : IDisposable
     }
 
     /// <summary>
+    /// Items the host adds to the end of the context menu, after the built-in ones.
+    /// </summary>
+    public List<(string Text, Action Click)> ExtraContextMenuItems { get; } = [];
+
+    /// <summary>
     /// Is the build-in context menu enabled and will be shown on mouse right click (default - true)
     /// </summary>
     public bool IsContextMenuEnabled

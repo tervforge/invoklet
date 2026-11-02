@@ -271,8 +271,8 @@ public sealed class WindowService : IWindowService
     public Task<string?> ShowSaveHtmlFileDialogAsync(string suggestedFileName, string startFolder)
         => ShowSaveResultsDialogAsync(suggestedFileName, startFolder, "html", new FilePickerFileType("HTML") { Patterns = ["*.html", "*.htm"] });
 
-    public Task<string?> ShowSaveExcelFileDialogAsync(string suggestedFileName, string startFolder)
-        => ShowSaveResultsDialogAsync(suggestedFileName, startFolder, "xlsx", new FilePickerFileType("Excel workbook") { Patterns = ["*.xlsx"] });
+    public Task<string?> ShowSaveCsvFileDialogAsync(string suggestedFileName, string startFolder)
+        => ShowSaveResultsDialogAsync(suggestedFileName, startFolder, "csv", new FilePickerFileType("CSV") { Patterns = ["*.csv"] });
 
     private async Task<string?> ShowSaveResultsDialogAsync(string suggestedFileName, string startFolder, string extension, FilePickerFileType type)
     {

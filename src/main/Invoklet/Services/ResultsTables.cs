@@ -1,37 +1,60 @@
-using System.Globalization;
 using System.Net;
 using System.Text;
 
 namespace Invoklet.Services;
 
-internal enum CellKind { Text, Number, Boolean, Header }
-
-internal readonly record struct SheetCell(string Text, CellKind Kind);
-
-internal sealed record SheetData(string Name, IReadOnlyList<IReadOnlyList<SheetCell>> Rows);
+/// <summary>The rows of one table of the results, as the text its cells show.</summary>
+internal sealed record ResultsTable(IReadOnlyList<IReadOnlyList<string>> Rows);
 
 /// <summary>
-/// Reads the results panel's HTML, as <c>Dump</c> writes it, into sheets: every table that is not inside another becomes one ("Table 1", …), with
-/// what it holds in its cells as text; everything shown outside the tables goes, a line to a row, to a last sheet "Output".
+/// The tables of the results panel's HTML, as <c>Dump</c> writes it. A table that is not inside another one is numbered from 0 in the order it
+/// appears; <see cref="WithMenus"/> puts a link for each in the page the panel shows and <see cref="Parse"/> reads their rows, so the number a click
+/// carries is the table to save.
 /// </summary>
 internal static class ResultsTables
 {
-    // A double holds 15 digits exactly: a longer number (an id) stays text, whole.
-    private const int MaxNumberDigits = 15;
+    private const string LinkPrefix = "invoklet-table:";
 
-    public static IReadOnlyList<SheetData> Parse(string html)
+    /// <summary>The page with a "…" link above each table that is not in another; a click raises LinkClicked with <see cref="TableOf"/> of its address.</summary>
+    public static string WithMenus(string html)
     {
-        var sheets = new List<SheetData>();
-        var output = new List<IReadOnlyList<SheetCell>>();
-        var line = new StringBuilder();
-        var rows = new List<IReadOnlyList<SheetCell>>();
-        var row = new List<SheetCell>();
+        var result = new StringBuilder(html.Length + 128);
+        var depth = 0;
+        var count = 0;
+        var copied = 0;
+        for (var i = html.IndexOf('<'); i >= 0; i = html.IndexOf('<', i + 1))
+        {
+            var close = html.IndexOf('>', i);
+            if (close < 0) break;
+            var tag = html[(i + 1)..close];
+            if (NameOf(tag) != "table") continue;
+            if (tag.StartsWith('/')) depth = Math.Max(depth - 1, 0);
+            else if (depth++ == 0)
+            {
+                result.Append(html, copied, i - copied)
+                    .Append("<div class=\"dp-tablemenu\"><a href=\"").Append(LinkPrefix).Append(count++).Append("\" title=\"Table actions\">&hellip;</a></div>");
+                copied = i;
+            }
+        }
+        return result.Append(html, copied, html.Length - copied).ToString();
+    }
+
+    /// <summary>The number of the table a link of <see cref="WithMenus"/> stands for, or null for any other link.</summary>
+    public static int? TableOf(string link) =>
+        link.StartsWith(LinkPrefix, StringComparison.Ordinal) && int.TryParse(link.AsSpan(LinkPrefix.Length), out var number) ? number : null;
+
+    /// <summary>Every table that is not inside another, an empty one too, so that the numbers match <see cref="WithMenus"/>. A table inside a cell is the text of that cell.</summary>
+    public static IReadOnlyList<ResultsTable> Parse(string html)
+    {
+        var tables = new List<ResultsTable>();
+        var rows = new List<IReadOnlyList<string>>();
+        var row = new List<string>();
         var segments = new List<(string? Class, StringBuilder Text)>();
         var depth = 0;
         var inCell = false;
-        var header = false;
+        var rowIsHeader = true;
+        var cellIsHeader = false;
         string? skipping = null;
-        string? cellClass = null;
 
         for (var i = 0; i < html.Length;)
         {
@@ -39,7 +62,7 @@ internal static class ResultsTables
             {
                 var next = html.IndexOf('<', i);
                 if (next < 0) next = html.Length;
-                if (skipping is null) AddText(WebUtility.HtmlDecode(html[i..next]));
+                if (skipping is null && inCell) AddText(WebUtility.HtmlDecode(html[i..next]));
                 i = next;
                 continue;
             }
@@ -61,68 +84,54 @@ internal static class ResultsTables
                 case "style" or "script" or "summary": // the panel's "(click to expand)" is not a result
                     if (!closing) skipping = name;
                     break;
+                case "div" when !closing && ClassOf(tag) == "dp-count": // "Person[] — 3 items"
+                    skipping = name;
+                    break;
                 case "table":
-                    if (!closing)
-                    {
-                        if (depth++ == 0) FlushLine();
-                    }
+                    if (!closing) depth++;
                     else if (depth > 0 && --depth == 0)
                     {
-                        if (rows.Count > 0) sheets.Add(new SheetData("Table " + (sheets.Count + 1), rows));
+                        tables.Add(new ResultsTable(rows));
                         rows = [];
                     }
                     break;
                 case "tr":
-                    if (depth == 1) { if (closing) CommitRow(); else row = []; }
-                    else if (closing) AddText("; ");
+                    if (depth == 1)
+                    {
+                        if (closing) CommitRow();
+                        else { row = []; rowIsHeader = true; }
+                    }
+                    else if (closing && inCell) AddText("; ");
                     break;
                 case "td" or "th":
                     if (depth == 1)
                     {
                         if (closing) CommitCell();
-                        else { inCell = true; header = name == "th"; cellClass = ClassOf(tag); segments.Clear(); }
+                        else { inCell = true; cellIsHeader = name == "th"; segments.Clear(); }
                     }
-                    else if (closing) AddText(" ");
+                    else if (closing && inCell) AddText(" ");
                     break;
                 case "span":
                     segments.Add((closing ? null : ClassOf(tag), new StringBuilder()));
                     break;
-                case "div" when !closing && ClassOf(tag) == "dp-count": // "Person[] — 3 items": the sheet has the rows
-                    skipping = name;
-                    break;
                 case "br" or "div" or "p" or "li" or "details" or "pre":
-                    if (depth == 0) FlushLine();
-                    else AddText(" ");
+                    AddText(" ");
                     break;
             }
         }
-        FlushLine();
-        if (output.Count > 0) sheets.Add(new SheetData("Output", output));
-        return sheets;
+        return tables;
 
         void AddText(string text)
         {
-            if (depth == 0) line.Append(text);
-            else if (inCell)
-            {
-                if (segments.Count == 0) segments.Add((null, new StringBuilder()));
-                segments[^1].Text.Append(text);
-            }
-        }
-
-        void FlushLine()
-        {
-            var text = line.ToString().Trim();
-            line.Clear();
-            if (text.Length > 0) output.Add([new SheetCell(text, CellKind.Text)]);
+            if (segments.Count == 0) segments.Add((null, new StringBuilder()));
+            segments[^1].Text.Append(text);
         }
 
         void CommitRow()
         {
             inCell = false;
             // The panel can repeat the header every so many rows.
-            var repeated = rows.Count > 0 && row.Count == rows[0].Count && row.All(c => c.Kind == CellKind.Header)
-                && row.Select(c => c.Text).SequenceEqual(rows[0].Select(c => c.Text));
+            var repeated = rowIsHeader && rows.Count > 0 && row.SequenceEqual(rows[0]);
             if (row.Count > 0 && !repeated) rows.Add(row);
             row = [];
         }
@@ -131,17 +140,15 @@ internal static class ResultsTables
         {
             inCell = false;
             var parts = segments.Where(s => s.Class is not null || s.Text.ToString().Trim().Length > 0).Select(s => (s.Class, Text: s.Text.ToString())).ToList();
-            var cell = parts.Count == 1
-                ? (parts[0].Class ?? (cellClass?.Contains("dp-number") == true ? "dp-number" : null)) switch
+            row.Add(parts.Count == 1
+                ? parts[0].Class switch
                 {
-                    "dp-number" when TryNumber(parts[0].Text, out var number) => new SheetCell(number, CellKind.Number),
-                    "dp-bool" => new SheetCell(parts[0].Text, CellKind.Boolean),
-                    "dp-null" => new SheetCell("", CellKind.Text),
-                    "dp-string" => new SheetCell(Unquote(parts[0].Text), CellKind.Text),
-                    _ => new SheetCell(Tidy(parts[0].Text), CellKind.Text),
+                    "dp-null" => "",
+                    "dp-string" => Unquote(parts[0].Text),
+                    _ => Tidy(parts[0].Text),
                 }
-                : new SheetCell(Tidy(string.Concat(parts.Select(p => p.Text))), CellKind.Text);
-            row.Add(header ? cell with { Kind = CellKind.Header } : cell);
+                : Tidy(string.Concat(parts.Select(p => p.Text))));
+            rowIsHeader &= cellIsHeader;
             segments.Clear();
         }
     }
@@ -169,16 +176,4 @@ internal static class ResultsTables
 
     // A string is shown in quotes in the panel; in a cell it is the string.
     private static string Unquote(string text) => text.Length >= 2 && text[0] == '"' && text[^1] == '"' ? text[1..^1] : text;
-
-    // The panel writes numbers in the culture of the script; a text neither reads is kept as text (a formatted "1,234.50", "50%").
-    private static bool TryNumber(string text, out string number)
-    {
-        number = text;
-        if (text.Count(char.IsAsciiDigit) > MaxNumberDigits) return false;
-        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            && !double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value)) return false;
-        if (!double.IsFinite(value)) return false;
-        number = value.ToString("R", CultureInfo.InvariantCulture);
-        return true;
-    }
 }

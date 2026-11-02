@@ -33,8 +33,6 @@ public partial class EditorsTabItemControl : ITabCommandTarget
 
     Task ITabCommandTarget.ExportResultsAsync() => ExportResultsAsync();
 
-    Task ITabCommandTarget.ExportResultsExcelAsync() => ExportResultsExcelAsync();
-
     Task ITabCommandTarget.FormatSelectionAsync() => _formatting?.FormatSelectionAsync() ?? Task.CompletedTask;
 
     Task ITabCommandTarget.ResolveAllUsingsAsync() => ResolveAllUsingsAsync();

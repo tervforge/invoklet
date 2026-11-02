@@ -63,8 +63,8 @@ public interface IWindowService
     /// <summary>Native Save As dialog for the results of a script ("Export Results as HTML…"); the local file path, or null when cancelled or unavailable.</summary>
     Task<string?> ShowSaveHtmlFileDialogAsync(string suggestedFileName, string startFolder);
 
-    /// <summary>Native Save As dialog for the results as an Excel workbook; the local file path, or null when cancelled or unavailable.</summary>
-    Task<string?> ShowSaveExcelFileDialogAsync(string suggestedFileName, string startFolder);
+    /// <summary>Native Save As dialog for one table of the results as CSV; the local file path, or null when cancelled or unavailable.</summary>
+    Task<string?> ShowSaveCsvFileDialogAsync(string suggestedFileName, string startFolder);
 
     /// <summary>Native Open dialog for any file (the text editor window's "Open Text File..."); null if cancelled.</summary>
     Task<string?> ShowOpenTextFileDialogAsync(string startFolder);

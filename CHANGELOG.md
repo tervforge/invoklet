@@ -7,8 +7,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Added
 
-- Export Results as Excel (File menu, or "Save tables as Excel..." in the output settings of the results panel) saves the tables of the results as an
-  Excel workbook: every table `.Dump()` showed is a sheet with bold column names and typed cells, and the rest of the output goes to a last sheet.
+- A "…" above every table in the results opens a menu with **Export to CSV...**, which saves that table as a CSV file (UTF-8 with a byte order mark,
+  so Excel reads it right). "Save results as HTML..." moved from the output settings to the context menu of the results panel.
 
 ### Fixed
 

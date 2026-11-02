@@ -15,21 +15,19 @@ public sealed class ResultsTablesTests
 
     private static string Dump(object value) => (string)Render.Invoke(null, [value, null, null, null])!;
 
+    private static string[][] Rows(ResultsTable table) => [.. table.Rows.Select(r => r.ToArray())];
+
     [Fact]
-    public void Parse_AListOfObjects_IsOneSheetWithAHeaderAndTypedCells()
+    public void Parse_AListOfObjects_IsOneTableWithItsHeaderAndTheTextOfItsCells()
     {
         // Arrange
         var html = Dump(new[] { new Person("Ann", 31, true, null), new Person("Bob", 7, false, "x") });
 
         // Act
-        var sheets = ResultsTables.Parse(html);
+        var table = Assert.Single(ResultsTables.Parse(html));
 
         // Assert
-        var sheet = Assert.Single(sheets, s => s.Name == "Table 1");
-        Assert.Equal(["Name", "Age", "Active", "Note"], sheet.Rows[0].Select(c => c.Text));
-        Assert.All(sheet.Rows[0], c => Assert.Equal(CellKind.Header, c.Kind));
-        Assert.Equal([("Ann", CellKind.Text), ("31", CellKind.Number), ("true", CellKind.Boolean), ("", CellKind.Text)], sheet.Rows[1].Select(c => (c.Text, c.Kind)));
-        Assert.Equal("Bob", sheet.Rows[2][0].Text);
+        Assert.Equal([["Name", "Age", "Active", "Note"], ["Ann", "31", "true", ""], ["Bob", "7", "false", "x"]], Rows(table));
     }
 
     [Fact]
@@ -39,29 +37,25 @@ public sealed class ResultsTablesTests
         var html = Dump(new[] { new { Name = "Ann", Tags = new[] { "a", "b" } } });
 
         // Act
-        var sheets = ResultsTables.Parse(html);
+        var table = Assert.Single(ResultsTables.Parse(html));
 
         // Assert
-        var sheet = Assert.Single(sheets);
-        Assert.Equal(["Name", "Tags"], sheet.Rows[0].Select(c => c.Text));
-        Assert.Equal("# Value ; 0 \"a\" ; 1 \"b\"", sheet.Rows[1][1].Text);
-        Assert.Equal(2, sheet.Rows.Count);
+        Assert.Equal([["Name", "Tags"], ["Ann", "# Value ; 0 \"a\" ; 1 \"b\""]], Rows(table));
     }
 
     [Fact]
-    public void Parse_TextOutsideTables_IsTheLastSheetOneLineToARow()
+    public void Parse_SeveralTables_AreNumberedInTheOrderTheyAppear()
     {
         // Arrange
-        var html = "<div>first</div><div>second</div>" + Dump(new[] { 1, 2 });
+        var html = "<div>text</div>" + Dump(new[] { 1, 2 }) + Dump(new Dictionary<string, int> { ["a"] = 1 });
 
         // Act
-        var sheets = ResultsTables.Parse(html);
+        var tables = ResultsTables.Parse(html);
 
         // Assert
-        Assert.Equal(["Table 1", "Output"], sheets.Select(s => s.Name));
-        Assert.Equal(2, sheets[1].Rows.Count);
-        Assert.Contains("first", sheets[1].Rows[0][0].Text);
-        Assert.Contains("second", sheets[1].Rows[1][0].Text);
+        Assert.Equal(2, tables.Count);
+        Assert.Equal(["#", "Value"], tables[0].Rows[0]);
+        Assert.Equal(["Key", "Value"], tables[1].Rows[0]);
     }
 
     [Fact]
@@ -71,29 +65,47 @@ public sealed class ResultsTablesTests
         var html = "<table><tr><th>A</th></tr><tr><td>1</td></tr><tr><th>A</th></tr><tr><td>2</td></tr></table>";
 
         // Act
-        var sheet = Assert.Single(ResultsTables.Parse(html));
+        var table = Assert.Single(ResultsTables.Parse(html));
 
         // Assert
-        Assert.Equal(["A", "1", "2"], sheet.Rows.Select(r => r[0].Text));
-    }
-
-    [Theory]
-    [InlineData("<span class=\"dp-number\">12345678901234567890</span>", false)]
-    [InlineData("<span class=\"dp-number\">1.5</span>", true)]
-    [InlineData("<span class=\"dp-number\">50%</span>", false)]
-    public void Parse_ANumberTooLongOrNotPlain_StaysText(string cell, bool isNumber)
-    {
-        // Act
-        var sheet = Assert.Single(ResultsTables.Parse($"<table><tr><td>{cell}</td></tr></table>"));
-
-        // Assert
-        Assert.Equal(isNumber ? CellKind.Number : CellKind.Text, sheet.Rows[0][0].Kind);
+        Assert.Equal(["A", "1", "2"], table.Rows.Select(r => r[0]));
     }
 
     [Fact]
-    public void Parse_NothingToShow_IsNoSheets()
+    public void Parse_AnEmptyTable_StillTakesItsNumber()
     {
-        Assert.Empty(ResultsTables.Parse(""));
-        Assert.Empty(ResultsTables.Parse("<style>a { }</style><div> </div>"));
+        // Act
+        var tables = ResultsTables.Parse("<table></table><table><tr><td>x</td></tr></table>");
+
+        // Assert
+        Assert.Equal([0, 1], tables.Select(t => t.Rows.Count));
     }
+
+    [Fact]
+    public void WithMenus_EveryTableNotInsideAnother_GetsALinkCarryingItsNumber()
+    {
+        // Arrange
+        var html = "a" + Dump(new[] { new { Tags = new[] { "x" } } }) + "b" + Dump(new[] { 1 });
+
+        // Act
+        var page = ResultsTables.WithMenus(html);
+
+        // Assert
+        Assert.Equal(2, page.Split("class=\"dp-tablemenu\"").Length - 1);
+        Assert.Contains("href=\"invoklet-table:0\"", page);
+        Assert.Contains("href=\"invoklet-table:1\"", page);
+        Assert.Equal(html, System.Text.RegularExpressions.Regex.Replace(page, "<div class=\"dp-tablemenu\">.*?</div>", ""));
+    }
+
+    [Fact]
+    public void WithMenus_NoTables_IsTheSamePage()
+    {
+        Assert.Equal("<div>hello</div>", ResultsTables.WithMenus("<div>hello</div>"));
+    }
+
+    [Theory]
+    [InlineData("invoklet-table:3", 3)]
+    [InlineData("invoklet-table:x", null)]
+    [InlineData("https://example.com", null)]
+    public void TableOf_ALink_IsTheTableItStandsForOrNull(string link, int? expected) => Assert.Equal(expected, ResultsTables.TableOf(link));
 }

@@ -110,67 +110,69 @@ public sealed class ResultsExporterTests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "</style", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
     }
 
+    private const string TwoTables = "<table><tr><th>A</th></tr><tr><td>1</td></tr></table><table><tr><th>B</th></tr><tr><td>2, 3</td></tr></table>";
+
     [Fact]
-    public async Task ExportExcelAsync_ResultsWithATable_AreOfferedAsAWorkbookAndWrittenAsAZip()
+    public async Task ExportTableCsvAsync_TheSecondOfTwoTables_IsOfferedNumberedAndWrittenAsCsv()
     {
         // Arrange
-        var fixture = new ResultsExporterFixture { Content = "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>" };
+        var fixture = new ResultsExporterFixture { Content = TwoTables };
         var sut = fixture.CreateSut();
 
         // Act
-        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+        await sut.ExportTableCsvAsync(1, TestContext.Current.CancellationToken);
 
         // Assert
-        fixture.Windows.Verify(w => w.ShowSaveExcelFileDialogAsync("Report.xlsx", "scripts"), Times.Once);
-        var (path, bytes) = Assert.Single(fixture.WrittenBytes);
-        Assert.Equal("chosen.xlsx", path);
-        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes));
-        Assert.NotNull(zip.GetEntry("xl/worksheets/sheet1.xml"));
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync("Report-2.csv", "scripts"), Times.Once);
+        var (path, text) = Assert.Single(fixture.WrittenCsv);
+        Assert.Equal("chosen.csv", path);
+        Assert.Equal("B\r\n\"2, 3\"\r\n", text);
+    }
+
+    [Fact]
+    public async Task ExportTableCsvAsync_TheOnlyTable_IsOfferedUnderTheScriptsName()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { Content = "<table><tr><td>x</td></tr></table>" };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportTableCsvAsync(0, TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync("Report.csv", "scripts"), Times.Once);
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("<style>a { }</style>")]
-    public async Task ExportExcelAsync_NothingToPutInASheet_SaysSoAndAsksNothing(string content)
+    [InlineData(-1)]
+    [InlineData(2)]
+    public async Task ExportTableCsvAsync_ATableThatIsNotThere_SaysSoAndAsksNothing(int table)
     {
         // Arrange
-        var fixture = new ResultsExporterFixture { Content = content };
+        var fixture = new ResultsExporterFixture { Content = TwoTables };
         var sut = fixture.CreateSut();
 
         // Act
-        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+        await sut.ExportTableCsvAsync(table, TestContext.Current.CancellationToken);
 
         // Assert
-        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Results", "There are no results to export."), Times.Once);
-        fixture.Windows.Verify(w => w.ShowSaveExcelFileDialogAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        Assert.Empty(fixture.WrittenBytes);
+        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Table", "This table is no longer in the results."), Times.Once);
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task ExportExcelAsync_TheDialogCancelled_WritesNothing()
+    public async Task ExportTableCsvAsync_TheDialogCancelledOrTheFileUnwritable_WritesNothingAndReports()
     {
         // Arrange
-        var fixture = new ResultsExporterFixture { ChosenExcelPath = null };
-        var sut = fixture.CreateSut();
+        var cancelled = new ResultsExporterFixture { Content = TwoTables, ChosenCsvPath = null };
+        var failing = new ResultsExporterFixture { Content = TwoTables, WriteFails = new IOException("disk full") };
 
         // Act
-        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
+        await cancelled.CreateSut().ExportTableCsvAsync(0, TestContext.Current.CancellationToken);
+        await failing.CreateSut().ExportTableCsvAsync(0, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Empty(fixture.WrittenBytes);
-    }
-
-    [Fact]
-    public async Task ExportExcelAsync_TheFileCannotBeWritten_ReportsIt()
-    {
-        // Arrange
-        var fixture = new ResultsExporterFixture { WriteFails = new IOException("disk full") };
-        var sut = fixture.CreateSut();
-
-        // Act
-        await sut.ExportExcelAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Results Failed", It.Is<string>(m => m.Contains("chosen.xlsx") && m.Contains("disk full"))), Times.Once);
+        Assert.Empty(cancelled.WrittenCsv);
+        failing.Windows.Verify(w => w.ShowErrorAsync("Export Results Failed", It.Is<string>(m => m.Contains("chosen.csv") && m.Contains("disk full"))), Times.Once);
     }
 }

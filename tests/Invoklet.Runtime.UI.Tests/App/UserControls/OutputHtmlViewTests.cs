@@ -30,6 +30,36 @@ public class OutputHtmlViewTests
         Assert.Contains("<body><div>hi</div></body>", view.RenderedHtml);
     }
 
+    // The "…" above a table is added to the page the panel shows, not to the content: the saved HTML and the
+    // tables to export are read from the content, so both count the same tables.
+    [AvaloniaFact]
+    public async Task Binding_Should_PutAMenuLinkAboveEveryTable_ButNotInTheContent()
+    {
+        var view = new OutputHtmlView();
+        var vm = new OutputHtmlViewModel();
+        vm.Append("<table><tr><td>1</td></tr></table>");
+
+        view.DataContext = vm;
+        await FlushPendingApply();
+
+        Assert.Contains("href=\"invoklet-table:0\"", view.RenderedHtml);
+        Assert.DoesNotContain("invoklet-table", vm.Content);
+    }
+
+    [AvaloniaFact]
+    public void ContextMenu_Should_OfferSavingTheResultsAsHtml()
+    {
+        var view = new OutputHtmlView();
+        var saved = 0;
+        view.SaveHtmlRequested += () => saved++;
+
+        var (text, click) = Assert.Single(view.ContextMenuItemsForTests);
+        click();
+
+        Assert.Equal("Save results as HTML...", text);
+        Assert.Equal(1, saved);
+    }
+
     // Follow-up after the user tried this live: a script dumping hundreds of lines in a tight loop
     // sets Content once per line (EditorTabItemControl.AppendOutput), and applying every single
     // change synchronously froze the UI thread. The view now coalesces — it only records that

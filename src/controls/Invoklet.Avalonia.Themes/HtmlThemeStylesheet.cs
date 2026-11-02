@@ -55,6 +55,8 @@ public static class HtmlThemeStylesheet
             .dp-highlight { background-color:{{highlightBg}}; color:{{highlightFg}}; padding:0 3px; }
             .dp-type    { color:{{fgSec}}; font-size:0.82em; margin-bottom:2px; }
             .dp-count   { color:{{fgSec}}; font-size:0.82em; margin-bottom:4px; }
+            .dp-tablemenu   { font-size:12px; line-height:1; margin:2px 0 0 0; }
+            .dp-tablemenu a { color:{{fgSec}}; text-decoration:none; padding:0 6px; }
             .dp-table   { border-collapse:collapse; font-size:12px; margin:2px 0; border:1px solid {{dpBorder}}; }
             .dp-th      { background-color:{{dpTh}}; color:{{dpThFg}}; padding:3px 10px; text-align:left; border:1px solid {{dpBorder}}; border-bottom:2px solid {{dpBorder}}; font-weight:600; white-space:nowrap; }
             .dp-td      { padding:2px 10px; border:1px solid {{dpBorder}}; vertical-align:top; }
