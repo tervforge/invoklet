@@ -60,6 +60,7 @@ internal sealed class ScriptContext
     // The references the service was created with (the framework's, Invoklet.Runtime): package updates select from these again, so a
     // framework assembly a package displaced comes back with it. The framework part is replaced by the script target's reference
     // assemblies when its targeting pack is found, as the build compiles against it.
+    private readonly IReferenceResolver _resolver;
     private readonly IReadOnlyList<string> _defaultFrameworkPaths;
     private readonly IReadOnlyList<string> _otherBaseReferencePaths;
     private IReadOnlyList<string> _frameworkPaths;
@@ -89,19 +90,6 @@ internal sealed class ScriptContext
     /// <summary>A reference and the file it was read from; a file that has changed since (a library built again in the same place) is read again.</summary>
     internal sealed record CachedReference(FileStamp Stamp, MetadataReference Reference);
 
-    /// <summary>
-    /// What tells that a file is still the one that was read: its size and the time it was last written. A file replaced by another of the same
-    /// size within the clock's resolution is not noticed.
-    /// </summary>
-    internal readonly record struct FileStamp(long Length, DateTime LastWriteUtc)
-    {
-        public static FileStamp Of(string path)
-        {
-            var info = new FileInfo(path);
-            return info.Exists ? new FileStamp(info.Length, info.LastWriteTimeUtc) : default;
-        }
-    }
-
     // See ReferenceDocumentation — without this, GetDocumentationCommentXml() comes back empty for
     // every metadata symbol (BCL, NuGet), so the doc-comment Summary was silently null for every
     // completion/signature-help/quick-info item except symbols the script itself defines.
@@ -115,8 +103,10 @@ internal sealed class ScriptContext
     }
 
 
-    public ScriptContext(ScriptDocumentSession session, ScriptDocumentLayout layout, ReferenceSet references, ILogger logger)
+    /// <param name="resolver">Finds the assemblies that packages and a target framework stand for; the file system's unless given (a test gives its own).</param>
+    public ScriptContext(ScriptDocumentSession session, ScriptDocumentLayout layout, ReferenceSet references, ILogger logger, IReferenceResolver? resolver = null)
     {
+        _resolver = resolver ?? new FileSystemReferenceResolver(references.DefaultFramework, logger);
         _session = session;
         _layout = layout;
         _logger = logger;
@@ -213,7 +203,7 @@ internal sealed class ScriptContext
         var sequence = Interlocked.Increment(ref _contextRequests);
         var packages = request.Packages.ToDictionary(p => p.Key, p => new Package(p.Value));
         var context = DotnetPackageReferenceContext.For(request);
-        var resolution = ResolvePackageReferences(packages,
+        var resolution = _resolver.Resolve(packages,
             context ?? new PackageReferenceContext($"net{Environment.Version.Major}.{Environment.Version.Minor}", null, null));
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -340,7 +330,7 @@ internal sealed class ScriptContext
     private void ApplyPackageReferences(IReadOnlyDictionary<string, Package> packages, PackageReferenceContext context,
         CancellationToken cancellationToken)
     {
-        var resolution = ResolvePackageReferences(packages, context);
+        var resolution = _resolver.Resolve(packages, context);
 
         // The same workspace lock as SyncDocument: a background analysis pass applies its own changes
         // under it, and both sides must see one consistent "current" solution.
@@ -349,28 +339,6 @@ internal sealed class ScriptContext
             cancellationToken.ThrowIfCancellationRequested();
             CommitPackageReferences(resolution);
         }
-    }
-
-    // What a package update selects, found without the workspace lock (it reads files, and may be slow).
-    private sealed record PackageResolution(IReadOnlyList<string> NewPaths, IReadOnlyList<string> FrameworkPaths, IReadOnlyList<string> GeneratorPaths,
-        IReadOnlyList<string> UserReferencePaths, IReadOnlyList<FileStamp> UserReferenceStamps, CSharpParseOptions ParseOptions);
-
-    private PackageResolution ResolvePackageReferences(IReadOnlyDictionary<string, Package> packages, PackageReferenceContext context)
-    {
-        var (frameworkPaths, generatorPaths) = TargetFrameworkReferences(context);
-        var userReferencePaths = RoslynScriptCompiler.WithSameFolderDependencies(context.AssemblyReferences ?? []);
-        var parseOptions = TargetFramework.TryParse(context.TargetFramework, out var major, out var minor)
-            ? CSharpScriptCompiler.ParseOptions(major, minor)
-            : CSharpScriptCompiler.ParseOptions(Environment.Version.Major, Environment.Version.Minor);
-        var newPaths = NuGetRestorer.CompileReferencesWithoutRestore(
-                packages.ToDictionary(p => p.Key, p => p.Value.Version, StringComparer.OrdinalIgnoreCase),
-                context.TargetFramework,
-                context.OutputDirectory is { } output ? RoslynScriptCompiler.ObjDirectory(output) : null,
-                context.NuGetConfigFile)
-            .Where(File.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        return new PackageResolution(newPaths, frameworkPaths, generatorPaths, userReferencePaths, [.. userReferencePaths.Select(FileStamp.Of)], parseOptions);
     }
 
     // Called with the workspace lock held.
@@ -413,28 +381,6 @@ internal sealed class ScriptContext
         _userReferenceStamps = userReferenceStamps;
         // force re-sync on next analysis pass
         _session.ContextChanged();
-    }
-
-    // The targeting pack the build would use for the target, among the installed and already downloaded
-    // ones: its reference assemblies and C# source generators. Without one (or with a malformed NuGet
-    // configuration), the references the service was created with and no generators, as before.
-    private (IReadOnlyList<string> References, IReadOnlyList<string> Generators) TargetFrameworkReferences(PackageReferenceContext context)
-    {
-        try
-        {
-            var settings = NuGetRestorer.LoadSettings(context.NuGetConfigFile,
-                context.OutputDirectory is { } output ? RoslynScriptCompiler.ObjDirectory(output) : Path.GetTempPath());
-            var pack = TargetingPack.Find(context.TargetFramework, context.DotnetExecutable,
-                SettingsUtility.GetGlobalPackagesFolder(settings));
-            if (pack is not null)
-                return (pack.ReferenceAssemblies.Order(StringComparer.OrdinalIgnoreCase).ToList(),
-                    pack.GeneratorAssemblies("cs").Order(StringComparer.OrdinalIgnoreCase).ToList());
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NuGetConfigurationException)
-        {
-            _logger.LogDebug(ex, "No targeting pack for {TargetFramework}", context.TargetFramework);
-        }
-        return (_defaultFrameworkPaths, []);
     }
 
     // Exposes only the source generators of an assembly: the analyzers and code fixes that ship next to
