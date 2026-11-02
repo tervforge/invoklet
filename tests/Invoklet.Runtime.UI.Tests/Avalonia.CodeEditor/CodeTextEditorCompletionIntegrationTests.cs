@@ -60,7 +60,7 @@ public class CodeTextEditorCompletionIntegrationTests
     }
 
     [AvaloniaFact]
-    public async Task TypingSpace_Should_NotCommitASoftPrefixMatch_WhileStillTypingADifferentWord()
+    public void TypingSpace_Should_NotCommitASoftPrefixMatch_WhileStillTypingADifferentWord()
     {
         // Arrange — "return"/"readonly" both start with "ret", so the 24/7 auto-invoke on 'r' offers
         // them as prefix matches while the user is actually typing a new local variable name "ret".
@@ -68,31 +68,31 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act
         window.KeyTextInput("r");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("e");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("t");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput(" ");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — space must not commit "return"/"readonly" over the word actually being typed.
         Assert.Equal("var ret ", editor.Document.Text);
     }
 
     [AvaloniaFact]
-    public async Task TypingUnderscore_Should_NotCommitTheSelectedItem_WhileContinuingAnIdentifier()
+    public void TypingUnderscore_Should_NotCommitTheSelectedItem_WhileContinuingAnIdentifier()
     {
         // Arrange
         var (window, editor) = CreateEditor("", ("my_field", 1.0));
 
         // Act
         window.KeyTextInput("m");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("y");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("_");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — '_' is a configured IdentifierChars member, so it must continue the identifier
         // being typed, not commit "my_field" out from under it.
@@ -100,14 +100,14 @@ public class CodeTextEditorCompletionIntegrationTests
     }
 
     [AvaloniaFact]
-    public async Task TypingACommitCharacter_Should_AcceptTheSelection_ByDefault()
+    public void TypingACommitCharacter_Should_AcceptTheSelection_ByDefault()
     {
         var (window, editor) = CreateEditor("", ("Rhino", 1.0));
 
         window.KeyTextInput("R");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput(";");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // ';' both commits the selection ("R" -> "Rhino") and is itself inserted as typed.
         Assert.Equal("Rhino;", editor.Document.Text);
@@ -117,15 +117,15 @@ public class CodeTextEditorCompletionIntegrationTests
     // this off — Enter/Tab/click still commit either way (untouched by this switch), only the
     // "typing punctuation also commits" convenience path is gated.
     [AvaloniaFact]
-    public async Task TypingACommitCharacter_Should_NotAcceptTheSelection_WhenCommitCharactersAreDisabled()
+    public void TypingACommitCharacter_Should_NotAcceptTheSelection_WhenCommitCharactersAreDisabled()
     {
         var (window, editor) = CreateEditor("", ("Rhino", 1.0));
         editor.CommitCharactersEnabled = false;
 
         window.KeyTextInput("R");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput(";");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // No commit happened — ';' was just inserted after the still-partial "R".
         Assert.Equal("R;", editor.Document.Text);
@@ -135,18 +135,18 @@ public class CodeTextEditorCompletionIntegrationTests
     // "match start" tier, quality >= 5, never fires), so it's only soft-selected: shown
     // highlighted, but not confident enough for a typed commit character to accept automatically.
     [AvaloniaFact]
-    public async Task TypingACommitCharacter_Should_NotAcceptASoftSelectedMatch()
+    public void TypingACommitCharacter_Should_NotAcceptASoftSelectedMatch()
     {
         var (window, editor) = CreateEditor("", ("MyContext", 1.0));
 
         window.KeyTextInput("C");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("o");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("n");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput(";");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // No commit happened — ';' was just inserted after the still-partial "Con".
         Assert.Equal("Con;", editor.Document.Text);
@@ -157,24 +157,24 @@ public class CodeTextEditorCompletionIntegrationTests
     // path (CompletionWindow.CompletionList_InsertionRequested's TextInputEventArgs check) is
     // gated by soft-selection.
     [AvaloniaFact]
-    public async Task PressingEnter_Should_AcceptASoftSelectedMatch()
+    public void PressingEnter_Should_AcceptASoftSelectedMatch()
     {
         var (window, editor) = CreateEditor("", ("MyContext", 1.0));
 
         window.KeyTextInput("C");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("o");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("n");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Equal("MyContext", editor.Document.Text);
     }
 
     [AvaloniaFact]
-    public async Task AutoInvoke_Should_PreSelectTheBestMatch_FromTheFirstLetterTyped()
+    public void AutoInvoke_Should_PreSelectTheBestMatch_FromTheFirstLetterTyped()
     {
         // Arrange — "Zebra" is added first (so it'd win if the window opened with no filtering/
         // selection and just defaulted to the first item), "Rhino" is the only real prefix match for
@@ -184,9 +184,9 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act
         window.KeyTextInput("R");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.Equal("Rhino", editor.Document.Text);
@@ -196,7 +196,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // pre-existing remainder ("ole"), producing exactly the accepted item's text — not leave it
     // dangling after the inserted text (e.g. "Consoleole").
     [AvaloniaFact]
-    public async Task CommittingWithTab_Should_ReplaceTheRemainderOfTheWordAfterTheCaret()
+    public void CommittingWithTab_Should_ReplaceTheRemainderOfTheWordAfterTheCaret()
     {
         // Arrange — the whole word "Console" is already in the document; the caret is moved back to
         // its middle, as if the user had clicked back into an already-typed identifier.
@@ -207,9 +207,9 @@ public class CodeTextEditorCompletionIntegrationTests
         // before the caret (same SelectItem(alreadyTyped) mechanism as the auto-invoke pre-selection
         // above), then Tab commits it.
         window.KeyPress(Key.Space, RawInputModifiers.Control, PhysicalKey.Space, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.Equal("Console", editor.Document.Text);
@@ -219,15 +219,15 @@ public class CodeTextEditorCompletionIntegrationTests
     // Enter's existing "insert, don't touch what follows the caret" behavior, only Tab replaces the
     // remainder.
     [AvaloniaFact]
-    public async Task CommittingWithEnter_Should_NotTouchTheRemainderAfterTheCaret()
+    public void CommittingWithEnter_Should_NotTouchTheRemainderAfterTheCaret()
     {
         var (window, editor) = CreateEditor("Console", ("Console", 1.0));
         editor.TextArea.Caret.Offset = 4; // "Cons|ole"
 
         window.KeyPress(Key.Space, RawInputModifiers.Control, PhysicalKey.Space, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Equal("Consoleole", editor.Document.Text);
     }
@@ -266,23 +266,23 @@ public class CodeTextEditorCompletionIntegrationTests
         // Act — 'C' auto-invokes (request #1, blocked on tcs1); '.' is an unconditional
         // CompletionTrigger, firing request #2 (blocked on tcs2) regardless of #1 still being open.
         window.KeyTextInput("C");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput(".");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // The newer request resolves first, then the stale one resolves late.
         tcs2.SetResult();
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         tcs1.SetResult();
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Nothing is pre-selected right after '.' (no member-name prefix typed yet — see
         // CodeTextEditor's alreadyTyped check), so Enter has nothing to accept until the list is
         // filtered down to one candidate by typing part of its name, same as a real user would.
         window.KeyTextInput("R");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — only the newer request's window should ever exist; accepting it must insert
         // "Rhino2" after "C.", not have the stale "Zzz1" response clobber it.
@@ -294,7 +294,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // position isn't a valid completion spot at all — ShowCompletion must respect that instead of
     // unconditionally offering snippets on every explicit/auto-invoke.
     [AvaloniaFact]
-    public async Task ShowCompletion_Should_NotOfferSnippets_WhenProviderSuppressesThem()
+    public void ShowCompletion_Should_NotOfferSnippets_WhenProviderSuppressesThem()
     {
         // Arrange
         var editor = new CodeTextEditor();
@@ -313,9 +313,9 @@ public class CodeTextEditorCompletionIntegrationTests
         // Act — 'f' auto-invokes; would normally offer the "for" snippet (nothing else does, and
         // this isn't a member-access context), if not for SuppressSnippets.
         window.KeyTextInput("f");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — no completion window ever opened, so Enter just inserts a newline instead of
         // expanding the "for" snippet. AvaloniaEdit's TextUtilities.GetNewLineFromDocument falls back
@@ -333,7 +333,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // leaves nothing to show — since that handler only runs on the *next* caret move, not for this
     // first, manually-triggered filter.
     [AvaloniaFact]
-    public async Task ShowCompletion_Should_HideTheWindow_WhenNothingTypedMatchesAnyItem()
+    public void ShowCompletion_Should_HideTheWindow_WhenNothingTypedMatchesAnyItem()
     {
         // Arrange — only "Rhino" is ever offered.
         var (window, editor) = CreateEditor("", ("Rhino", 1.0));
@@ -341,7 +341,7 @@ public class CodeTextEditorCompletionIntegrationTests
         // Act — 'Q' auto-invokes and filters against "Rhino" — zero matches, so the window should
         // close instead of sitting open and empty.
         window.KeyTextInput("Q");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.False(editor.IsCompletionWindowOpen);
@@ -353,7 +353,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // highest — here a same-named class — and '=' used to be a commit character like any other
     // punctuation, accepting that match right before the "=>" the user was actually typing.
     [AvaloniaFact]
-    public async Task TypingEquals_Should_NotCommitTheSelectedItem_WhileStartingALambdaArrow()
+    public void TypingEquals_Should_NotCommitTheSelectedItem_WhileStartingALambdaArrow()
     {
         // Arrange — "XmlClass" is the only offered item, so it's always selected regardless of
         // quality/priority ranking; stands in for whatever real symbol happens to match "x".
@@ -361,9 +361,9 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act
         window.KeyTextInput("x");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("=");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — '=' must just be inserted, not commit "XmlClass" over the lambda parameter "x".
         Assert.Equal("list.First(x=", editor.Document.Text);
@@ -375,7 +375,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // "using" is (language-agnostic control layer) — they just carry opaque tags through to
     // whatever onCommit callback the language-aware caller (EditorTabItemControl) supplied.
     [AvaloniaFact]
-    public async Task AcceptingACompletion_Should_InvokeOnCommit_WithTheItemsTags()
+    public void AcceptingACompletion_Should_InvokeOnCommit_WithTheItemsTags()
     {
         // Arrange
         IReadOnlyList<string>? committedTags = null;
@@ -395,9 +395,9 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act
         window.KeyTextInput("J");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.Equal("JsonConvert", editor.Document.Text);
@@ -410,7 +410,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // show overloads instead of whatever completion items the provider may (or may not) have added,
     // not open a completion window at all.
     [AvaloniaFact]
-    public async Task ShowCompletion_Should_ShowOverloads_WhenProviderRedirects()
+    public void ShowCompletion_Should_ShowOverloads_WhenProviderRedirects()
     {
         // Arrange
         var overloadProviderCallCount = 0;
@@ -435,7 +435,7 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act — the literal Ctrl+Space hotkey (trigger '\0', IsExplicitInvoke true).
         window.KeyPress(Key.Space, RawInputModifiers.Control, PhysicalKey.Space, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.Equal(1, overloadProviderCallCount);
@@ -446,7 +446,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // Ordinary completion items (no tags — the overwhelming majority) must not pay for, or trigger,
     // any onCommit machinery at all.
     [AvaloniaFact]
-    public async Task AcceptingACompletion_Should_NotInvokeOnCommit_WhenTheItemHasNoTags()
+    public void AcceptingACompletion_Should_NotInvokeOnCommit_WhenTheItemHasNoTags()
     {
         // Arrange
         var onCommitCallCount = 0;
@@ -465,9 +465,9 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act
         window.KeyTextInput("R");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.Equal("Rhino", editor.Document.Text);
@@ -480,7 +480,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // completion window drives that same path end to end, not just that the service produces the
     // right template string (covered separately, headlessly, by CSharpIntelliSenseOverrideStubTests).
     [AvaloniaFact]
-    public async Task AcceptingASnippetCompletionData_Should_ExpandTheTemplate_ReindentedToTheCurrentLine()
+    public void AcceptingASnippetCompletionData_Should_ExpandTheTemplate_ReindentedToTheCurrentLine()
     {
         // Arrange — caret sits right after 4 spaces of indent on the current (only) line.
         const string template = "public override void Foo()\n{\n\tbase.Foo();${0}\n}";
@@ -502,11 +502,11 @@ public class CodeTextEditorCompletionIntegrationTests
         // selected (mirrors AcceptingACompletion_Should_InvokeOnCommit_WithTheItemsTags above — Enter
         // with nothing typed/selected doesn't commit anything), then Enter to accept it.
         window.KeyPress(Key.Space, RawInputModifiers.Control, PhysicalKey.Space, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("F");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — every line after the first gets the same 4-space indent as the current line, and
         // the ${0} marker is gone with the caret left exactly where it was (right after "base.Foo();").
@@ -523,7 +523,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // The active parameter used to update only on a typed "," — clicking,
     // arrow keys, Home/End left it stuck on whatever slot was active when the window opened.
     [AvaloniaFact]
-    public async Task ShowOverloads_Should_ReRequest_WhenTheCaretMovesWhileTheWindowIsOpen()
+    public void ShowOverloads_Should_ReRequest_WhenTheCaretMovesWhileTheWindowIsOpen()
     {
         // Arrange
         var callCount = 0;
@@ -544,12 +544,12 @@ public class CodeTextEditorCompletionIntegrationTests
         // Act — open the insight window via the trigger character, then move the caret without
         // typing anything (simulating a click/arrow-key navigation, not a "," trigger).
         window.KeyTextInput("(");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(editor.IsInsightWindowOpen);
         var callsAfterOpen = callCount;
 
         editor.TextArea.Caret.Offset = 1;
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — a second request went out purely from the caret move.
         Assert.True(callCount > callsAfterOpen);
@@ -576,7 +576,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // OverloadTriggers path in OnTextEntered), so it isolates ShowOverloads' own empty-result handling
     // from that separate, already-present AvaloniaEdit behavior.
     [AvaloniaFact]
-    public async Task ShowOverloads_Should_CloseTheWindow_WhenARequestComesBackWithNoOverloads()
+    public void ShowOverloads_Should_CloseTheWindow_WhenARequestComesBackWithNoOverloads()
     {
         // Arrange
         var returnOverload = true;
@@ -595,14 +595,14 @@ public class CodeTextEditorCompletionIntegrationTests
         editor.TextArea.Caret.Offset = 3;
 
         window.KeyTextInput("(");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(editor.IsInsightWindowOpen);
 
         // Act — a second trigger character, but this time the provider finds nothing (e.g. the
         // service determined the caret is no longer inside any call).
         returnOverload = false;
         window.KeyTextInput(",");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.False(editor.IsInsightWindowOpen);
@@ -613,7 +613,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // base.OnKeyDown first, before its own Up/Down cycling), but had no regression test locking that
     // behavior in.
     [AvaloniaFact]
-    public async Task Escape_Should_CloseTheInsightWindow()
+    public void Escape_Should_CloseTheInsightWindow()
     {
         // Arrange
         var editor = new CodeTextEditor();
@@ -630,12 +630,12 @@ public class CodeTextEditorCompletionIntegrationTests
         editor.TextArea.Caret.Offset = 3;
 
         window.KeyTextInput("(");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(editor.IsInsightWindowOpen);
 
         // Act
         window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.False(editor.IsInsightWindowOpen);
@@ -646,7 +646,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // an array-literal argument (Foo(new[] { 1, 2 }) incorrectly hid the window for Foo's own,
     // still-open call.
     [AvaloniaFact]
-    public async Task InsightWindow_Should_StayOpen_WhenClosingABracketNestedInsideAnArgument()
+    public void InsightWindow_Should_StayOpen_WhenClosingABracketNestedInsideAnArgument()
     {
         // Arrange
         var editor = new CodeTextEditor();
@@ -667,13 +667,13 @@ public class CodeTextEditorCompletionIntegrationTests
         // Act — open the call, type a nested "{" (e.g. the start of an array-literal argument), then
         // its closing "}".
         window.KeyTextInput("(");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(editor.IsInsightWindowOpen);
 
         window.KeyTextInput("{");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         window.KeyTextInput("}");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert — the OUTER call's window is still showing (it never should have closed at all).
         Assert.True(editor.IsInsightWindowOpen);
@@ -682,7 +682,7 @@ public class CodeTextEditorCompletionIntegrationTests
     // Companion regression guard — closing the call's OWN bracket (nothing nested pending) must still
     // hide the window immediately, same as before this fix.
     [AvaloniaFact]
-    public async Task InsightWindow_Should_Close_WhenClosingTheCallsOwnBracket()
+    public void InsightWindow_Should_Close_WhenClosingTheCallsOwnBracket()
     {
         // Arrange
         var editor = new CodeTextEditor();
@@ -701,11 +701,11 @@ public class CodeTextEditorCompletionIntegrationTests
 
         // Act
         window.KeyTextInput("(");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(editor.IsInsightWindowOpen);
 
         window.KeyTextInput(")");
-        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.False(editor.IsInsightWindowOpen);
@@ -757,7 +757,8 @@ public class CodeTextEditorCompletionIntegrationTests
         Assert.True(editor.IsCompletionWindowOpen);
 
         window.KeyTextInput(".");
-        await Task.Delay(100);
+        await editor.CompletionTask;
+        Dispatcher.UIThread.RunJobs();
 
         // Assert
         Assert.Equal("var a = new System.Collections.Generic.List<string>();\na.", editor.Document.Text);

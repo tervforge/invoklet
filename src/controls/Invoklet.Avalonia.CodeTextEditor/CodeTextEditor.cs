@@ -1113,7 +1113,18 @@ public class CodeTextEditor : TextEditor, IDisposable
             Document.Insert(TextArea.Caret.Offset, closing.ToString());
     }
 
+    // The latest completion request, which is over when the provider has answered and the window is open or was not needed: for a test to wait
+    // for, instead of a pause. Nothing else needs it.
+    internal Task CompletionTask { get; private set; } = Task.CompletedTask;
+
     private async void ShowCompletion(char trigger, bool explicitInvoke = false)
+    {
+        var request = ShowCompletionAsync(trigger, explicitInvoke);
+        CompletionTask = request;
+        await request; // an error of the provider is raised here as it was when this method did the work itself
+    }
+
+    private async Task ShowCompletionAsync(char trigger, bool explicitInvoke)
     {
         // Fast typing can start a new completion request before the previous one has resolved (e.g.
         // 'C' triggers the 24/7 auto-invoke, then '.' triggers again before that first request comes
