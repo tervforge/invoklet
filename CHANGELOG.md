@@ -44,6 +44,8 @@ closes six security gaps around secrets, downloads and connections.
 - The Test button and the OpenAPI schema read no longer follow a redirect, which would have sent a connection's headers, a secret among them, to
   whatever host the server named.
 - A script's saved output (`run-output.json`) is readable by its owner only on macOS and Linux.
+- A settings file that holds `null` for a group of settings (`"Logging": null`) no longer stops Invoklet from starting: the group has its default values.
+  A settings file that cannot be read is kept as `settings.json.bad` before the defaults are saved over it.
 - In database connections a foreign key on a unique column is a one-to-one relationship: the row on the other side is one row (`person.Passport`), not a
   collection of rows.
 - A library that a script references by path is read again by the editor when it is built again in the same place, so completion and errors follow the new
