@@ -11,7 +11,7 @@ using Invoklet.Languages.DotnetCommon.Sdk;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Http;
+namespace Invoklet.Connectors.Tests.Connectors.Http;
 
 // The generated client is compiled and run against a server on this machine that serves a document and a few operations.
 public sealed class OpenApiScriptTests : IDisposable

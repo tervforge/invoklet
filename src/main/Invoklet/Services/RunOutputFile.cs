@@ -17,7 +17,11 @@ internal static class RunOutputFile
         Directory.CreateDirectory(outputDirectory);
         var path = Path.Combine(outputDirectory, FileName);
         var temp = path + ".tmp";
-        File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(output));
+        // What a script printed may hold a secret: readable by its owner only, as the other stores.
+        var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using (var stream = new FileStream(temp, options))
+            stream.Write(JsonSerializer.SerializeToUtf8Bytes(output));
         File.Move(temp, path, overwrite: true);
     }
 

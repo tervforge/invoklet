@@ -1,16 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- SQLite connections: the provider's package brings Microsoft.Data.Sqlite and its design-time services, and nothing of any other database. -->
   <PropertyGroup>
     <RootNamespace>Invoklet.Connectors.Sqlite</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Invoklet.NonUI.Tests" />
+    <InternalsVisibleTo Include="Invoklet.Connectors.Tests" />
     <InternalsVisibleTo Include="Invoklet.Runtime.UI.Tests" />
     <InternalsVisibleTo Include="Invoklet.IntegrationTests" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\core\Invoklet.Contracts\Invoklet.Contracts.csproj" />
+    <ProjectReference Include="..\Invoklet.Connectors.EfCore\Invoklet.Connectors.EfCore.csproj" />
   </ItemGroup>
 </Project>

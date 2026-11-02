@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Reads a database with Entity Framework Core's reverse engineering and writes the context a script uses. The providers (PostgreSQL, SQL Server) are
+       libraries of their own that bring only their own packages. -->
+  <PropertyGroup>
+    <RootNamespace>Invoklet.Connectors.EfCore</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <!-- The design package asks for Roslyn 5.0; Invoklet uses a newer one. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.Common" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Invoklet.NonUI.Tests" />
+    <InternalsVisibleTo Include="Invoklet.Connectors.Tests" />
+    <InternalsVisibleTo Include="Invoklet.Connectors.IntegrationTests" />
+    <InternalsVisibleTo Include="Invoklet.Runtime.UI.Tests" />
+    <InternalsVisibleTo Include="Invoklet.IntegrationTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\Invoklet.Contracts\Invoklet.Contracts.csproj" />
+  </ItemGroup>
+  <Import Project="..\..\..\build\EfCoreDesign.props" />
+</Project>

@@ -369,7 +369,8 @@ public sealed class SecretStoreTests : IDisposable
         WithKeyExport(() => WithStore(StorePath, () =>
         {
             var store = new FileSecretStore(StorePath, new FakeKeychain());
-            store.Save([new Secret("Orders-DB", "p@ss wörd")], null); // exports the key, as Invoklet does
+            store.Save([new Secret("Orders-DB", "p@ss wörd")], null); // keeps the key for the scripts, as Invoklet does
+            Environment.SetEnvironmentVariable(SecretKeys.EnvVar, SecretKeys.ScriptKey); // as the run gives it to its script
 
             Assert.Equal("p@ss wörd", Util.GetSecret("orders-db"));
 
@@ -407,7 +408,8 @@ public sealed class SecretStoreTests : IDisposable
             Assert.True(SecretKeys.IsEncrypted(StorePath));
             Assert.DoesNotContain("plain-secret-value", File.ReadAllText(StorePath));
             Assert.Equal([new Secret("db", "plain-secret-value")], store.Load());
-            Assert.NotNull(Environment.GetEnvironmentVariable(SecretKeys.EnvVar));
+            Assert.NotNull(SecretKeys.ScriptKey);
+            Assert.Null(Environment.GetEnvironmentVariable(SecretKeys.EnvVar));
         });
     }
 

@@ -3,6 +3,46 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.1] — 2026-11-02
+
+This release adds PostgreSQL and SQL Server connections, exports a table of the results as CSV, lets you drag the heights of the sidebar sections, and
+closes six security gaps around secrets, downloads and connections.
+
+**Changed behaviour:** SQLite connections now name their sets and rows as Entity Framework Core does (`order_items` is `OrderItems`, a table `log` is
+`Logs`). A script that uses a set by its old name must be changed to the new one.
+
+### Added
+
+- PostgreSQL and SQL Server connections: one connection string (with `${secret:…}` for the password) and an optional schema. The script gets an
+  Entity Framework Core context with a set per table and view, rows with typed columns, keys and navigation properties for foreign keys, and
+  Tools → Connections browses the tables, columns and keys. The database is read with Entity Framework Core's own reverse engineering, and each
+  provider is a library of its own.
+  A PostgreSQL connection can leave the password out and use the pgpass file; a SQL Server one can use `Integrated Security=true`. The form says
+  so, and a failed sign-in names the pgpass line looked for or the Kerberos ticket needed.
+- A "…" button in the header of the last column of every table in the results opens a menu with **Export to CSV...**, which saves that table as a CSV file (UTF-8 with a byte order mark,
+  so Excel reads it right). "Save results as HTML..." moved from the output settings to the context menu of the results panel.
+- The heights of the sections of the sidebar (Connections, Scripts, Samples) can be changed by dragging the line between two open sections, and are
+  kept between launches.
+
+### Changed
+
+- SQLite connections are read with Entity Framework Core's reverse engineering too, as PostgreSQL and SQL Server are, so the sets, rows and navigation
+  properties of a database are named as EF Core names them (`order_items` is `OrderItems`, a table `log` is `Logs`): a script that uses a set by its old name
+  needs the new one.
+
+### Fixed
+
+- The Secret Store's key is given only to a script that can ask for secrets. It used to stay in Invoklet's environment after the first such run, so
+  every program started later, scripts that never mention a secret among them, inherited it.
+- On macOS and Linux Invoklet's NuGet configuration, which keeps the password of a package source in clear text, is readable by its owner only.
+- The first-run setup downloads into a folder of its own instead of fixed names in the shared temp folder, and a failed netcoredbg update keeps the
+  debugger that was installed.
+- Opening a script no longer reads the schema of a connection that uses `${secret:…}` or `${env:…}`, so a file from elsewhere cannot make Invoklet send
+  a secret to the server it names merely by being opened. Run the script, or press Refresh in the Connections window, to read it.
+- The Test button and the OpenAPI schema read no longer follow a redirect, which would have sent a connection's headers, a secret among them, to
+  whatever host the server named.
+- A script's saved output (`run-output.json`) is readable by its owner only on macOS and Linux.
+
 ## [0.11.0] — 2026-10-31
 
 ### Added
@@ -973,5 +1013,6 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.10.3]: https://github.com/tervforge/invoklet/releases/tag/v0.10.3
 [0.10.5]: https://github.com/tervforge/invoklet/releases/tag/v0.10.5
 [0.11.0]: https://github.com/tervforge/invoklet/releases/tag/v0.11.0
+[0.11.1]: https://github.com/tervforge/invoklet/releases/tag/v0.11.1
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5

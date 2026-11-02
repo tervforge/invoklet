@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Invoklet.Contracts;
 using Invoklet.Languages.DotnetCommon;
 using NuGet.Configuration;
@@ -116,5 +117,20 @@ public sealed class InvokletNuGetConfigStoreTests : IDisposable
         store.Save([new("a", "https://a.example/v3/index.json")]);
 
         Assert.Equal(["a"], store.Load().Select(s => s.Name));
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public void Save_Should_LeaveAFileWithAPassword_ReadableByItsOwnerOnly()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes");
+        var store = Store();
+        File.WriteAllText(store.ConfigFilePath, "<configuration/>");
+        File.SetUnixFileMode(store.ConfigFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+
+        store.Save([new("corp", "https://corp.example/v3/index.json", true, "me", "secret")]);
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(store.ConfigFilePath));
+        Assert.Equal("secret", store.Load().Single().Password);
     }
 }

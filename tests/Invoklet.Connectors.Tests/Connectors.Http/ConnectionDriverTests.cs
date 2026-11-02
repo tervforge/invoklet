@@ -4,7 +4,7 @@ using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Http;
+namespace Invoklet.Connectors.Tests.Connectors.Http;
 
 public class ConnectionPlaceholderResolverTests
 {

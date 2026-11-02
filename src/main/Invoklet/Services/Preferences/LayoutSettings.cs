@@ -15,6 +15,9 @@ public sealed class LayoutSettings
     /// <summary>Folded sections of the sidebar: "Connections", "Scripts", "Samples". Samples starts folded.</summary>
     public List<string> CollapsedSidebarSections { get; set; } = ["Samples"];
 
+    /// <summary>The share of the sidebar's height each open section has, by section name; a section not listed counts 1 (equal shares).</summary>
+    public Dictionary<string, double>? SidebarSectionWeights { get; set; }
+
     /// <summary>IDs of folded connection groups in the sidebar's Connections tree.</summary>
     public List<string> CollapsedConnectionGroups { get; set; } = [];
 

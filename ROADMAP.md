@@ -4,14 +4,12 @@ Planned work for Invoklet. Missing something? [Open an issue](https://github.com
 
 ## Editor
 
-- Format on type and Format Selection (Format Document already exists).
 - Completion polish: soft selection, recently used items first, per-item commit characters,
   target-typed preselection and full fuzzy matching.
 - CodeLens and a syntax tree viewer.
 
 ## Scripts and results
 
-- Exporting results (HTML, Excel).
 - Database connections for querying data from scripts.
 
 ## Plugins

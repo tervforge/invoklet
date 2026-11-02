@@ -7,6 +7,7 @@ using Grpc.Core;
 using Grpc.Reflection.V1Alpha;
 using Inventory.V1;
 using Invoklet.Connectors.Grpc;
+using Invoklet.Connectors.Tests.Infrastructure;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
@@ -14,7 +15,6 @@ using Invoklet.Languages.CSharp;
 using Invoklet.Languages.CSharp.IntelliSense;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
-using Invoklet.NonUI.Tests.Infrastructure;
 using Invoklet.Services.Secrets;
 using Invoklet.Windows.Models;
 using Microsoft.AspNetCore.Builder;
@@ -27,7 +27,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Grpc;
+namespace Invoklet.Connectors.Tests.Connectors.Grpc;
 
 // A gRPC connection reads the server's services through server reflection, has protoc write their
 // classes, and gives the script a client per service that sends the connection's metadata. The
@@ -376,7 +376,8 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
         if (!new DotnetSdkProvider().Get().Any()) return;
         var connection = Inventory();
         var schemas = Schemas();
-        Assert.True(await schemas.EnsureAsync([connection], null, ConnectionSchemaRefresh.Missing, TestContext.Current.CancellationToken));
+        // As a run reads it: the editor leaves a connection with a secret in it alone until then.
+        Assert.True(await schemas.EnsureAsync([connection], null, ConnectionSchemaRefresh.Failed, TestContext.Current.CancellationToken));
         Assert.Null(schemas.Cache.ErrorFor(connection));
         var schema = schemas.Cache.Get(connection)!;
         Assert.Equal("2 services: inventory.v1.Audit, inventory.v1.Stock.", schema.Summary);
@@ -385,7 +386,7 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
         Assert.DoesNotContain(schema.Files, f => f.Name.Contains("Timestamp", StringComparison.Ordinal)); // Google.Protobuf has it
         Assert.All(schema.Files, f => Assert.Contains("#nullable enable annotations", f.Text, StringComparison.Ordinal));
         // Read once: nothing changes the next time.
-        Assert.False(await schemas.EnsureAsync([connection], null, ConnectionSchemaRefresh.Missing, TestContext.Current.CancellationToken));
+        Assert.False(await schemas.EnsureAsync([connection], null, ConnectionSchemaRefresh.Failed, TestContext.Current.CancellationToken));
 
         var packages = new GrpcConnectionDriver().Packages;
         var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, packages.Keys, schemas.Drivers, schemas.Cache)!;
@@ -548,7 +549,7 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
 
         // A missing secret is such a reason too.
         var secretless = Inventory(metadata: "Bearer ${secret:nope}");
-        await schemas.EnsureAsync([secretless], null, ConnectionSchemaRefresh.Missing, TestContext.Current.CancellationToken);
+        await schemas.EnsureAsync([secretless], null, ConnectionSchemaRefresh.Failed, TestContext.Current.CancellationToken);
         Assert.Equal("The Secret Store has no secret named 'nope'. Add it in Tools → Secret Store.", schemas.Cache.ErrorFor(secretless));
     }
 

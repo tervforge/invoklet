@@ -248,7 +248,8 @@ public sealed class NavigationSidebarTests : IDisposable
         var samples = Named<Expander>(window, "SamplesBundle");
         Assert.False(samples.IsExpanded); // folded by default
 
-        Assert.Equal(grid.Bounds.Height, connections.Bounds.Height + scripts.Bounds.Height + samples.Bounds.Height, 1);
+        // A seam between two open sections takes one device-independent pixel of the height.
+        Assert.Equal(grid.Bounds.Height, connections.Bounds.Height + scripts.Bounds.Height + samples.Bounds.Height + OpenSeams(window), 1);
         // Grid star sizing can round one section by a device pixel.
         Assert.InRange(Math.Abs(connections.Bounds.Height - scripts.Bounds.Height), 0, 1);
         var header = samples.GetVisualDescendants().OfType<ToggleButton>().First();
@@ -257,7 +258,84 @@ public sealed class NavigationSidebarTests : IDisposable
         samples.IsExpanded = true;
         Settle();
         Assert.InRange(Math.Abs(connections.Bounds.Height - samples.Bounds.Height), 0, 1);
-        Assert.Equal(grid.Bounds.Height, connections.Bounds.Height + scripts.Bounds.Height + samples.Bounds.Height, 1);
+        Assert.Equal(grid.Bounds.Height, connections.Bounds.Height + scripts.Bounds.Height + samples.Bounds.Height + OpenSeams(window), 1);
+    }
+
+    private static int OpenSeams(Window window) =>
+        new[] { "ConnectionsScriptsSplitter", "ScriptsSamplesSplitter" }.Count(name => Named<GridSplitter>(window, name).IsVisible);
+
+    [AvaloniaFact]
+    public void ASeam_Should_TakeOnePixelOfLayout_AndNothingWhenHidden()
+    {
+        var (window, _, _) = CreateMainWindow();
+        var grid = Named<Grid>(window, "SidebarSections");
+        Assert.Equal([1d, 0d], [grid.RowDefinitions[1].ActualHeight, grid.RowDefinitions[3].ActualHeight]);
+    }
+
+    // A seam to drag shows only between two open neighbours.
+    [AvaloniaFact]
+    public void ASeam_Should_ShowOnlyBetweenTwoOpenSections()
+    {
+        var (window, _, _) = CreateMainWindow();
+        var first = Named<GridSplitter>(window, "ConnectionsScriptsSplitter");
+        var second = Named<GridSplitter>(window, "ScriptsSamplesSplitter");
+        Assert.True(first.IsVisible); // Connections and Scripts are open, Samples folded by default
+        Assert.False(second.IsVisible);
+
+        Named<Expander>(window, "SamplesBundle").IsExpanded = true;
+        Settle();
+        Assert.True(second.IsVisible);
+
+        Named<Expander>(window, "ScriptsBundle").IsExpanded = false;
+        Settle();
+        Assert.False(first.IsVisible);
+        Assert.False(second.IsVisible);
+    }
+
+    // A real drag with the mouse: the upper section grows by what the pointer moved, the lower one gives it up, and the shares are kept.
+    [AvaloniaFact]
+    public void DraggingASeamWithTheMouse_Should_MoveTheBoundaryAndKeepStarShares()
+    {
+        var (window, _, _) = CreateMainWindow();
+        var seam = Named<GridSplitter>(window, "ConnectionsScriptsSplitter");
+        var connections = Named<Expander>(window, "ConnectionsBundle");
+        var scripts = Named<Expander>(window, "ScriptsBundle");
+        var before = connections.Bounds.Height;
+        var total = connections.Bounds.Height + scripts.Bounds.Height;
+        var start = seam.TranslatePoint(new Point(seam.Bounds.Width / 2, seam.Bounds.Height / 2), window)!.Value;
+
+        window.MouseMove(start);
+        window.MouseDown(start, MouseButton.Left);
+        window.MouseMove(start + new Point(0, 40));
+        window.MouseMove(start + new Point(0, 60));
+        window.MouseUp(start + new Point(0, 60), MouseButton.Left);
+        Settle();
+
+        Assert.InRange(connections.Bounds.Height, before + 50, before + 70);
+        Assert.Equal(total, connections.Bounds.Height + scripts.Bounds.Height, 1);
+        var grid = Named<Grid>(window, "SidebarSections");
+        Assert.True(grid.RowDefinitions[0].Height.IsStar && grid.RowDefinitions[2].Height.IsStar);
+        Assert.True(_layout.SidebarSectionWeights!["Connections"] > _layout.SidebarSectionWeights["Scripts"]);
+    }
+
+    // Dragging a seam changes the shares of the open sections, which are kept for the next start.
+    [AvaloniaFact]
+    public void DraggingASeam_Should_KeepTheSectionsHeightsForTheNextStart()
+    {
+        var (window, _, _) = CreateMainWindow();
+        var grid = Named<Grid>(window, "SidebarSections");
+        grid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
+        grid.RowDefinitions[2].Height = new GridLength(3, GridUnitType.Star);
+
+        Named<GridSplitter>(window, "ConnectionsScriptsSplitter").RaiseEvent(new VectorEventArgs { RoutedEvent = Thumb.DragCompletedEvent });
+
+        Assert.Equal(1, _layout.SidebarSectionWeights!["Connections"]);
+        Assert.Equal(3, _layout.SidebarSectionWeights["Scripts"]);
+
+        var (secondWindow, _, _) = CreateMainWindow();
+        var connections = Named<Expander>(secondWindow, "ConnectionsBundle");
+        var scripts = Named<Expander>(secondWindow, "ScriptsBundle");
+        Assert.InRange(scripts.Bounds.Height / connections.Bounds.Height, 2.8, 3.2);
     }
 
     // Which sections are open is kept in the layout settings for the next start.

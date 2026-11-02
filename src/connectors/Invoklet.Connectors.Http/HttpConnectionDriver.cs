@@ -29,7 +29,7 @@ public sealed class HttpConnectionDriver : IConnectionDriver
     private readonly Func<HttpMessageHandler> _handler;
 
     /// <param name="handler">What sends the Test button's request; a plain <see cref="HttpClientHandler"/> unless replaced.</param>
-    public HttpConnectionDriver(Func<HttpMessageHandler>? handler = null) => _handler = handler ?? (() => new HttpClientHandler());
+    public HttpConnectionDriver(Func<HttpMessageHandler>? handler = null) => _handler = handler ?? (() => new HttpClientHandler { AllowAutoRedirect = false });
 
     public string Id => DriverId;
 

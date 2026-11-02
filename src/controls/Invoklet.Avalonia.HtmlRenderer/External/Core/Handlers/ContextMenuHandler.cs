@@ -323,6 +323,13 @@ internal sealed class ContextMenuHandler : IDisposable
                     _contextMenu.AddItem(_selectAll, true, OnSelectAllClick);
                 }
 
+                if (_htmlContainer.ExtraContextMenuItems.Count > 0)
+                {
+                    if (_contextMenu.ItemsCount > 0) _contextMenu.AddDivider();
+                    foreach (var (text, click) in _htmlContainer.ExtraContextMenuItems)
+                        _contextMenu.AddItem(text, true, (_, _) => click());
+                }
+
                 if (_contextMenu.ItemsCount > 0)
                 {
                     _contextMenu.RemoveLastDivider();

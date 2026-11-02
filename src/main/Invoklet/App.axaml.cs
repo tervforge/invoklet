@@ -5,7 +5,9 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Invoklet.Connectors.Grpc;
 using Invoklet.Connectors.Http;
+using Invoklet.Connectors.Postgres;
 using Invoklet.Connectors.Sqlite;
+using Invoklet.Connectors.SqlServer;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Languages.CSharp;
@@ -293,6 +295,8 @@ public class App : Application
             registry.Register(new OpenApiConnectionDriver());
             registry.Register(new GrpcConnectionDriver());
             registry.Register(new SqliteConnectionDriver());
+            registry.Register(new PostgresConnectionDriver());
+            registry.Register(new SqlServerConnectionDriver());
             return registry;
         });
         // What some drivers read from the endpoint before a build (a gRPC server's services), kept

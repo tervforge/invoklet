@@ -568,20 +568,54 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
     // ── Sidebar sections ──────────────────────────────────────────────────────
 
-    // Open sections share the sidebar's height and each tree scrolls inside its own section; a folded
-    // or hidden one takes its header only. The last row takes what is left when all are folded.
+    // The section rows are 0, 2 and 4; the rows between them hold the seams, the last takes what is left when all are folded.
+    private static readonly string[] SectionNames = [MainWindowViewModel.ConnectionsSection, MainWindowViewModel.ScriptsSection, MainWindowViewModel.SamplesSection];
+
+    // The smallest height of an open section: its header and a row or two of its tree.
+    private const double MinSectionHeight = 72;
+
+    private Expander[] Sections => [ConnectionsBundle, ScriptsBundle, SamplesBundle];
+
+    private static bool IsOpen(Expander section) => section.IsVisible && section.IsExpanded;
+
+    // Open sections share the sidebar's height in the proportions last dragged (equal at first) and each tree
+    // scrolls inside its own section; a folded or hidden one takes its header only. A seam shows between two
+    // open neighbours. The last row takes what is left when all are folded.
     private void UpdateSidebarRows()
     {
         var grid = this.FindControl<Grid>("SidebarSections")!;
-        var sections = new[] { ConnectionsBundle, ScriptsBundle, SamplesBundle };
+        var sections = Sections;
+        var weights = _prefs.Layout.SidebarSectionWeights ?? [];
         var anyOpen = false;
         for (var i = 0; i < sections.Length; i++)
         {
-            var open = sections[i].IsVisible && sections[i].IsExpanded;
+            var open = IsOpen(sections[i]);
             anyOpen |= open;
-            grid.RowDefinitions[i].Height = open ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            var row = grid.RowDefinitions[2 * i];
+            row.MinHeight = open ? MinSectionHeight : 0;
+            row.Height = open ? new GridLength(weights.TryGetValue(SectionNames[i], out var weight) && weight > 0 ? weight : 1, GridUnitType.Star) : GridLength.Auto;
         }
-        grid.RowDefinitions[3].Height = anyOpen ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        // A seam is one pixel of layout, as the one between the sidebar and the editor; its drag target overlaps the sections.
+        ConnectionsScriptsSplitter.IsVisible = IsOpen(sections[0]) && IsOpen(sections[1]);
+        ScriptsSamplesSplitter.IsVisible = IsOpen(sections[1]) && IsOpen(sections[2]);
+        grid.RowDefinitions[1].Height = new GridLength(ConnectionsScriptsSplitter.IsVisible ? 1 : 0);
+        grid.RowDefinitions[3].Height = new GridLength(ScriptsSamplesSplitter.IsVisible ? 1 : 0);
+        grid.RowDefinitions[5].Height = anyOpen ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+    }
+
+    // After a drag the open sections' rows hold the new proportions (the splitter keeps them in star units): kept for the next start.
+    private void SidebarSplitter_DragCompleted(object? sender, VectorEventArgs e)
+    {
+        var grid = this.FindControl<Grid>("SidebarSections")!;
+        var sections = Sections;
+        var weights = new Dictionary<string, double>(_prefs.Layout.SidebarSectionWeights ?? []);
+        for (var i = 0; i < sections.Length; i++)
+        {
+            var height = grid.RowDefinitions[2 * i].Height;
+            if (IsOpen(sections[i]) && height.IsStar) weights[SectionNames[i]] = Math.Round(height.Value, 3);
+        }
+        _prefs.Layout.SidebarSectionWeights = weights;
+        _prefs.Save();
     }
 
     // ── Connections tree ──────────────────────────────────────────────────────

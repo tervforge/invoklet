@@ -3,6 +3,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Invoklet.Avalonia.HtmlRenderer;
+using Invoklet.Avalonia.HtmlRenderer.External.Core.Entities;
+using Invoklet.Services;
 using Invoklet.UserControls.Models;
 
 namespace Invoklet.UserControls;
@@ -38,6 +41,9 @@ public partial class OutputHtmlView : UserControl
             _scrollToEndPending = false;
             OutputHtml.ScrollToEnd();
         };
+
+        OutputHtml.LinkClicked += OnLinkClicked;
+        OutputHtml.Container.ExtraContextMenuItems.Add(("Save results as HTML...", () => SaveHtmlRequested?.Invoke()));
 
         DataContextChanged += (_, _) => Rebind();
         // DataContext (State.Output, EditorTabItemControl.cs) is set exactly once per tab and never
@@ -105,12 +111,29 @@ public partial class OutputHtmlView : UserControl
         OutputHtml.Text = $"""
                            <html>
                            <head><style>{vm.Css}</style></head>
-                           <body>{vm.Content}</body>
+                           <body>{ResultsTables.WithMenus(vm.Content)}</body>
                            </html>
                            """;
     }
 
+    /// <summary>"Save results as HTML..." was chosen in the context menu.</summary>
+    public event Action? SaveHtmlRequested;
+
+    /// <summary>The "…" above a table was clicked and "Export to CSV" chosen; the number of the table (see <see cref="ResultsTables"/>).</summary>
+    public event Action<int>? ExportTableRequested;
+
+    private void OnLinkClicked(object? sender, HtmlRendererRoutedEventArgs<HtmlLinkClickedEventArgs> e)
+    {
+        if (e.Event is not { } link || ResultsTables.TableOf(link.Link) is not { } table) return;
+        link.Handled = true;
+        var export = new MenuItem { Header = "Export to CSV..." };
+        export.Click += (_, _) => ExportTableRequested?.Invoke(table);
+        new MenuFlyout { Items = { export } }.ShowAt(OutputHtml, showAtPointer: true);
+    }
+
     internal string? RenderedHtml => OutputHtml.Text;
+
+    internal IReadOnlyList<(string Text, Action Click)> ContextMenuItemsForTests => OutputHtml.Container.ExtraContextMenuItems.ToList();
 
     // Test-only observability for the coalescing above — counts real applies to the underlying
     // HtmlPanel, as opposed to how many times the bound model's Css/Content actually changed.

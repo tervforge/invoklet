@@ -268,7 +268,13 @@ public sealed class WindowService : IWindowService
         else window.Show();
     }
 
-    public async Task<string?> ShowSaveHtmlFileDialogAsync(string suggestedFileName, string startFolder)
+    public Task<string?> ShowSaveHtmlFileDialogAsync(string suggestedFileName, string startFolder)
+        => ShowSaveResultsDialogAsync(suggestedFileName, startFolder, "html", new FilePickerFileType("HTML") { Patterns = ["*.html", "*.htm"] });
+
+    public Task<string?> ShowSaveCsvFileDialogAsync(string suggestedFileName, string startFolder)
+        => ShowSaveResultsDialogAsync(suggestedFileName, startFolder, "csv", new FilePickerFileType("CSV") { Patterns = ["*.csv"] });
+
+    private async Task<string?> ShowSaveResultsDialogAsync(string suggestedFileName, string startFolder, string extension, FilePickerFileType type)
     {
         var owner = MainWindow;
         if (owner is null) return null;
@@ -278,9 +284,9 @@ public sealed class WindowService : IWindowService
         {
             Title = "Export Results",
             SuggestedFileName = suggestedFileName,
-            DefaultExtension = "html",
+            DefaultExtension = extension,
             SuggestedStartLocation = startLocation,
-            FileTypeChoices = [new FilePickerFileType("HTML") { Patterns = ["*.html", "*.htm"] }],
+            FileTypeChoices = [type],
         });
         return file is null ? null : file.TryGetLocalPath();
     }

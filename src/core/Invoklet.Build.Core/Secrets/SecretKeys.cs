@@ -64,8 +64,23 @@ public static class SecretKeys
         => text is { Length: > 0 }
             && (text.Contains("GetSecret", StringComparison.Ordinal) || text.Contains("SetSecret", StringComparison.Ordinal));
 
-    /// <summary>Passes the key to <c>Util.GetSecret</c> in this process and in the scripts it starts.</summary>
-    public static void ExportForScripts(byte[] key) => Environment.SetEnvironmentVariable(EnvVar, Convert.ToBase64String(key));
+    /// <summary>
+    /// The key as the scripts get it, once read. It is not put in this process's environment, which every program
+    /// started later would inherit: <see cref="Models.ExecutionOptions.SecretKey"/> hands it to the one script that may use it.
+    /// </summary>
+    public static string? ScriptKey => Volatile.Read(ref _scriptKey);
+
+    private static string? _scriptKey;
+
+    /// <summary>Keeps the key for the scripts that may ask for secrets (<see cref="ScriptKey"/>).</summary>
+    public static void ExportForScripts(byte[] key) => Volatile.Write(ref _scriptKey, Convert.ToBase64String(key));
+
+    /// <summary>Gives a process the key, or takes it away: a program must not get it by inheriting it from whoever started Invoklet.</summary>
+    public static void ApplyTo(ProcessStartInfo startInfo, string? key)
+    {
+        if (key is null) startInfo.Environment.Remove(EnvVar);
+        else startInfo.Environment[EnvVar] = key;
+    }
 
     /// <summary>
     /// For the command line: when the store is encrypted, reads its key and exports it. A key that

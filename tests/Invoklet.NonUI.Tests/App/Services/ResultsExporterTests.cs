@@ -109,4 +109,70 @@ public sealed class ResultsExporterTests
         // Assert
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(page, "</style", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
     }
+
+    private const string TwoTables = "<table><tr><th>A</th></tr><tr><td>1</td></tr></table><table><tr><th>B</th></tr><tr><td>2, 3</td></tr></table>";
+
+    [Fact]
+    public async Task ExportTableCsvAsync_TheSecondOfTwoTables_IsOfferedNumberedAndWrittenAsCsv()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { Content = TwoTables };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportTableCsvAsync(1, TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync("Report-2.csv", "scripts"), Times.Once);
+        var (path, text) = Assert.Single(fixture.WrittenCsv);
+        Assert.Equal("chosen.csv", path);
+        Assert.Equal("B\r\n\"2, 3\"\r\n", text);
+    }
+
+    [Fact]
+    public async Task ExportTableCsvAsync_TheOnlyTable_IsOfferedUnderTheScriptsName()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { Content = "<table><tr><td>x</td></tr></table>" };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportTableCsvAsync(0, TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync("Report.csv", "scripts"), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(2)]
+    public async Task ExportTableCsvAsync_ATableThatIsNotThere_SaysSoAndAsksNothing(int table)
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture { Content = TwoTables };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportTableCsvAsync(table, TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Table", "This table is no longer in the results."), Times.Once);
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportTableCsvAsync_TheDialogCancelledOrTheFileUnwritable_WritesNothingAndReports()
+    {
+        // Arrange
+        var cancelled = new ResultsExporterFixture { Content = TwoTables, ChosenCsvPath = null };
+        var failing = new ResultsExporterFixture { Content = TwoTables, WriteFails = new IOException("disk full") };
+
+        // Act
+        await cancelled.CreateSut().ExportTableCsvAsync(0, TestContext.Current.CancellationToken);
+        await failing.CreateSut().ExportTableCsvAsync(0, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Empty(cancelled.WrittenCsv);
+        failing.Windows.Verify(w => w.ShowErrorAsync("Export Results Failed", It.Is<string>(m => m.Contains("chosen.csv") && m.Contains("disk full"))), Times.Once);
+    }
 }

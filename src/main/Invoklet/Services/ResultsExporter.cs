@@ -22,9 +22,12 @@ internal static class ResultsHtml
 /// <summary>Saves the results panel of a tab as an HTML file: asks where, writes it, and says so when there is nothing to save or the file cannot be written.</summary>
 internal sealed class ResultsExporter(
     IWindowService windows, Func<string> css, Func<string> content, Func<string?> scriptPath, Func<string> startFolder,
-    Func<string, string, CancellationToken, Task>? write = null)
+    Func<string, string, CancellationToken, Task>? write = null, Func<string, string, CancellationToken, Task>? writeCsv = null)
 {
     private readonly Func<string, string, CancellationToken, Task> _write = write ?? ((path, text, ct) => File.WriteAllTextAsync(path, text, new UTF8Encoding(false), ct));
+
+    // With a byte order mark: Excel reads a CSV without one as the system's code page and garbles non-ASCII text.
+    private readonly Func<string, string, CancellationToken, Task> _writeCsv = writeCsv ?? ((path, text, ct) => File.WriteAllTextAsync(path, text, new UTF8Encoding(true), ct));
 
     public async Task ExportAsync(CancellationToken ct = default)
     {
@@ -35,15 +38,41 @@ internal sealed class ResultsExporter(
             return;
         }
 
-        var script = scriptPath();
-        var name = script is null ? "Results" : Path.GetFileNameWithoutExtension(script);
-        var folder = script is null ? startFolder() : Path.GetDirectoryName(script) ?? startFolder();
+        var (name, folder) = Target();
         var path = await windows.ShowSaveHtmlFileDialogAsync(name + ".html", folder);
         if (path is null) return;
+        await WriteAsync(path, () => _write(path, ResultsHtml.Build(css(), html, name + " — results"), ct));
+    }
 
+    /// <summary>One table of the results, by its number among the tables not inside another (see <see cref="ResultsTables"/>), as a CSV file.</summary>
+    public async Task ExportTableCsvAsync(int table, CancellationToken ct = default)
+    {
+        var tables = ResultsTables.Parse(content());
+        if (table < 0 || table >= tables.Count)
+        {
+            await windows.ShowErrorAsync("Export Table", "This table is no longer in the results.");
+            return;
+        }
+
+        var (name, folder) = Target();
+        var path = await windows.ShowSaveCsvFileDialogAsync(name + (tables.Count > 1 ? "-" + (table + 1) : "") + ".csv", folder);
+        if (path is null) return;
+        await WriteAsync(path, () => _writeCsv(path, ResultsCsv.Build(tables[table]), ct));
+    }
+
+    // The script's name and folder, which the dialog offers; "Results" in the start folder for a script not saved yet.
+    private (string Name, string Folder) Target()
+    {
+        var script = scriptPath();
+        return (script is null ? "Results" : Path.GetFileNameWithoutExtension(script),
+            script is null ? startFolder() : Path.GetDirectoryName(script) ?? startFolder());
+    }
+
+    private async Task WriteAsync(string path, Func<Task> write)
+    {
         try
         {
-            await _write(path, ResultsHtml.Build(css(), html, name + " — results"), ct);
+            await write();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

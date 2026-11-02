@@ -12,7 +12,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Invoklet.NonUI.Tests.Connectors.Sqlite;
+namespace Invoklet.Connectors.Tests.Connectors.Sqlite;
 
 // A SQLite connection reads the database's tables and views, and the script gets an EF Core context
 // with a set per table. The file here is a real one next to a script, named by a relative path.
@@ -114,38 +114,6 @@ public sealed class SqliteConnectionTests : IDisposable
     }
 
     [Fact]
-    public void Names_And_Types_Should_ReadAsCSharp()
-    {
-        Assert.Equal("OrderItems", SqliteModel.Pascal("order_items", "Table"));
-        Assert.Equal("OrderItems", SqliteModel.Pascal("Order Items", "Table"));
-        Assert.Equal("Table2020", SqliteModel.Pascal("2020", "Table"));
-        Assert.Equal("Column", SqliteModel.Pascal("$", "Column"));
-        Assert.Equal(["Category", "Address", "Box", "Status", "Data"],
-            new[] { "Categories", "Addresses", "Boxes", "Status", "Data" }.Select(SqliteModel.Singular));
-
-        Assert.Equal(("long", true), SqliteModel.ClrType("INTEGER"));
-        Assert.Equal(("string", false), SqliteModel.ClrType("varchar(20)"));
-        Assert.Equal(("string", false), SqliteModel.ClrType(""));
-        Assert.Equal(("byte[]", false), SqliteModel.ClrType("BLOB"));
-        Assert.Equal(("double", true), SqliteModel.ClrType("REAL"));
-        Assert.Equal(("decimal", true), SqliteModel.ClrType("DECIMAL(10,2)"));
-        Assert.Equal(("bool", true), SqliteModel.ClrType("BOOLEAN"));
-        Assert.Equal(("global::System.DateTime", true), SqliteModel.ClrType("datetime"));
-        Assert.Equal(("global::System.DateOnly", true), SqliteModel.ClrType("DATE"));
-        Assert.Equal(("global::System.Guid", true), SqliteModel.ClrType("UUID"));
-
-        // A set never takes a DbContext member's name, and a row class never its set's.
-        var model = SqliteModel.Build(
-        [
-            new SqliteTable("model", false, [new SqliteColumn("model", "TEXT", false, 0)]),
-            new SqliteTable("data", false, []),
-        ], "ShopClient");
-        Assert.Equal(["ModelTable", "Data"], model.Select(e => e.SetName));
-        Assert.Equal(["ModelRow", "DataRow"], model.Select(e => e.ClassName));
-        Assert.Equal("Model", model[0].Columns[0].PropertyName);
-    }
-
-    [Fact]
     [Trait("Category", "RealBuild")]
     public async Task AScript_Should_QueryAndChangeTheDatabase_ThroughItsContext()
     {
@@ -163,7 +131,7 @@ public sealed class SqliteConnectionTests : IDisposable
         Assert.Empty(generated.Errors);
         Assert.Contains("public global::Microsoft.EntityFrameworkCore.DbSet<Customer> Customers => Set<Customer>();", generated.Source);
         Assert.Contains("e.HasKey(x => new { x.OrderId, x.Line });", generated.Source);
-        Assert.Contains("public sealed class LogRow", generated.Source);
+        Assert.Contains("public sealed class Log", generated.Source);
 
         // The editor knows the sets and the rows' columns before any run.
         var referenceService = new CSharpReferenceService();
@@ -196,7 +164,7 @@ public sealed class SqliteConnectionTests : IDisposable
             Console.WriteLine(string.Join(",", shop.Customers.Where(c => c.City == "Oslo").OrderBy(c => c.Id).Select(c => c.Name)));
             Console.WriteLine(shop.Customers.Single(c => c.Name == "Ann").Created?.ToString("yyyy-MM-dd HH:mm:ss"));
             Console.WriteLine(shop.OrderItems.Sum(i => i.Qty));
-            Console.WriteLine(shop.Log.Single().Message + " " + shop.BigCustomers.Count());
+            Console.WriteLine(shop.Logs.Single().Message + " " + shop.BigCustomers.Count());
             shop.Customers.Add(new Connections.ShopClient.Customer { Name = "Eve", City = "Bergen" });
             shop.SaveChanges();
             Console.WriteLine(shop.Customers.Count());
@@ -252,9 +220,9 @@ public sealed class SqliteConnectionTests : IDisposable
         await RunSchemaScriptAsync($"CREATE TABLE computed (id INTEGER PRIMARY KEY, value INTEGER, twice INTEGER GENERATED ALWAYS AS (value * 2) {storage}); INSERT INTO computed (value) VALUES (3);",
             """
             var shop = Connections.Shop;
-            Console.WriteLine(shop.Computed.Single().Twice);
-            var row = new Connections.ShopClient.ComputedRow { Value = 4, Twice = 99 };
-            shop.Computed.Add(row);
+            Console.WriteLine(shop.Computeds.Single().Twice);
+            var row = new Connections.ShopClient.Computed { Value = 4, Twice = 99 };
+            shop.Computeds.Add(row);
             shop.SaveChanges();
             Console.WriteLine(row.Twice);
             row.Value = 7;
@@ -273,9 +241,9 @@ public sealed class SqliteConnectionTests : IDisposable
         await RunSchemaScriptAsync($"CREATE TABLE keyed ({columns}) {options}; INSERT INTO keyed VALUES ('first');",
             """
             var shop = Connections.Shop;
-            shop.Keyed.Add(new Connections.ShopClient.KeyedRow { Code = "second" });
+            shop.Keyeds.Add(new Connections.ShopClient.Keyed { Code = "second" });
             shop.SaveChanges();
-            Console.WriteLine(shop.Keyed.ToList().Count);
+            Console.WriteLine(shop.Keyeds.ToList().Count);
             """, ["2"]);
     }
 
@@ -331,32 +299,6 @@ public sealed class SqliteConnectionTests : IDisposable
         Assert.Contains("customers", schemas.Cache.Get(connection)!.Summary, StringComparison.Ordinal);
     }
 
-    // A foreign key is walked both ways, and one EF Core can't model (a different type, a table without a key) stays a plain column.
-    [Fact]
-    public void ForeignKeys_Should_BecomeNavigationProperties_WhereEfCoreCanModelThem()
-    {
-        var id = new SqliteColumn("id", "INTEGER", true, 1);
-        var customers = new SqliteTable("customers", false, [id, new SqliteColumn("name", "TEXT", true, 0)]);
-        var orders = new SqliteTable("orders", false,
-            [new SqliteColumn("id", "INTEGER", true, 1), new SqliteColumn("customer_id", "INTEGER", false, 0), new SqliteColumn("note", "TEXT", false, 0)])
-        {
-            ForeignKeys = [new SqliteForeignKey("Customers", ["customer_id"], [])],
-        };
-        var mismatched = new SqliteTable("notes", false, [new SqliteColumn("id", "INTEGER", true, 1), new SqliteColumn("order_ref", "TEXT", false, 0)])
-        {
-            ForeignKeys = [new SqliteForeignKey("orders", ["order_ref"], ["id"])],
-        };
-
-        var model = SqliteModel.Build([customers, orders, mismatched], "ShopClient");
-
-        var relation = Assert.Single(model[1].Relations);
-        Assert.Equal("Customer", relation.ReferenceName);
-        Assert.Equal("Orders", relation.CollectionName);
-        Assert.Same(model[0], relation.Principal);
-        Assert.Equal(["Id"], relation.PrincipalKey.Select(p => p.PropertyName));
-        Assert.Empty(model[2].Relations);
-    }
-
     [Fact]
     [Trait("Category", "RealBuild")]
     public async Task ForeignKeys_Should_BeWalkedFromEitherSideOfAScript()
@@ -371,8 +313,8 @@ public sealed class SqliteConnectionTests : IDisposable
             using Microsoft.EntityFrameworkCore;
             var shop = Connections.Shop;
             Console.WriteLine(shop.Parcels.Include(p => p.Shipper).Where(p => p.Id == 3).Single().Shipper!.Name);
-            var fast = shop.Shippers.Include(s => s.Parcels).Single(s => s.Name == "Fast");
-            Console.WriteLine(fast.Parcels.Count + " " + fast.Parcels.Sum(p => p.Weight));
+            var fast = shop.Shippers.Include(s => s.ParcelShippers).Single(s => s.Name == "Fast");
+            Console.WriteLine(fast.ParcelShippers.Count + " " + fast.ParcelShippers.Sum(p => p.Weight));
             Console.WriteLine(shop.Parcels.Count(p => p.Receiver == null));
             """, ["Slow", "2 12", "1"]);
     }

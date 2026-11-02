@@ -815,11 +815,13 @@ public sealed class ConnectionsWindowViewModel : ViewModelBase, IDisposable
         ResourceDetails.Clear();
         SelectedResource = null;
         using var data = JsonDocument.Parse(schema.Data);
-        if (driverId.Equals("sqlite", StringComparison.OrdinalIgnoreCase) && data.RootElement.ValueKind == JsonValueKind.Array)
+        if (driverId.ToLowerInvariant() is "sqlite" or "postgres" or "sqlserver" && data.RootElement.ValueKind == JsonValueKind.Array)
         {
             foreach (var table in data.RootElement.EnumerateArray())
             {
                 var name = ReadString(table, "Name") ?? "(unnamed table)";
+                // A server's tables live in schemas (public.orders); a SQLite file has none.
+                if (ReadString(table, "Schema") is { Length: > 0 } schemaName) name = schemaName + "." + name;
                 var isView = ReadBoolean(table, "IsView");
                 var node = new ConnectionResourceViewModel(name, isView ? "View" : "Table",
                     isView ? "Database view" : "Database table");

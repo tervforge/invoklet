@@ -48,6 +48,54 @@ public class SetupInstallerServiceTests
     }
 
     [Fact]
+    public async Task InstallNetcoredbgAsync_Should_KeepTheInstalledDebugger_WhenTheNewArchiveHasNone()
+    {
+        var downloader = new Mock<ISetupDownloader>();
+        downloader
+            .Setup(d => d.DownloadFileAsync(
+                It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .Returns((Uri _, string destinationPath, IProgress<double>? _, CancellationToken _) =>
+            {
+                WriteArchiveWithoutADebugger(destinationPath);
+                return Task.CompletedTask;
+            });
+        var installDir = Path.Combine(Path.GetTempPath(), "Invoklet-tests-netcoredbg-" + Guid.NewGuid());
+        Directory.CreateDirectory(installDir);
+        var installed = Path.Combine(installDir, "netcoredbg-installed");
+        await File.WriteAllTextAsync(installed, "working", TestContext.Current.CancellationToken);
+        try
+        {
+            var service = new SetupInstallerService(downloader.Object, new Mock<ISetupProcessRunner>().Object, installDir);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.InstallNetcoredbgAsync(new Progress<SetupProgress>(), TestContext.Current.CancellationToken));
+
+            Assert.Equal("working", await File.ReadAllTextAsync(installed, TestContext.Current.CancellationToken));
+            Assert.False(Directory.Exists(installDir + ".new"));
+        }
+        finally
+        {
+            Directory.Delete(installDir, recursive: true);
+        }
+    }
+
+    private static void WriteArchiveWithoutADebugger(string destinationPath)
+    {
+        if (destinationPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            File.Delete(destinationPath);
+            using var zip = ZipFile.Open(destinationPath, ZipArchiveMode.Create);
+            using var stream = zip.CreateEntry("netcoredbg/readme.txt").Open();
+            stream.Write("nothing here"u8);
+            return;
+        }
+        using var fileStream = File.Create(destinationPath);
+        using var gzipStream = new GZipStream(fileStream, CompressionLevel.Fastest);
+        using var tarWriter = new TarWriter(gzipStream);
+        tarWriter.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "netcoredbg/readme.txt") { DataStream = new MemoryStream("nothing here"u8.ToArray()) });
+    }
+
+    [Fact]
     public async Task InstallDotnetSdkAsync_Should_Throw_WhenTheInstallerScriptExitsNonZero()
     {
         var downloader = new Mock<ISetupDownloader>();

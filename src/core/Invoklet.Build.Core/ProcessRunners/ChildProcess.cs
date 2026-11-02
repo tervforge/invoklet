@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Invoklet.Build.Core.Models;
+using Invoklet.Build.Core.Secrets;
 
 namespace Invoklet.Build.Core.ProcessRunners;
 
@@ -148,13 +149,15 @@ public sealed class ChildProcess : IChildProcess
         startInfo.Environment[ParentProcessIdEnvVar] = parentPid;
         var cancelFile = Path.Combine(Path.GetTempPath(), $"Invoklet-stop-{Guid.NewGuid():N}");
         startInfo.Environment[CancelFileEnvVar] = cancelFile;
+        SecretKeys.ApplyTo(startInfo, options.SecretKey);
 
         return new ChildProcess(startInfo) { _cancelFilePath = cancelFile };
     }
 
     /// <summary>Creates a process for the netcoredbg DAP debugger.</summary>
     public static ChildProcess ForDebugger(ExecutionOptions options)
-        => new(new ProcessStartInfo
+    {
+        var startInfo = new ProcessStartInfo
         {
             FileName = options.Debugger.DebuggerPath,
             Arguments = "--interpreter=vscode",
@@ -166,5 +169,9 @@ public sealed class ChildProcess : IChildProcess
             RedirectStandardInput = true,
             StandardErrorEncoding = Encoding.UTF8,
             // No StandardOutputEncoding: stdout carries raw DAP binary frames.
-        });
+        };
+        // The program being debugged is started by the debugger and inherits its environment.
+        SecretKeys.ApplyTo(startInfo, options.SecretKey);
+        return new ChildProcess(startInfo);
+    }
 }

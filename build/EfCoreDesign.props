@@ -1,0 +1,11 @@
+<Project>
+  <!-- Entity Framework Core's design package writes code with T4 templates and finds projects with MSBuild; Invoklet only asks it to read a
+       database, so those assemblies are left out of what a project that uses it ships. Import this file from every executable. -->
+  <ItemGroup>
+    <PackageReference Include="Mono.TextTemplating" ExcludeAssets="all" />
+    <PackageReference Include="System.CodeDom" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.SolutionPersistence" ExcludeAssets="all" />
+  </ItemGroup>
+</Project>

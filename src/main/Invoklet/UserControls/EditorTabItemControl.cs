@@ -168,6 +168,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         State = new EditorTabState(editor);
         _watchEvaluator = new WatchEvaluator(() => State.CurrentDebugCtx, w => _vm.DebugPanel.WatchExpressions.Contains(w));
         ResultsOutput.DataContext = State.Output;
+        ResultsOutput.SaveHtmlRequested += () => _ = ExportResultsAsync();
+        ResultsOutput.ExportTableRequested += table => _ = _resultsExporter?.ExportTableCsvAsync(table);
         _resultsWordWrap = prefs.Editor.ResultsWordWrap;
         State.Output.Css = HtmlThemeStylesheet.Generate(themeService.CurrentTheme.Interface.Variant,
             themeService.CurrentTheme.Interface.IsDark, _resultsWordWrap);
@@ -1711,12 +1713,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     // The output settings menu's check box: saved like any preference, so every open tab follows it
     // (OnPreferencesChanged); this tab's results reflow at once.
-    private async void ExportResultsButton_Click(object? sender, RoutedEventArgs e)
-    {
-        OutputSettingsButton.Flyout?.Hide();
-        await ExportResultsAsync();
-    }
-
     private void OnResultsWrapCheckBoxChanged(object? sender, RoutedEventArgs e)
     {
         var wrap = ResultsWrapCheckBox.IsChecked == true;

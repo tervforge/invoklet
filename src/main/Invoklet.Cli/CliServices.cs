@@ -1,7 +1,9 @@
 using Invoklet.Build.Core.Secrets;
 using Invoklet.Connectors.Grpc;
 using Invoklet.Connectors.Http;
+using Invoklet.Connectors.Postgres;
 using Invoklet.Connectors.Sqlite;
+using Invoklet.Connectors.SqlServer;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Languages.CSharp;
@@ -33,6 +35,8 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
         connectionDrivers.Register(new OpenApiConnectionDriver());
         connectionDrivers.Register(new GrpcConnectionDriver());
         connectionDrivers.Register(new SqliteConnectionDriver());
+        connectionDrivers.Register(new PostgresConnectionDriver());
+        connectionDrivers.Register(new SqlServerConnectionDriver());
         var schemas = new ConnectionSchemas(connectionDrivers, ConnectionSchemaCache.DefaultFolder,
             DotnetConnectionTools.Default, Secret);
         return new CliServices(registry, new DotnetSdkProvider(), connectionDrivers, schemas);
