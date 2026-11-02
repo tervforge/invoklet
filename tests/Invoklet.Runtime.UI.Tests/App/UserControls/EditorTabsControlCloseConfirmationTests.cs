@@ -236,7 +236,7 @@ public class EditorTabsControlCloseConfirmationTests
             var filePath = Path.Combine(rootFolder, "demo.inv");
             File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
             mainVm.OpenTab(filePath);
-            await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+            await editorTabs.TabsReadyForTests();
             var tab = mainVm.Tabs.Single(t => t.FilePath == filePath);
 
             var ctrl = editorTabs.GetVisualDescendants().OfType<TabItem>()

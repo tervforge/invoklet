@@ -111,7 +111,7 @@ public class EditorTabTargetSdkTests
 
     private static async Task<EditorsTabItemControl> ActiveControlAsync(MainWindowViewModel mainVm, EditorTabsControl editorTabs)
     {
-        await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+        await editorTabs.TabsReadyForTests();
         EditorsTabItemControl? control = null;
         await TestWait.WhileAsync(() =>
         {

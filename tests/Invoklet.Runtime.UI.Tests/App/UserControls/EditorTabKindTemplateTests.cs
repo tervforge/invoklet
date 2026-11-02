@@ -98,7 +98,7 @@ public class EditorTabKindTemplateTests
 
     private static async Task<EditorsTabItemControl> ActiveControlAsync(MainWindowViewModel mainVm, EditorTabsControl editorTabs)
     {
-        await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+        await editorTabs.TabsReadyForTests();
         var fileTabControl = editorTabs.GetVisualDescendants().OfType<TabControl>()
             .First(t => t.Name == "FileTabControl");
         return (EditorsTabItemControl)((TabItem)fileTabControl.SelectedItem!).Content!;

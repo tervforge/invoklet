@@ -71,7 +71,7 @@ public class EditorTabsControlTests
 
             // Act
             mainVm.OpenTab(filePath);
-            await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+            await editorTabs.TabsReadyForTests();
 
             // Assert
             Assert.NotNull(mainVm.ActiveTab);
@@ -135,7 +135,7 @@ public class EditorTabsControlTests
             editorTabs.Attach(mainVm);
 
             mainVm.OpenTab(filePath);
-            await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+            await editorTabs.TabsReadyForTests();
             var tab = mainVm.ActiveTab!;
 
             // OpenTab already closed the initial blank tab (opening a real file over a single blank
@@ -277,7 +277,7 @@ public class EditorTabsControlTests
             editorTabs.Attach(mainVm); // opens the initial blank tab
 
             mainVm.OpenTab(filePath);
-            await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+            await editorTabs.TabsReadyForTests();
 
             intelliSense.Verify(x => x.UpdateKind(MdRunKind.Program), Times.AtLeastOnce);
         }

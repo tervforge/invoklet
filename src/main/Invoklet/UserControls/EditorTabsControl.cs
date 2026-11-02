@@ -135,7 +135,22 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
 
     // ── Tab lifecycle ──────────────────────────────────────────────────────────
 
+    // The changes of the tab collection that are being handled (a tab is added once its language services exist): complete when every tab that
+    // was added has its control. For a test to wait for instead of polling; nothing else uses it.
+    private readonly HashSet<Task> _tabChanges = [];
+
+    internal Task TabsReadyForTests() => Task.WhenAll(_tabChanges.ToArray());
+
     private async void OnTabsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // Runs up to its first wait here, so the change is tracked before this returns; an error is raised here as when this did the work itself.
+        var work = TabsChangedAsync(e);
+        _tabChanges.Add(work);
+        try { await work; }
+        finally { _tabChanges.Remove(work); }
+    }
+
+    private async Task TabsChangedAsync(NotifyCollectionChangedEventArgs e)
     {
         var fileTabControl = this.FindControl<TabControl>("FileTabControl")!;
 

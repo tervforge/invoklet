@@ -92,7 +92,7 @@ public class EditorTabsControlResidencyTests
     {
         var count = vm.Tabs.Count;
         vm.NewMdRunFile();
-        await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
+        await tabs.TabsReadyForTests();
         await tabs.IdleForTests();
     }
 
@@ -222,7 +222,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\nvar b = 2;\nvar c = 3;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
             var file = vm.Tabs[0];
             var control = tabs.ControlForTests(file)!;
             var editor = control.State.Editor;
@@ -255,7 +255,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
             var file = vm.Tabs[0];
             await AddTabsAsync(tabs, vm, 4);
             Assert.False(tabs.IsLoadedForTests(file));
@@ -278,7 +278,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
             var file = vm.Tabs[0];
             tabs.ControlForTests(file)!.State.Editor.Text = "var edited = 3;\n";
             await AddTabsAsync(tabs, vm, 4);
@@ -372,7 +372,7 @@ public class EditorTabsControlResidencyTests
         var path = Path.Combine(folder, "A.inv");
         File.WriteAllText(path, Script("var a = 1;\n"));
         vm.OpenTab(path);
-        await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+        await tabs.TabsReadyForTests();
         var file = vm.Tabs[0];
         tabs.ControlForTests(file)!.State.Editor.Text = "var edited = 3;\n";
         await AddTabsAsync(tabs, vm, 4);
@@ -428,7 +428,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
             var file = vm.Tabs[0];
             var output = tabs.ControlForTests(file)!.State.Output;
             output.Append("<div>result 42</div>");
@@ -453,7 +453,7 @@ public class EditorTabsControlResidencyTests
         var path = Path.Combine(folder, "A.inv");
         File.WriteAllText(path, Script("var a = 1;\n"));
         vm.OpenTab(path);
-        await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+        await tabs.TabsReadyForTests();
         var control = tabs.ControlForTests(vm.Tabs[0])!;
         control.State.Output.Append("<div>old</div>");
         return (Path.Combine(folder, "run"), tabs, vm, spill, control);
@@ -476,7 +476,7 @@ public class EditorTabsControlResidencyTests
             // The fourth tab makes this one the one to give up; its write waits at the disk.
             var count = vm.Tabs.Count;
             vm.NewMdRunFile();
-            await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
+            await tabs.TabsReadyForTests();
             await TestWait.WhileAsync(() => !spill.WriteStarted.IsSet);
 
             // A run produced output and ended: its output is asked to be written, and the window goes on while the write waits.
@@ -594,7 +594,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
 
             var state = tabs.ControlForTests(vm.Tabs[0])!.State;
 
@@ -613,7 +613,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
             var file = vm.Tabs[0];
             var text = EditorText(tabs, file);
             await AddTabsAsync(tabs, vm, 4);
@@ -663,7 +663,7 @@ public class EditorTabsControlResidencyTests
         // The fourth tab makes the first one the one to give up; its write waits.
         var count = vm.Tabs.Count;
         vm.NewMdRunFile();
-        await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
+        await tabs.TabsReadyForTests();
         return (first, control);
     }
 
@@ -780,7 +780,7 @@ public class EditorTabsControlResidencyTests
             var path = Path.Combine(folder, "A.inv");
             File.WriteAllText(path, Script("var a = 1;\n"));
             vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            await tabs.TabsReadyForTests();
             var file = vm.Tabs[0];
             var control = tabs.ControlForTests(file)!;
             control.State.Output.Append("<div>run of A</div>");
