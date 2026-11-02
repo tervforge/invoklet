@@ -16,9 +16,10 @@ internal static class ResultsTables
     private const string LinkPrefix = "invoklet-table:";
 
     /// <summary>
-    /// The page with a "…" button, a cell of its own at the end of the first row, of each table that is not in another; a click raises
-    /// LinkClicked with <see cref="TableOf"/> of its address. A table with no rows has none, and keeps its number. (The panel loses the text of a
-    /// cell that an inline link follows, and lays a link out on a line of its own, so the button is not put in a cell with text.)
+    /// The page with a "…" button in the header of the last column of each table that is not in another: the content of the last cell of the
+    /// first row is put in a table of its own next to the button. A click raises LinkClicked with <see cref="TableOf"/> of its address. A table
+    /// with no rows has none, and keeps its number. (The panel loses the text of a cell that an inline link follows, and lays a link out on a
+    /// line of its own; two cells of a table inside the cell lay out right.)
     /// </summary>
     public static string WithMenus(string html)
     {
@@ -26,8 +27,8 @@ internal static class ResultsTables
         var depth = 0;
         var count = 0;
         var copied = 0;
-        var lastCell = -1;
-        var lastCellTag = "th";
+        var cellStart = -1;
+        var lastCell = (Start: -1, End: -1);
         var firstRowDone = false;
         for (var i = html.IndexOf('<'); i >= 0; i = html.IndexOf('<', i + 1))
         {
@@ -40,23 +41,24 @@ internal static class ResultsTables
                 case "table":
                     if (!closing)
                     {
-                        if (depth++ == 0) { lastCell = -1; firstRowDone = false; }
+                        if (depth++ == 0) { lastCell = (-1, -1); firstRowDone = false; }
                     }
                     else if (depth > 0 && --depth == 0) count++;
                     break;
-                case "td" or "th" when closing && depth == 1 && !firstRowDone:
-                    lastCell = close + 1;
-                    lastCellTag = NameOf(tag);
+                case "td" or "th" when depth == 1 && !firstRowDone:
+                    if (!closing) cellStart = close + 1;
+                    else lastCell = (cellStart, i);
                     break;
                 case "tr" when closing && depth == 1 && !firstRowDone:
                     firstRowDone = true;
-                    if (lastCell >= 0)
+                    if (lastCell.Start >= 0)
                     {
-                        result.Append(html, copied, lastCell - copied)
-                            .Append('<').Append(lastCellTag).Append(" class=\"dp-").Append(lastCellTag == "th" ? "th" : "td").Append(" dp-menucell\">")
-                            .Append("<a class=\"dp-tablemenu\" href=\"").Append(LinkPrefix).Append(count).Append("\" title=\"Table actions\">&nbsp;&hellip;&nbsp;</a></")
-                            .Append(lastCellTag).Append('>');
-                        copied = lastCell;
+                        result.Append(html, copied, lastCell.Start - copied)
+                            .Append("<table class=\"dp-menuhost\"><tr><td class=\"dp-menutext\">")
+                            .Append(html, lastCell.Start, lastCell.End - lastCell.Start)
+                            .Append("</td><td class=\"dp-menubtn\"><a class=\"dp-tablemenu\" href=\"").Append(LinkPrefix).Append(count)
+                            .Append("\" title=\"Table actions\">&nbsp;&hellip;&nbsp;</a></td></tr></table>");
+                        copied = lastCell.End;
                     }
                     break;
             }

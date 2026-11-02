@@ -82,7 +82,7 @@ public sealed class ResultsTablesTests
     }
 
     [Fact]
-    public void WithMenus_EveryTableNotInsideAnother_GetsAButtonCellAtTheEndOfItsFirstRow()
+    public void WithMenus_EveryTableNotInsideAnother_GetsAButtonInTheHeaderOfItsLastColumn()
     {
         // Arrange
         var html = "a<table><tr><th>X</th><th>Y</th></tr><tr><td>1</td><td><table><tr><td>in</td></tr></table></td></tr></table>b"
@@ -92,10 +92,12 @@ public sealed class ResultsTablesTests
         var page = ResultsTables.WithMenus(html);
 
         // Assert
-        Assert.StartsWith("a<table><tr><th>X</th><th>Y</th><th class=\"dp-th dp-menucell\"><a class=\"dp-tablemenu\" href=\"invoklet-table:0\"", page);
-        Assert.Contains("<td>only</td><td class=\"dp-td dp-menucell\"><a class=\"dp-tablemenu\" href=\"invoklet-table:1\"", page);
-        Assert.Equal(2, page.Split("dp-menucell").Length - 1);
-        Assert.Equal(html, System.Text.RegularExpressions.Regex.Replace(page, "<t[hd] class=\"dp-t[hd] dp-menucell\">.*?</t[hd]>", ""));
+        Assert.StartsWith("a<table><tr><th>X</th><th><table class=\"dp-menuhost\"><tr><td class=\"dp-menutext\">Y</td><td class=\"dp-menubtn\"><a class=\"dp-tablemenu\" href=\"invoklet-table:0\"", page);
+        Assert.Contains("<td class=\"dp-menutext\">only</td><td class=\"dp-menubtn\"><a class=\"dp-tablemenu\" href=\"invoklet-table:1\"", page);
+        Assert.Equal(2, page.Split("dp-menuhost").Length - 1);
+        // The cell's own content is untouched: the table around it and the button are the only additions.
+        var restored = page.Replace("<table class=\"dp-menuhost\"><tr><td class=\"dp-menutext\">", "");
+        Assert.Equal(html, System.Text.RegularExpressions.Regex.Replace(restored, "</td><td class=\"dp-menubtn\">.*?</table>", ""));
     }
 
     [Fact]
@@ -119,7 +121,7 @@ public sealed class ResultsTablesTests
         var page = ResultsTables.WithMenus(html);
 
         // Assert
-        Assert.Equal(ResultsTables.Parse(html).Count, page.Split("dp-menucell").Length - 1);
+        Assert.Equal(ResultsTables.Parse(html).Count, page.Split("dp-menuhost").Length - 1);
         Assert.Contains("href=\"invoklet-table:1\"", page);
     }
 
