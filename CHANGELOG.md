@@ -7,10 +7,22 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Added
 
+- PostgreSQL and SQL Server connections: one connection string (with `${secret:…}` for the password) and an optional schema. The script gets an
+  Entity Framework Core context with a set per table and view, rows with typed columns, keys and navigation properties for foreign keys, and
+  Tools → Connections browses the tables, columns and keys. The database is read with Entity Framework Core's own reverse engineering, and each
+  provider is a library of its own.
+  A PostgreSQL connection can leave the password out and use the pgpass file; a SQL Server one can use `Integrated Security=true`. The form says
+  so, and a failed sign-in names the pgpass line looked for or the Kerberos ticket needed.
 - A "…" button in the header of the last column of every table in the results opens a menu with **Export to CSV...**, which saves that table as a CSV file (UTF-8 with a byte order mark,
   so Excel reads it right). "Save results as HTML..." moved from the output settings to the context menu of the results panel.
 - The heights of the sections of the sidebar (Connections, Scripts, Samples) can be changed by dragging the line between two open sections, and are
   kept between launches.
+
+### Changed
+
+- SQLite connections are read with Entity Framework Core's reverse engineering too, as PostgreSQL and SQL Server are, so the sets, rows and navigation
+  properties of a database are named as EF Core names them (`order_items` is `OrderItems`, a table `log` is `Logs`): a script that uses a set by its old name
+  needs the new one.
 
 ### Fixed
 
@@ -21,7 +33,6 @@ Notable changes in each Invoklet release. Downloads are on the
   debugger that was installed.
 - Opening a script no longer reads the schema of a connection that uses `${secret:…}` or `${env:…}`, so a file from elsewhere cannot make Invoklet send
   a secret to the server it names merely by being opened. Run the script, or press Refresh in the Connections window, to read it.
-
 - The Test button and the OpenAPI schema read no longer follow a redirect, which would have sent a connection's headers, a secret among them, to
   whatever host the server named.
 - A script's saved output (`run-output.json`) is readable by its owner only on macOS and Linux.
@@ -35,17 +46,8 @@ Notable changes in each Invoklet release. Downloads are on the
 - `Util.Highlight`, `Util.HighlightIf`, `Util.WithStyle` and `Util.WithHeading` (LINQPad-compatible) dress a value in the output of
   `.Dump()`: a highlight, CSS declarations, or a heading above it. They work on their own and inside what is dumped, such as a
   column of a table.
-- SQLite connections are read with Entity Framework Core's reverse engineering too, as PostgreSQL and SQL Server are, so the sets, rows and navigation
-  properties of a database are named as EF Core names them (`order_items` is `OrderItems`, a table `log` is `Logs`): a script that uses a set by its old name
-  needs the new one.
 - SQLite connections: foreign keys become navigation properties (`order.Customer`, `customer.Orders`), and the connection form has a **Browse...**
   button for the database file.
-- PostgreSQL and SQL Server connections: one connection string (with `${secret:…}` for the password) and an optional schema. The script gets an
-  Entity Framework Core context with a set per table and view, rows with typed columns, keys and navigation properties for foreign keys, and
-  Tools → Connections browses the tables, columns and keys. The database is read with Entity Framework Core's own reverse engineering, and each
-  provider is a library of its own. Not yet checked against live servers.
-  A PostgreSQL connection can leave the password out and use the pgpass file; a SQL Server one can use `Integrated Security=true`. The form says
-  so, and a failed sign-in names the pgpass line looked for or the Kerberos ticket needed.
 - A new connection type, **OpenAPI/Swagger**, has the settings of an HTTP connection (base address, headers, timeout) and finds the API's OpenAPI or Swagger
   document (JSON) at the usual addresses under the base address. The script gets a typed method for each operation and a class for each schema
   (`await Connections.Pets.GetPetAsync(7)`), and Tools → Connections lists the operations by tag, with their parameters, bodies, answers and models.
