@@ -15,25 +15,50 @@ internal static class ResultsTables
 {
     private const string LinkPrefix = "invoklet-table:";
 
-    /// <summary>The page with a "…" link above each table that is not in another; a click raises LinkClicked with <see cref="TableOf"/> of its address.</summary>
+    /// <summary>
+    /// The page with a "…" button, a cell of its own at the end of the first row, of each table that is not in another; a click raises
+    /// LinkClicked with <see cref="TableOf"/> of its address. A table with no rows has none, and keeps its number. (The panel loses the text of a
+    /// cell that an inline link follows, and lays a link out on a line of its own, so the button is not put in a cell with text.)
+    /// </summary>
     public static string WithMenus(string html)
     {
         var result = new StringBuilder(html.Length + 128);
         var depth = 0;
         var count = 0;
         var copied = 0;
+        var lastCell = -1;
+        var lastCellTag = "th";
+        var firstRowDone = false;
         for (var i = html.IndexOf('<'); i >= 0; i = html.IndexOf('<', i + 1))
         {
             var close = html.IndexOf('>', i);
             if (close < 0) break;
             var tag = html[(i + 1)..close];
-            if (NameOf(tag) != "table") continue;
-            if (tag.StartsWith('/')) depth = Math.Max(depth - 1, 0);
-            else if (depth++ == 0)
+            var closing = tag.StartsWith('/');
+            switch (NameOf(tag))
             {
-                result.Append(html, copied, i - copied)
-                    .Append("<div class=\"dp-tablemenu\"><a href=\"").Append(LinkPrefix).Append(count++).Append("\" title=\"Table actions\">&hellip;</a></div>");
-                copied = i;
+                case "table":
+                    if (!closing)
+                    {
+                        if (depth++ == 0) { lastCell = -1; firstRowDone = false; }
+                    }
+                    else if (depth > 0 && --depth == 0) count++;
+                    break;
+                case "td" or "th" when closing && depth == 1 && !firstRowDone:
+                    lastCell = close + 1;
+                    lastCellTag = NameOf(tag);
+                    break;
+                case "tr" when closing && depth == 1 && !firstRowDone:
+                    firstRowDone = true;
+                    if (lastCell >= 0)
+                    {
+                        result.Append(html, copied, lastCell - copied)
+                            .Append('<').Append(lastCellTag).Append(" class=\"dp-").Append(lastCellTag == "th" ? "th" : "td").Append(" dp-menucell\">")
+                            .Append("<a class=\"dp-tablemenu\" href=\"").Append(LinkPrefix).Append(count).Append("\" title=\"Table actions\">&nbsp;&hellip;&nbsp;</a></")
+                            .Append(lastCellTag).Append('>');
+                        copied = lastCell;
+                    }
+                    break;
             }
         }
         return result.Append(html, copied, html.Length - copied).ToString();

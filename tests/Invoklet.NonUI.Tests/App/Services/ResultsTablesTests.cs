@@ -82,19 +82,45 @@ public sealed class ResultsTablesTests
     }
 
     [Fact]
-    public void WithMenus_EveryTableNotInsideAnother_GetsALinkCarryingItsNumber()
+    public void WithMenus_EveryTableNotInsideAnother_GetsAButtonCellAtTheEndOfItsFirstRow()
     {
         // Arrange
-        var html = "a" + Dump(new[] { new { Tags = new[] { "x" } } }) + "b" + Dump(new[] { 1 });
+        var html = "a<table><tr><th>X</th><th>Y</th></tr><tr><td>1</td><td><table><tr><td>in</td></tr></table></td></tr></table>b"
+            + "<table><tr><td>only</td></tr></table>";
 
         // Act
         var page = ResultsTables.WithMenus(html);
 
         // Assert
-        Assert.Equal(2, page.Split("class=\"dp-tablemenu\"").Length - 1);
-        Assert.Contains("href=\"invoklet-table:0\"", page);
+        Assert.StartsWith("a<table><tr><th>X</th><th>Y</th><th class=\"dp-th dp-menucell\"><a class=\"dp-tablemenu\" href=\"invoklet-table:0\"", page);
+        Assert.Contains("<td>only</td><td class=\"dp-td dp-menucell\"><a class=\"dp-tablemenu\" href=\"invoklet-table:1\"", page);
+        Assert.Equal(2, page.Split("dp-menucell").Length - 1);
+        Assert.Equal(html, System.Text.RegularExpressions.Regex.Replace(page, "<t[hd] class=\"dp-t[hd] dp-menucell\">.*?</t[hd]>", ""));
+    }
+
+    [Fact]
+    public void WithMenus_ATableWithNoRows_HasNoButtonAndKeepsItsNumber()
+    {
+        // Act
+        var page = ResultsTables.WithMenus("<table></table><table><tr><td>x</td></tr></table>");
+
+        // Assert
+        Assert.DoesNotContain("invoklet-table:0", page);
+        Assert.Contains("invoklet-table:1", page);
+    }
+
+    [Fact]
+    public void WithMenus_TheMarkupOfARealDump_GetsOneButtonPerTableAndTheNumbersMatchParse()
+    {
+        // Arrange
+        var html = Dump(new[] { new { Tags = new[] { "x" } } }) + Dump(new[] { 1 });
+
+        // Act
+        var page = ResultsTables.WithMenus(html);
+
+        // Assert
+        Assert.Equal(ResultsTables.Parse(html).Count, page.Split("dp-menucell").Length - 1);
         Assert.Contains("href=\"invoklet-table:1\"", page);
-        Assert.Equal(html, System.Text.RegularExpressions.Regex.Replace(page, "<div class=\"dp-tablemenu\">.*?</div>", ""));
     }
 
     [Fact]
