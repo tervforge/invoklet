@@ -268,6 +268,33 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
 
     internal Task IdleForTests() => _lifecycle?.WhenIdleAsync() ?? Task.CompletedTask;
 
+    /// <summary>Some tab has output of a run that is not on disk yet.</summary>
+    internal bool HasPendingOutputWrites() => _tabs.Values.Any(t => !t.Control.OutputWrites.IsCompleted);
+
+    /// <summary>
+    /// Completes once the output of the runs of every tab is on disk (so that the last result is not lost when the application is closed), or when
+    /// <paramref name="limit"/> has passed: False then, and what was not written is not waited for any more. A write that failed has been logged by
+    /// its writer; there is nothing more to wait for.
+    /// </summary>
+    internal async Task<bool> FlushOutputWritesAsync(TimeSpan limit)
+    {
+        var pending = _tabs.Values.Select(t => t.Control.OutputWrites).Where(task => !task.IsCompleted).ToList();
+        if (pending.Count == 0) return true;
+        try
+        {
+            await Task.WhenAll(pending).WaitAsync(limit);
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            // A failed write: reported where it happened.
+        }
+        return true;
+    }
+
     internal bool IsLoadedForTests(EditorTabItemViewModel vm) => _lifecycle?.IsContentLoaded(vm) ?? HasControl(vm);
 
     // A tab's text could not be brought back from disk: it stays empty and read-only, and saving it fails,

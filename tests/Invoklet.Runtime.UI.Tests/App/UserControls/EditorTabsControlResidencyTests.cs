@@ -520,6 +520,62 @@ public class EditorTabsControlResidencyTests
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
+    // The index changed after the run ended (the other instance entered its folder): the release, with no new run and no Save As, writes the output
+    // where the index says, so that opening the script again finds it.
+    [AvaloniaFact]
+    public async Task AReleaseAfterTheIndexChanged_Should_WriteTheOutputInTheFolderOfTheIndex()
+    {
+        var folder = Directory.CreateTempSubdirectory("Invoklet-residency-test").FullName;
+        var local = Path.Combine(folder, "local");
+        var shared = Path.Combine(folder, "shared");
+        var current = local;
+        var cache = new Mock<IBuildCacheService>();
+        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(() => current);
+        var (_, tabs, vm, _, control) = await OpenSavedTabWithOutputAsync(folder, cache);
+        try
+        {
+            current = shared;
+
+            await AddTabsAsync(tabs, vm, 3);
+
+            Assert.True(control.IsContentReleased);
+            Assert.Equal("<div>old</div>", RunOutputFile.TryLoad(shared)!.Content);
+            Assert.Null(RunOutputFile.TryLoad(local));
+        }
+        finally { tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
+    // Closing waits for the output that is not written yet, for as long as it is given, and does not hold the window.
+    [AvaloniaFact]
+    public async Task FlushingTheOutputWrites_Should_WaitForThemWithoutHoldingTheWindow_AndGiveUpAfterTheLimit()
+    {
+        var folder = Directory.CreateTempSubdirectory("Invoklet-residency-test").FullName;
+        var cache = new Mock<IBuildCacheService>();
+        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(Path.Combine(folder, "run"));
+        var (runFolder, tabs, _, _, control) = await OpenSavedTabWithOutputAsync(folder, cache);
+        using var gate = new ManualResetEventSlim(false);
+        try
+        {
+            Assert.True(await tabs.FlushOutputWritesAsync(TimeSpan.FromSeconds(5))); // nothing is pending
+            _ = control.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30))); // a slow disk
+            _ = control.SaveRunOutputForTests();
+            Assert.True(tabs.HasPendingOutputWrites());
+
+            Assert.False(await tabs.FlushOutputWritesAsync(TimeSpan.FromMilliseconds(100))); // given up after the limit
+            var flushing = tabs.FlushOutputWritesAsync(TimeSpan.FromSeconds(30));
+            var dispatched = false;
+            await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
+            Assert.True(dispatched);
+            Assert.False(flushing.IsCompleted);
+
+            gate.Set();
+            Assert.True(await flushing);
+            Assert.False(tabs.HasPendingOutputWrites());
+            Assert.Equal("<div>old</div>", RunOutputFile.TryLoad(runFolder)!.Content);
+        }
+        finally { gate.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
     [AvaloniaFact]
     public async Task ATabOpenedAgain_Should_ShowTheOutputOfTheLastRunOfItsScript()
     {

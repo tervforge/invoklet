@@ -22,7 +22,10 @@ public partial class EditorsTabItemControl
     // older output is never written after a newer one (each is taken when it is asked for), and off the UI thread, so that a slow disk is not waited for.
     private Task _outputWrites = Task.CompletedTask;
 
-    internal Task OutputWritesForTests => _outputWrites;
+    /// <summary>The last of the writes of the output that were asked for: complete when all of them are done.</summary>
+    internal Task OutputWrites => _outputWrites;
+
+    internal Task<T> QueueOutputJobForTests<T>(Func<T> job) => InOutputQueue(job);
 
     internal Task SaveRunOutputForTests() => SaveRunOutput();
 
@@ -51,6 +54,8 @@ public partial class EditorsTabItemControl
         var text = editor.Text;
         var viewState = CaptureViewState();
         var output = CaptureOutput();
+        // The folder of the output is the one the index has now, as it is where a run or Save As would write it.
+        FollowTheFolderOfTheIndex();
         var generation = Volatile.Read(ref _outputVersion);
         var folder = State.OutputDirectory;
         var id = _vm.RecoveryId;

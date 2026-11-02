@@ -113,12 +113,37 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     // The text editor windows this window owns leave their unsaved changes to it when it closes (see
     // TextEditorWindow): each is asked here after the tabs and closed once answered, so closing the
     // app asks once per unsaved document and then really closes.
+    private bool _outputFlushed;
+
+    // How long closing waits for the output of the last runs to be written to disk.
+    internal TimeSpan OutputFlushLimit { get; set; } = TimeSpan.FromSeconds(10);
+
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_confirmedClose) return;
         if (_closeConfirmationInProgress)
         {
             e.Cancel = true;
+            return;
+        }
+        // The output of a run that has just ended is written in the background: closing waits for it, for a while, so that the last result is
+        // not lost; the window is not frozen meanwhile. A write that is not done in time is given up, and the window closes as asked.
+        if (!_outputFlushed && _editorTabs.HasPendingOutputWrites())
+        {
+            e.Cancel = true;
+            _closeConfirmationInProgress = true;
+            IsEnabled = false;
+            try
+            {
+                await _editorTabs.FlushOutputWritesAsync(OutputFlushLimit);
+            }
+            finally
+            {
+                IsEnabled = true;
+                _closeConfirmationInProgress = false;
+                _outputFlushed = true;
+            }
+            Close(); // the same close again; its confirmations come next
             return;
         }
         var unsavedWindows = OwnedWindows.OfType<TextEditorWindow>().Where(w => w.ViewModel.IsDirty).ToList();
@@ -143,7 +168,11 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
             IsEnabled = true;
             _closeConfirmationInProgress = false;
         }
-        if (!canClose) return;
+        if (!canClose)
+        {
+            _outputFlushed = false; // the close was given up: the next one waits for the output again
+            return;
+        }
 
         _confirmedClose = true;
         Close();

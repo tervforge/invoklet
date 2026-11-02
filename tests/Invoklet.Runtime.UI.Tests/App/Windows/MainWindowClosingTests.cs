@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
@@ -92,6 +93,54 @@ public class MainWindowClosingTests
 
         Assert.True(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    // The output of a run that has just ended is written in the background: closing waits for it, so that the last result is not lost, and
+    // the window is not frozen while it waits.
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhileTheOutputOfTheLastRunIsBeingWritten_Should_WaitForItAndThenClose()
+    {
+        var (window, _, _) = CreateMainWindow();
+        var ctrl = await GetSoleControlAsync(window);
+        using var gate = new ManualResetEventSlim(false);
+        var written = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+        var closedFired = false;
+        window.Closed += (_, _) => closedFired = true;
+
+        window.Close();
+        await Task.Delay(100);
+
+        Assert.False(closedFired); // waiting for the write
+        var dispatched = false;
+        await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
+        Assert.True(dispatched);
+
+        gate.Set();
+        await written;
+        await Task.Delay(100);
+
+        Assert.True(closedFired);
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhileTheOutputIsNotWrittenInTime_Should_GiveItUpAndClose()
+    {
+        var (window, _, _) = CreateMainWindow();
+        window.OutputFlushLimit = TimeSpan.FromMilliseconds(100);
+        var ctrl = await GetSoleControlAsync(window);
+        using var gate = new ManualResetEventSlim(false);
+        _ = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+        var closedFired = false;
+        window.Closed += (_, _) => closedFired = true;
+
+        try
+        {
+            window.Close();
+            await Task.Delay(500);
+
+            Assert.True(closedFired);
+        }
+        finally { gate.Set(); }
     }
 
     [AvaloniaFact]
