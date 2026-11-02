@@ -44,6 +44,8 @@ closes six security gaps around secrets, downloads and connections.
 - The Test button and the OpenAPI schema read no longer follow a redirect, which would have sent a connection's headers, a secret among them, to
   whatever host the server named.
 - A script's saved output (`run-output.json`) is readable by its owner only on macOS and Linux.
+- A link to a folder that leads back to a folder being listed (a link to its own parent, or to `/`) no longer makes the list of scripts walk the same folders over
+  and over, or the whole disk: such a link is shown as a folder without content. Links to other folders are listed as before.
 - The command-line runner ends with exit code 130 when it is stopped with Ctrl+C at any stage, also while it reads the script or a connection's description (it used
   to print an exception), and a script or output file it cannot read or write is a message with exit code 2 (1 for `convert`).
 - A settings file that holds `null` for a group of settings (`"Logging": null`) no longer stops Invoklet from starting: the group has its default values.
