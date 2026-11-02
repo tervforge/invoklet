@@ -40,6 +40,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
 
         // What the test waits for instead of polling: the first creation call has ended (with a service, or cancelled), and the first
         // service it made has been disposed.
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Finished { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource FirstDisposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Lock _lock = new();
@@ -56,6 +57,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
             lock (_lock)
             {
                 Tokens.Add(cancellationToken);
+                Started.TrySetResult();
                 OnUiThread.Add(Dispatcher.UIThread.CheckAccess());
             }
             try
@@ -172,7 +174,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         {
             tabs.Attach(shell);
             var vm = shell.Tabs[0];
-            await TestWait.WhileAsync(() => csharp.Tokens.Count == 0);
+            await csharp.Started.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
 
             shell.Tabs.Remove(vm);
             Assert.True(csharp.Tokens[0].IsCancellationRequested);
@@ -200,7 +202,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         try
         {
             tabs.Attach(shell);
-            await TestWait.WhileAsync(() => csharp.Tokens.Count == 0);
+            await csharp.Started.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
 
             tabs.Dispose();
             Assert.True(csharp.Tokens[0].IsCancellationRequested);

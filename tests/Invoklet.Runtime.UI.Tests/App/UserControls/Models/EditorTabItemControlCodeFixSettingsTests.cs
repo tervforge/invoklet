@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Invoklet.Avalonia.CodeTextEditor;
 using Invoklet.Avalonia.CodeTextEditor.CodeFix;
 using Invoklet.Avalonia.Themes;
@@ -98,8 +99,7 @@ public class EditorTabItemControlCodeFixSettingsTests
             new FakeCodeFixInfo(2, "Add using System;", DiagnosticSeverity.Warning, "kept-key", "CS0246"),
         ]);
 
-        await TestWait.WhileAsync(() => margin.Fixes.Count == 0);
-
+        Dispatcher.UIThread.RunJobs(); // the fixes reach the margin through the UI queue
         var keys = margin.Fixes.Select(f => f.Key).ToList();
         Assert.DoesNotContain("excluded-key", keys);
         Assert.Contains("kept-key", keys);
@@ -117,12 +117,12 @@ public class EditorTabItemControlCodeFixSettingsTests
         intelliSense
             .Setup(s => s.GetRefactoringsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<ICodeFixInfo>?)[new FakeCodeFixInfo(1, "Use expression body", DiagnosticSeverity.Info, "refactor-key")]);
-        var (_, editor, margin) = CreateControl(prefs, intelliSense);
+        var (ctrl, editor, margin) = CreateControl(prefs, intelliSense);
 
         editor.Text = "line1\n";
         editor.TextArea.Caret.Offset = 1;
 
-        await TestWait.WhileAsync(() => margin.Fixes.Count == 0);
+        await ctrl.RefactoringsTask;
 
         Assert.Contains(margin.Fixes, f => f.Key == "refactor-key");
     }
@@ -164,7 +164,7 @@ public class EditorTabItemControlCodeFixSettingsTests
         intelliSense.Raise(s => s.CodeFixesChanged += null, editor.Text,
             (IReadOnlyList<ICodeFixInfo>)[new FakeCodeFixInfo(1, "Add using System;", DiagnosticSeverity.Warning, "fix-key", "CS0246")]);
 
-        await TestWait.WhileAsync(() => margin.Fixes.Count == 0);
+        Dispatcher.UIThread.RunJobs(); // the fixes reach the margin through the UI queue
         Assert.NotEmpty(margin.Fixes);
 
         // Flip the setting and raise the same change notification EditorTabItemControl.SetupEditor
@@ -172,7 +172,7 @@ public class EditorTabItemControlCodeFixSettingsTests
         settings.CodeFixesEnabled = false;
         prefs.Raise(p => p.Changed += null);
 
-        await TestWait.WhileAsync(() => margin.Fixes.Count != 0);
+        Dispatcher.UIThread.RunJobs();
 
         Assert.Empty(margin.Fixes);
     }

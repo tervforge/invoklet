@@ -1982,7 +1982,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             // character moves the caret, and editor.Text here copied the whole document per keystroke
             var snapshot = editor.Document.CreateSnapshot();
 
-            _ = Task.Run(async () =>
+            RefactoringsTask = Task.Run(async () =>
             {
                 try
                 {
@@ -2537,6 +2537,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // applied over it. The text is analysed again, once, only when asked and only for the newest.
     // The latest refresh: complete when it has applied the context and, if it was asked to, the text has been analysed again. For a test to wait for instead of polling.
     internal Task ContextRefreshTask { get; private set; } = Task.CompletedTask;
+
+    // The latest request for the refactorings at the caret: complete when its answer is on the lightbulb, or it was superseded. For a test to wait for instead of polling.
+    internal Task RefactoringsTask { get; private set; } = Task.CompletedTask;
 
     private void RefreshIntelliSenseContext(bool reanalyze)
     {
