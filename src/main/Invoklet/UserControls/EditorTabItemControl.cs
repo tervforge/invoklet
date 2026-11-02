@@ -385,8 +385,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // The editor is empty while its text is on disk: writing it would replace the script with nothing.
         if (_contentReleased) throw new IOException("The text of this tab is not loaded.");
         var written = _documentWriter.Serialize(State.MdRunDocument, State.Editor.Text, path, _vm.FilePath, _vm.ReferenceAnchorPath);
+        // A write that fails leaves the file as it was (and so the tab's idea of it): the ID and the state are taken only after it.
+        AtomicFile.WriteAllBytes(path, written.Bytes);
         if (written.DocumentId is { } id) _writtenId = (path, id);
-        File.WriteAllBytes(path, written.Bytes);
         _vm.LastWrite = (path, ScriptFileState.Of(written.Bytes));
     }
 
