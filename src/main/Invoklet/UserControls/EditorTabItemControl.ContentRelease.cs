@@ -14,14 +14,24 @@ public partial class EditorsTabItemControl
     private bool _contentReleased;
     private Task<bool>? _restoring;
 
-    // Counts the changes of the output (and of the folder it is kept in). A release takes the output at some count and may publish it only if that is
-    // still the count: a newer output must not be replaced by an older one that was being written. The file is written under the lock, one writer at a time.
+    // Counts the changes of the output (and of the folder it is kept in). A release takes the output at some count, and does not let go of the tab if it
+    // is not that count when the write is done.
     private int _outputVersion;
-    private readonly object _outputFileLock = new();
 
-    internal object OutputFileLockForTests => _outputFileLock;
+    // The writes of the output of this tab, in the order they were asked for: a chain, extended on the UI thread only. They run one after another, so that an
+    // older output is never written after a newer one (each is taken when it is asked for), and off the UI thread, so that a slow disk is not waited for.
+    private Task _outputWrites = Task.CompletedTask;
 
-    internal bool SaveRunOutputForTests() => SaveRunOutput();
+    internal Task OutputWritesForTests => _outputWrites;
+
+    internal Task SaveRunOutputForTests() => SaveRunOutput();
+
+    private Task<T> InOutputQueue<T>(Func<T> write)
+    {
+        var next = _outputWrites.ContinueWith(_ => write(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        _outputWrites = next;
+        return next;
+    }
 
     internal ITabSpillStore? SpillStore { get; set; }
 
@@ -45,19 +55,12 @@ public partial class EditorsTabItemControl
         var folder = State.OutputDirectory;
         var id = _vm.RecoveryId;
 
-        var written = await Task.Run(() =>
+        var written = await InOutputQueue(() =>
         {
+            // The output has changed since it was taken (a run ended, the output was cleared): this release is out of date.
+            if (Volatile.Read(ref _outputVersion) != generation) return false;
             // The output of a run waits in the folder of that run; only an output without one goes to the spill.
-            var keptInFolder = false;
-            if (folder is not null)
-            {
-                lock (_outputFileLock)
-                {
-                    // The output has changed since it was taken (a run ended, the output was cleared): what the folder holds now is newer.
-                    if (Volatile.Read(ref _outputVersion) != generation) return false;
-                    keptInFolder = SaveRunOutputOf(folder, output);
-                }
-            }
+            var keptInFolder = folder is not null && SaveRunOutputOf(folder, output);
             return store.TryWrite(id, new ReleasedContent(text, viewState, keptInFolder ? null : output));
         });
         if (!written || _disposed || _contentReleased || HasRunningProcess || !stillWanted()
@@ -159,9 +162,26 @@ public partial class EditorsTabItemControl
         UpdateOutputUi();
     }
 
-    // The output of the last run, beside the library it ran: written when a run ends, and when the content
-    // of the tab is released. False when the tab has no such folder yet.
-    private bool SaveRunOutput() => State.OutputDirectory is { } folder && SaveRunOutputOf(folder, CaptureOutput());
+    // The output of the last run, beside the library it ran: asked to be written when a run ends, and when the content of the tab is released.
+    // What is taken now is what is written, in its turn in the queue of the writes; the window does not wait for the disk.
+    private Task SaveRunOutput()
+    {
+        FollowTheFolderOfTheIndex();
+        if (State.OutputDirectory is not { } folder) return Task.CompletedTask;
+        var output = CaptureOutput();
+        return InOutputQueue(() => SaveRunOutputOf(folder, output));
+    }
+
+    // Another running Invoklet may have entered a folder for this script in the shared index while this tab was given one of its own (the index was
+    // locked then): the tab goes over to the index's, so that opening the script again finds its output. What the tab shows is written there.
+    private void FollowTheFolderOfTheIndex()
+    {
+        if (_vm.FilePath is not { } path || State.OutputDirectory is not { } current) return;
+        _buildCache.Touch(path); // reads the index again
+        if (_buildCache.EnsureOutputDirectory(path, EnsureWorkDirectory()) is not { } shared || FilePaths.Comparer.Equals(shared, current)) return;
+        State.OutputDirectory = shared;
+        Interlocked.Increment(ref _outputVersion); // a release that is writing to the other folder is out of date
+    }
 
     // The tab moved to another file (Save As, a rename): its runs are built, and their output kept, in the
     // folder of that file from now on. The folder of the old file keeps the output of the runs it saw, so
@@ -173,9 +193,9 @@ public partial class EditorsTabItemControl
         State.OutputDirectory = folder;
         Interlocked.Increment(ref _outputVersion); // a release that is writing to the old folder is out of date
         if (!_contentReleased)
-            SaveRunOutput(); // what the tab shows now belongs to the new file
-        else if (old is not null && RunOutputFile.TryLoad(old) is { } waiting)
-            SaveRunOutputOf(folder, waiting); // the output is still waiting in the old folder: it moves along
+            _ = SaveRunOutput(); // what the tab shows now belongs to the new file
+        else if (old is not null)
+            _ = InOutputQueue(() => RunOutputFile.TryLoad(old) is { } waiting && SaveRunOutputOf(folder, waiting)); // the output is still waiting in the old folder: it moves along
     }
 
     // True when the output is in the folder now. Safe off the UI thread: it touches the file and the logger only.
@@ -183,8 +203,7 @@ public partial class EditorsTabItemControl
     {
         try
         {
-            // One writer at a time: a release writing the output it took and the end of a run writing the new one do not overlap.
-            lock (_outputFileLock) RunOutputFile.Save(folder, output);
+            RunOutputFile.Save(folder, output);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

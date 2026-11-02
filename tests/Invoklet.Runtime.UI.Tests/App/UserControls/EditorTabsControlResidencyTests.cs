@@ -2,6 +2,7 @@ using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Contracts.IntelliSense;
@@ -441,47 +442,80 @@ public class EditorTabsControlResidencyTests
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
-    // A release writes the output it took; a run that ends while that write waits has a newer one, which must stay the last on disk.
+    private static async Task<(string RunFolder, EditorTabsControl Tabs, MainWindowViewModel Vm, FlakySpill Spill, EditorsTabItemControl Control)> OpenSavedTabWithOutputAsync(
+        string folder, Mock<IBuildCacheService> cache)
+    {
+        var (tabs, vm, _, spill) = CreateHarness(buildCache: cache, folder: folder);
+        var path = Path.Combine(folder, "A.inv");
+        File.WriteAllText(path, Script("var a = 1;\n"));
+        vm.OpenTab(path);
+        await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+        var control = tabs.ControlForTests(vm.Tabs[0])!;
+        control.State.Output.Append("<div>old</div>");
+        return (Path.Combine(folder, "run"), tabs, vm, spill, control);
+    }
+
+    // The write of a release is behind a slow disk: a run that ends meanwhile asks for its output to be written, which does not wait for it,
+    // and, written after it, is the one that stays on disk (an older output is never written after a newer one).
     [AvaloniaFact]
-    public async Task AReleaseWritingAnOlderOutput_Should_NotReplaceTheOutputOfARunThatEndedMeanwhile()
+    public async Task AReleaseWritingAnOlderOutput_Should_NotReplaceTheOutputOfARunThatEndedMeanwhile_NorHoldTheWindow()
     {
         var folder = Directory.CreateTempSubdirectory("Invoklet-residency-test").FullName;
-        var runFolder = Path.Combine(folder, "run");
         var cache = new Mock<IBuildCacheService>();
-        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(runFolder);
-        var (tabs, vm, _, _) = CreateHarness(buildCache: cache, folder: folder);
+        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(Path.Combine(folder, "run"));
+        var (runFolder, tabs, vm, spill, control) = await OpenSavedTabWithOutputAsync(folder, cache);
         try
         {
-            var path = Path.Combine(folder, "A.inv");
-            File.WriteAllText(path, Script("var a = 1;\n"));
-            vm.OpenTab(path);
-            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
-            var control = tabs.ControlForTests(vm.Tabs[0])!;
-            control.State.Output.Append("<div>old</div>");
             await AddTabsAsync(tabs, vm, 2);
+            spill.WritesWait = new ManualResetEventSlim(false);
 
-            // The writer of the release waits for the file: the fourth tab makes this one the one to give up.
-            Monitor.Enter(control.OutputFileLockForTests);
-            try
-            {
-                var count = vm.Tabs.Count;
-                vm.NewMdRunFile();
-                await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
-                await Task.Delay(100);
+            // The fourth tab makes this one the one to give up; its write waits at the disk.
+            var count = vm.Tabs.Count;
+            vm.NewMdRunFile();
+            await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
+            await Task.Delay(100);
 
-                // A run produced output and ended: its output is written (this thread has the lock, as the end of a run does for its write).
-                control.State.Output.Append("<div>new</div>");
-                Assert.True(control.SaveRunOutputForTests());
-            }
-            finally
-            {
-                Monitor.Exit(control.OutputFileLockForTests);
-            }
+            // A run produced output and ended: its output is asked to be written, and the window goes on while the write waits.
+            control.State.Output.Append("<div>new</div>");
+            var saving = control.SaveRunOutputForTests();
+            var dispatched = false;
+            await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
+            Assert.True(dispatched);
+            Assert.False(saving.IsCompleted);
+
+            spill.WritesWait.Set();
+            await saving.WaitAsync(TimeSpan.FromSeconds(30));
             await tabs.IdleForTests();
 
             Assert.Equal("<div>old</div><div>new</div>", RunOutputFile.TryLoad(runFolder)!.Content);
             Assert.False(control.IsContentReleased);
             Assert.Equal("<div>old</div><div>new</div>", control.State.Output.Content);
+        }
+        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
+    // Two running Invoklets opened one script while the index was locked: the second entered its folder, the tab of the first still had its own. The
+    // tab goes over to the index's folder when its run ends, so that opening the script again finds the output.
+    [AvaloniaFact]
+    public async Task ATabWhoseFolderTheIndexNoLongerHas_Should_KeepItsOutputInTheFolderOfTheIndex()
+    {
+        var folder = Directory.CreateTempSubdirectory("Invoklet-residency-test").FullName;
+        var local = Path.Combine(folder, "local");
+        var shared = Path.Combine(folder, "shared");
+        var current = local;
+        var cache = new Mock<IBuildCacheService>();
+        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(() => current);
+        var (_, tabs, _, _, control) = await OpenSavedTabWithOutputAsync(folder, cache);
+        try
+        {
+            Assert.Equal(local, control.State.OutputDirectory);
+            current = shared; // the other instance entered its folder, and this one has read the index again
+
+            await control.SaveRunOutputForTests();
+
+            Assert.Equal(shared, control.State.OutputDirectory);
+            Assert.Equal("<div>old</div>", RunOutputFile.TryLoad(shared)!.Content);
+            Assert.Null(RunOutputFile.TryLoad(local));
         }
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }

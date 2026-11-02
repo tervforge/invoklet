@@ -790,7 +790,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 if (ReferenceEquals(s.RunCts, runCts)) s.RunCts = null;
                 runCts.Dispose();
                 _run.End();
-                SaveRunOutput();
+                _ = SaveRunOutput();
             }
         }
     }

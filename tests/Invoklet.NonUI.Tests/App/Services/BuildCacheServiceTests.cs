@@ -209,4 +209,27 @@ public sealed class BuildCacheServiceTests : IDisposable
         Assert.False(Directory.Exists(folder));
         Assert.Empty(Index());
     }
+
+    // Two instances open the same script while the index is locked: each has a folder of its own for it. The one that enters its folder first keeps
+    // the index; the other goes over to it when it reads the index again, and a script opened again later gets that folder.
+    [Fact]
+    public void Touch_AnotherInstanceEnteredAFolderForTheSameScriptMeanwhile_TheIndexHasThatOneAndBothFollowIt()
+    {
+        // Arrange
+        var first = NewInstance();
+        var second = NewInstance();
+        string mine;
+        using (HoldTheLock()) mine = first.EnsureOutputDirectory(Script("same.inv"), WorkDir);
+
+        // Act
+        var theirs = second.EnsureOutputDirectory(Script("same.inv"), WorkDir);
+        first.Touch(Script("same.inv"));
+        var followed = first.EnsureOutputDirectory(Script("same.inv"), WorkDir);
+
+        // Assert
+        Assert.NotEqual(mine, theirs);
+        Assert.Equal(theirs, followed);
+        Assert.Equal(theirs, NewInstance().EnsureOutputDirectory(Script("same.inv"), WorkDir));
+        Assert.Single(Index());
+    }
 }
