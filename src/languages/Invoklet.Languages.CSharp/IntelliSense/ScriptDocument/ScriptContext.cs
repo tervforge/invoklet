@@ -68,6 +68,7 @@ internal sealed class ScriptContext
     private IReadOnlyList<string> _generatorPaths = [];
     // The script's own .dll references with the same-folder dependencies the build adds.
     private volatile IReadOnlyList<string> _userReferencePaths = [];
+    private IReadOnlyList<FileStamp> _userReferenceStamps = [];
     // Replaced as a whole, never changed in place: completion and navigation read them without the lock.
     private volatile IReadOnlyList<MetadataReference> _nugetRefs = [];
     private IReadOnlyList<string> _nugetPaths = [];
@@ -82,15 +83,36 @@ internal sealed class ScriptContext
     // CreateIntelliSenseAsync) — MetadataReferences are immutable and safe to share across unrelated
     // workspaces/compilations, so without this every new tab redid the PE-header + XML-doc parsing
     // for the same ~167 default BCL reference assemblies from scratch.
-    internal static readonly ConcurrentDictionary<string, MetadataReference> ReferenceCache =
+    internal static readonly ConcurrentDictionary<string, CachedReference> ReferenceCache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A reference and the file it was read from; a file that has changed since (a library built again in the same place) is read again.</summary>
+    internal sealed record CachedReference(FileStamp Stamp, MetadataReference Reference);
+
+    /// <summary>
+    /// What tells that a file is still the one that was read: its size and the time it was last written. A file replaced by another of the same
+    /// size within the clock's resolution is not noticed.
+    /// </summary>
+    internal readonly record struct FileStamp(long Length, DateTime LastWriteUtc)
+    {
+        public static FileStamp Of(string path)
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? new FileStamp(info.Length, info.LastWriteTimeUtc) : default;
+        }
+    }
 
     // See ReferenceDocumentation — without this, GetDocumentationCommentXml() comes back empty for
     // every metadata symbol (BCL, NuGet), so the doc-comment Summary was silently null for every
     // completion/signature-help/quick-info item except symbols the script itself defines.
-    internal static MetadataReference CreateReference(string path) =>
-        ReferenceCache.GetOrAdd(path,
-            static p => MetadataReference.CreateFromFile(p, documentation: ReferenceDocumentation.Find(p)));
+    internal static MetadataReference CreateReference(string path)
+    {
+        var stamp = FileStamp.Of(path);
+        if (ReferenceCache.TryGetValue(path, out var cached) && cached.Stamp == stamp) return cached.Reference;
+        var reference = MetadataReference.CreateFromFile(path, documentation: ReferenceDocumentation.Find(path));
+        ReferenceCache[path] = new CachedReference(stamp, reference);
+        return reference;
+    }
 
 
     public ScriptContext(ScriptDocumentSession session, ScriptDocumentLayout layout, ReferenceSet references, ILogger logger)
@@ -180,7 +202,8 @@ internal sealed class ScriptContext
     // A request cancelled before it is applied changes nothing: the slow parts (reading the NuGet
     // assets, the targeting pack, the contract assembly lookup) run without the workspace lock, and
     // a caller that has since asked again must not have its newer context overwritten when this one
-    // finally finishes.
+    // finally finishes. Nothing of a request (references, generators, connections) is applied before
+    // the check under the lock that it is still the latest.
     //
     // Requests also supersede each other by the order they were made in: one that finishes after a
     // later request has been applied is dropped, whether or not its caller cancelled it.
@@ -190,14 +213,14 @@ internal sealed class ScriptContext
         var sequence = Interlocked.Increment(ref _contextRequests);
         var packages = request.Packages.ToDictionary(p => p.Key, p => new Package(p.Value));
         var context = DotnetPackageReferenceContext.For(request);
-        if (context is not null) ApplyPackageReferences(packages, context, cancellationToken);
-        else ApplyPackageReferences(packages, new PackageReferenceContext($"net{Environment.Version.Major}.{Environment.Version.Minor}", null, null), cancellationToken);
+        var resolution = ResolvePackageReferences(packages,
+            context ?? new PackageReferenceContext($"net{Environment.Version.Major}.{Environment.Version.Minor}", null, null));
         cancellationToken.ThrowIfCancellationRequested();
 
         string? contract = null;
         if (request.Connections is { Files.Count: > 0 } generated && context?.OutputDirectory is { } output)
         {
-            var (framework, packagePaths) = RoslynScriptCompiler.ResolveConflicts(_frameworkPaths, _nugetPaths);
+            var (framework, packagePaths) = RoslynScriptCompiler.ResolveConflicts(resolution.FrameworkPaths, resolution.NewPaths);
             try
             {
                 contract = ConnectionContractAssemblyCache.Find(RoslynScriptCompiler.ObjDirectory(output), generated.Files,
@@ -214,6 +237,8 @@ internal sealed class ScriptContext
             cancellationToken.ThrowIfCancellationRequested();
             if (sequence < _appliedContextRequest) return;
             _appliedContextRequest = sequence;
+            // One request is applied whole or not at all: the references, the setting and the connections are of the same request.
+            CommitPackageReferences(resolution);
             UpdateAllowUnsafe(request.AllowUnsafe);
             _requestedConnections = request.Connections;
             _requestedContractAssembly = contract;
@@ -315,6 +340,23 @@ internal sealed class ScriptContext
     private void ApplyPackageReferences(IReadOnlyDictionary<string, Package> packages, PackageReferenceContext context,
         CancellationToken cancellationToken)
     {
+        var resolution = ResolvePackageReferences(packages, context);
+
+        // The same workspace lock as SyncDocument: a background analysis pass applies its own changes
+        // under it, and both sides must see one consistent "current" solution.
+        lock (_session.SyncLock)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CommitPackageReferences(resolution);
+        }
+    }
+
+    // What a package update selects, found without the workspace lock (it reads files, and may be slow).
+    private sealed record PackageResolution(IReadOnlyList<string> NewPaths, IReadOnlyList<string> FrameworkPaths, IReadOnlyList<string> GeneratorPaths,
+        IReadOnlyList<string> UserReferencePaths, IReadOnlyList<FileStamp> UserReferenceStamps, CSharpParseOptions ParseOptions);
+
+    private PackageResolution ResolvePackageReferences(IReadOnlyDictionary<string, Package> packages, PackageReferenceContext context)
+    {
         var (frameworkPaths, generatorPaths) = TargetFrameworkReferences(context);
         var userReferencePaths = RoslynScriptCompiler.WithSameFolderDependencies(context.AssemblyReferences ?? []);
         var parseOptions = TargetFramework.TryParse(context.TargetFramework, out var major, out var minor)
@@ -328,46 +370,49 @@ internal sealed class ScriptContext
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        return new PackageResolution(newPaths, frameworkPaths, generatorPaths, userReferencePaths, [.. userReferencePaths.Select(FileStamp.Of)], parseOptions);
+    }
 
-        // The same workspace lock as SyncDocument: a background analysis pass applies its own changes
-        // under it, and both sides must see one consistent "current" solution.
-        lock (_session.SyncLock)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (newPaths.SequenceEqual(_nugetPaths, StringComparer.OrdinalIgnoreCase)
-                && frameworkPaths.SequenceEqual(_frameworkPaths, StringComparer.OrdinalIgnoreCase)
-                && parseOptions.Equals(_layout.ParseOptions)
-                && generatorPaths.SequenceEqual(_generatorPaths, StringComparer.OrdinalIgnoreCase)
-                && userReferencePaths.SequenceEqual(_userReferencePaths, StringComparer.OrdinalIgnoreCase)) return;
+    // Called with the workspace lock held.
+    private void CommitPackageReferences(PackageResolution resolution)
+    {
+        var (newPaths, frameworkPaths, generatorPaths, userReferencePaths, userReferenceStamps, parseOptions) = resolution;
+        if (newPaths.SequenceEqual(_nugetPaths, StringComparer.OrdinalIgnoreCase)
+            && frameworkPaths.SequenceEqual(_frameworkPaths, StringComparer.OrdinalIgnoreCase)
+            && parseOptions.Equals(_layout.ParseOptions)
+            && generatorPaths.SequenceEqual(_generatorPaths, StringComparer.OrdinalIgnoreCase)
+            && userReferencePaths.SequenceEqual(_userReferencePaths, StringComparer.OrdinalIgnoreCase)
+            // The same path can hold another library since: a script's own DLL that was built again.
+            && userReferenceStamps.SequenceEqual(_userReferenceStamps)) return;
 
-            // Rebuilt from the base references every time, so stale package ones (a removed package, an
-            // older resolved version) go away. A package assembly the framework also has is resolved as
-            // the build resolves it: referencing both would make every one of its types ambiguous
-            // (CS0433) in the editor while the build compiles.
-            var (basePaths, packagePaths) = RoslynScriptCompiler.ResolveConflicts(
-                frameworkPaths.Concat(_otherBaseReferencePaths), newPaths);
-            // In the build's order: the framework (and Invoklet.Runtime), the script's own assemblies, packages.
-            var baseRefs = basePaths.Concat(userReferencePaths).Select(p => (MetadataReference)CreateReference(p)).ToList();
-            var newRefs = packagePaths.Select(p => (MetadataReference)CreateReference(p)).ToList();
+        // Rebuilt from the base references every time, so stale package ones (a removed package, an
+        // older resolved version) go away. A package assembly the framework also has is resolved as
+        // the build resolves it: referencing both would make every one of its types ambiguous
+        // (CS0433) in the editor while the build compiles.
+        var (basePaths, packagePaths) = RoslynScriptCompiler.ResolveConflicts(
+            frameworkPaths.Concat(_otherBaseReferencePaths), newPaths);
+        // In the build's order: the framework (and Invoklet.Runtime), the script's own assemblies, packages.
+        var baseRefs = basePaths.Concat(userReferencePaths).Select(p => (MetadataReference)CreateReference(p)).ToList();
+        var newRefs = packagePaths.Select(p => (MetadataReference)CreateReference(p)).ToList();
 
-            // Replaced as a whole: another target's generators never linger next to the new ones.
-            var generatorRefs = generatorPaths.Select(p => (AnalyzerReference)new GeneratorReference(p, _logger)).ToList();
+        // Replaced as a whole: another target's generators never linger next to the new ones.
+        var generatorRefs = generatorPaths.Select(p => (AnalyzerReference)new GeneratorReference(p, _logger)).ToList();
 
-            var project = _session.Workspace.CurrentSolution.GetProject(_session.DocumentId.ProjectId)!;
+        var project = _session.Workspace.CurrentSolution.GetProject(_session.DocumentId.ProjectId)!;
 
-            if (!_session.Workspace.TryApplyChanges(project.WithMetadataReferences(baseRefs.Concat(newRefs).ToList())
-                    .WithParseOptions(parseOptions).WithAnalyzerReferences(generatorRefs).Solution))
-                return; // the next update tries again: _nugetPaths still describes the workspace
+        if (!_session.Workspace.TryApplyChanges(project.WithMetadataReferences(baseRefs.Concat(newRefs).ToList())
+                .WithParseOptions(parseOptions).WithAnalyzerReferences(generatorRefs).Solution))
+            return; // the next update tries again: _nugetPaths still describes the workspace
 
-            _nugetRefs = newRefs;
-            _nugetPaths = newPaths;
-            _frameworkPaths = frameworkPaths;
-            _layout.ParseOptions = parseOptions;
-            _generatorPaths = generatorPaths;
-            _userReferencePaths = userReferencePaths;
-            // force re-sync on next analysis pass
-            _session.ContextChanged();
-        }
+        _nugetRefs = newRefs;
+        _nugetPaths = newPaths;
+        _frameworkPaths = frameworkPaths;
+        _layout.ParseOptions = parseOptions;
+        _generatorPaths = generatorPaths;
+        _userReferencePaths = userReferencePaths;
+        _userReferenceStamps = userReferenceStamps;
+        // force re-sync on next analysis pass
+        _session.ContextChanged();
     }
 
     // The targeting pack the build would use for the target, among the installed and already downloaded

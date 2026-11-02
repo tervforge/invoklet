@@ -307,6 +307,6 @@ public class CSharpIntelliSenseBackgroundAnalysisTests
         using var service2 = new CSharpIntelliSenseService([path], NullLogger<CSharpIntelliSenseService>.Instance);
         Assert.True(ScriptContext.ReferenceCache.TryGetValue(path, out var afterSecond));
 
-        Assert.Same(afterFirst, afterSecond);
+        Assert.Same(afterFirst.Reference, afterSecond.Reference);
     }
 }
