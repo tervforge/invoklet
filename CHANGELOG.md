@@ -9,6 +9,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - A "…" button in the header of the last column of every table in the results opens a menu with **Export to CSV...**, which saves that table as a CSV file (UTF-8 with a byte order mark,
   so Excel reads it right). "Save results as HTML..." moved from the output settings to the context menu of the results panel.
+- The heights of the sections of the sidebar (Connections, Scripts, Samples) can be changed by dragging the line between two open sections, and are
+  kept between launches.
 
 ### Fixed
 

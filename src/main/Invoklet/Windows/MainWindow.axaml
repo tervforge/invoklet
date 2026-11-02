@@ -121,8 +121,9 @@
                 <!-- Three sections that open and close independently (Resources/NavigationStyles.axaml):
                      Connections first, then the scripts folder, then the bundled samples. Open sections
                      share the height and each scrolls its own tree; folded ones take only their header
-                     (rows set by MainWindow.UpdateSidebarRows). Which are open is kept between runs. -->
-                <Grid x:Name="SidebarSections" RowDefinitions="Auto,Auto,Auto,*">
+                     (rows set by MainWindow.UpdateSidebarRows). Which are open is kept between runs. A seam
+                     between two open neighbours drags their heights; the proportions are kept too. -->
+                <Grid x:Name="SidebarSections" RowDefinitions="Auto,0,Auto,0,Auto,*">
                         <Expander x:Name="ConnectionsBundle" Grid.Row="0" Classes="bundle"
                                   IsExpanded="{Binding IsConnectionsSectionExpanded, Mode=TwoWay}"
                                   IsVisible="{Binding HasConnectionNavigation}"
@@ -143,7 +144,10 @@
                                                          AddToScript="ConnectionNavigation_AddToScript"
                                                          RemoveFromScript="ConnectionNavigation_RemoveFromScript"/>
                         </Expander>
-                        <Expander x:Name="ScriptsBundle" Grid.Row="1" Classes="bundle"
+                        <GridSplitter x:Name="ConnectionsScriptsSplitter" Grid.Row="1" Classes="seam" ResizeDirection="Rows"
+                                      ResizeBehavior="PreviousAndNext" IsVisible="False"
+                                      DragCompleted="SidebarSplitter_DragCompleted"/>
+                        <Expander x:Name="ScriptsBundle" Grid.Row="2" Classes="bundle"
                                   IsExpanded="{Binding IsScriptsSectionExpanded, Mode=TwoWay}"
                                   AutomationProperties.Name="Scripts navigation bundle">
                             <Expander.Header>
@@ -155,7 +159,10 @@
                             <ContentControl Content="{Binding FileTree}" ContentTemplate="{StaticResource FileTreeTemplate}"
                                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
                         </Expander>
-                        <Expander x:Name="SamplesBundle" Grid.Row="2" Classes="bundle"
+                        <GridSplitter x:Name="ScriptsSamplesSplitter" Grid.Row="3" Classes="seam" ResizeDirection="Rows"
+                                      ResizeBehavior="PreviousAndNext" IsVisible="False"
+                                      DragCompleted="SidebarSplitter_DragCompleted"/>
+                        <Expander x:Name="SamplesBundle" Grid.Row="4" Classes="bundle"
                                   IsExpanded="{Binding IsSamplesSectionExpanded, Mode=TwoWay}"
                                   AutomationProperties.Name="Samples navigation bundle">
                             <Expander.Header>
