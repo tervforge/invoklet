@@ -113,8 +113,6 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     // The text editor windows this window owns leave their unsaved changes to it when it closes (see
     // TextEditorWindow): each is asked here after the tabs and closed once answered, so closing the
     // app asks once per unsaved document and then really closes.
-    private bool _outputFlushed;
-
     // How long closing waits for the output of the last runs to be written to disk.
     internal TimeSpan OutputFlushLimit { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -126,28 +124,10 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
             e.Cancel = true;
             return;
         }
-        // The output of a run that has just ended is written in the background: closing waits for it, for a while, so that the last result is
-        // not lost; the window is not frozen meanwhile. A write that is not done in time is given up, and the window closes as asked.
-        if (!_outputFlushed && _editorTabs.HasPendingOutputWrites())
-        {
-            e.Cancel = true;
-            _closeConfirmationInProgress = true;
-            IsEnabled = false;
-            try
-            {
-                await _editorTabs.FlushOutputWritesAsync(OutputFlushLimit);
-            }
-            finally
-            {
-                IsEnabled = true;
-                _closeConfirmationInProgress = false;
-                _outputFlushed = true;
-            }
-            Close(); // the same close again; its confirmations come next
-            return;
-        }
         var unsavedWindows = OwnedWindows.OfType<TextEditorWindow>().Where(w => w.ViewModel.IsDirty).ToList();
-        if (!GetViewModel().RestoresDrafts && !_editorTabs.HasUnsavedTabs() && unsavedWindows.Count == 0) return;
+        // Output that is not on disk yet is waited for below, after the confirmations, so a close that has nothing to ask still goes through here.
+        if (!GetViewModel().RestoresDrafts && !_editorTabs.HasUnsavedTabs() && unsavedWindows.Count == 0
+            && !_editorTabs.HasPendingOutputWrites()) return;
 
         e.Cancel = true;
         _closeConfirmationInProgress = true;
@@ -168,14 +148,37 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
             IsEnabled = true;
             _closeConfirmationInProgress = false;
         }
-        if (!canClose)
-        {
-            _outputFlushed = false; // the close was given up: the next one waits for the output again
-            return;
-        }
+        if (!canClose) return;
 
+        // The output of a run that has just ended is written in the background, and a Save As made by the confirmations writes the output of its
+        // tab again: closing waits for what is queued by now, for a while, so that the last result is not lost, and this is the last thing before
+        // the close. The window is not frozen meanwhile; a write that is not done in time is given up.
+        _closeConfirmationInProgress = true;
+        try
+        {
+            await WaitForOutputWritesAsync();
+        }
+        finally
+        {
+            _closeConfirmationInProgress = false;
+        }
         _confirmedClose = true;
         Close();
+    }
+
+    private async Task WaitForOutputWritesAsync()
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        IsEnabled = false;
+        try
+        {
+            while (_editorTabs.HasPendingOutputWrites() && waited.Elapsed < OutputFlushLimit
+                   && await _editorTabs.FlushOutputWritesAsync(OutputFlushLimit - waited.Elapsed)) { }
+        }
+        finally
+        {
+            IsEnabled = true;
+        }
     }
 
     // ── Global keyboard shortcuts ─────────────────────────────────────────────

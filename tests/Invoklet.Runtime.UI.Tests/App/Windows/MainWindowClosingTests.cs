@@ -122,6 +122,37 @@ public class MainWindowClosingTests
         Assert.True(closedFired);
     }
 
+    // The confirmations come first, and a Save As made by one of them writes the output of its tab again: the last wait is after them, just before the
+    // close, and covers that write too.
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhenAConfirmationQueuesAnOutputWrite_Should_WaitForThatWriteToo()
+    {
+        var (window, _, windowService) = CreateMainWindow();
+        var ctrl = await GetSoleControlAsync(window);
+        ctrl.State.Editor.Text = "Console.WriteLine(1);";
+        using var gate = new ManualResetEventSlim(false);
+        Task<bool>? written = null;
+        windowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>())).ReturnsAsync(() =>
+        {
+            written = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+            return UnsavedChangesResult.DontSave;
+        });
+        var closedFired = false;
+        window.Closed += (_, _) => closedFired = true;
+
+        window.Close();
+        await Task.Delay(200);
+
+        Assert.NotNull(written);
+        Assert.False(closedFired); // the answer came, and the write it made is still being waited for
+
+        gate.Set();
+        await written;
+        await Task.Delay(200);
+
+        Assert.True(closedFired);
+    }
+
     [AvaloniaFact]
     public async Task ClosingTheWindow_WhileTheOutputIsNotWrittenInTime_Should_GiveItUpAndClose()
     {
