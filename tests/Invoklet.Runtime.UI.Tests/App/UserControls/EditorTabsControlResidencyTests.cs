@@ -441,6 +441,51 @@ public class EditorTabsControlResidencyTests
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
+    // A release writes the output it took; a run that ends while that write waits has a newer one, which must stay the last on disk.
+    [AvaloniaFact]
+    public async Task AReleaseWritingAnOlderOutput_Should_NotReplaceTheOutputOfARunThatEndedMeanwhile()
+    {
+        var folder = Directory.CreateTempSubdirectory("Invoklet-residency-test").FullName;
+        var runFolder = Path.Combine(folder, "run");
+        var cache = new Mock<IBuildCacheService>();
+        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(runFolder);
+        var (tabs, vm, _, _) = CreateHarness(buildCache: cache, folder: folder);
+        try
+        {
+            var path = Path.Combine(folder, "A.inv");
+            File.WriteAllText(path, Script("var a = 1;\n"));
+            vm.OpenTab(path);
+            await TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null || vm.Tabs[0].FilePath is null);
+            var control = tabs.ControlForTests(vm.Tabs[0])!;
+            control.State.Output.Append("<div>old</div>");
+            await AddTabsAsync(tabs, vm, 2);
+
+            // The writer of the release waits for the file: the fourth tab makes this one the one to give up.
+            Monitor.Enter(control.OutputFileLockForTests);
+            try
+            {
+                var count = vm.Tabs.Count;
+                vm.NewMdRunFile();
+                await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
+                await Task.Delay(100);
+
+                // A run produced output and ended: its output is written (this thread has the lock, as the end of a run does for its write).
+                control.State.Output.Append("<div>new</div>");
+                Assert.True(control.SaveRunOutputForTests());
+            }
+            finally
+            {
+                Monitor.Exit(control.OutputFileLockForTests);
+            }
+            await tabs.IdleForTests();
+
+            Assert.Equal("<div>old</div><div>new</div>", RunOutputFile.TryLoad(runFolder)!.Content);
+            Assert.False(control.IsContentReleased);
+            Assert.Equal("<div>old</div><div>new</div>", control.State.Output.Content);
+        }
+        finally { tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
     [AvaloniaFact]
     public async Task ATabOpenedAgain_Should_ShowTheOutputOfTheLastRunOfItsScript()
     {

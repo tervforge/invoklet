@@ -168,6 +168,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         State = new EditorTabState(editor);
         _watchEvaluator = new WatchEvaluator(() => State.CurrentDebugCtx, w => _vm.DebugPanel.WatchExpressions.Contains(w));
         ResultsOutput.DataContext = State.Output;
+        // A change of the output makes a snapshot of it that is being written to disk out of date (see ContentRelease).
+        State.Output.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(OutputHtmlViewModel.Content)) Interlocked.Increment(ref _outputVersion);
+        };
         ResultsOutput.SaveHtmlRequested += () => _ = ExportResultsAsync();
         ResultsOutput.ExportTableRequested += table => _ = _resultsExporter?.ExportTableCsvAsync(table);
         _resultsWordWrap = prefs.Editor.ResultsWordWrap;

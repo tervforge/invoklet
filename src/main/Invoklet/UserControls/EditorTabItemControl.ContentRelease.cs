@@ -14,6 +14,15 @@ public partial class EditorsTabItemControl
     private bool _contentReleased;
     private Task<bool>? _restoring;
 
+    // Counts the changes of the output (and of the folder it is kept in). A release takes the output at some count and may publish it only if that is
+    // still the count: a newer output must not be replaced by an older one that was being written. The file is written under the lock, one writer at a time.
+    private int _outputVersion;
+    private readonly object _outputFileLock = new();
+
+    internal object OutputFileLockForTests => _outputFileLock;
+
+    internal bool SaveRunOutputForTests() => SaveRunOutput();
+
     internal ITabSpillStore? SpillStore { get; set; }
 
     internal bool IsContentReleased => _contentReleased;
@@ -32,16 +41,27 @@ public partial class EditorsTabItemControl
         var text = editor.Text;
         var viewState = CaptureViewState();
         var output = CaptureOutput();
+        var generation = Volatile.Read(ref _outputVersion);
         var folder = State.OutputDirectory;
         var id = _vm.RecoveryId;
 
         var written = await Task.Run(() =>
         {
             // The output of a run waits in the folder of that run; only an output without one goes to the spill.
-            var keptInFolder = folder is not null && SaveRunOutputOf(folder, output);
+            var keptInFolder = false;
+            if (folder is not null)
+            {
+                lock (_outputFileLock)
+                {
+                    // The output has changed since it was taken (a run ended, the output was cleared): what the folder holds now is newer.
+                    if (Volatile.Read(ref _outputVersion) != generation) return false;
+                    keptInFolder = SaveRunOutputOf(folder, output);
+                }
+            }
             return store.TryWrite(id, new ReleasedContent(text, viewState, keptInFolder ? null : output));
         });
         if (!written || _disposed || _contentReleased || HasRunningProcess || !stillWanted()
+            || Volatile.Read(ref _outputVersion) != generation
             || !ReferenceEquals(editor.Document, document) || document.Version.CompareAge(version) != 0)
             return false;
         ReleaseNow(editor);
@@ -151,6 +171,7 @@ public partial class EditorsTabItemControl
         if (_buildCache.EnsureOutputDirectory(newPath, EnsureWorkDirectory()) is not { } folder) return;
         var old = State.OutputDirectory;
         State.OutputDirectory = folder;
+        Interlocked.Increment(ref _outputVersion); // a release that is writing to the old folder is out of date
         if (!_contentReleased)
             SaveRunOutput(); // what the tab shows now belongs to the new file
         else if (old is not null && RunOutputFile.TryLoad(old) is { } waiting)
@@ -162,7 +183,8 @@ public partial class EditorsTabItemControl
     {
         try
         {
-            RunOutputFile.Save(folder, output);
+            // One writer at a time: a release writing the output it took and the end of a run writing the new one do not overlap.
+            lock (_outputFileLock) RunOutputFile.Save(folder, output);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

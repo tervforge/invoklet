@@ -16,13 +16,21 @@ internal static class RunOutputFile
     {
         Directory.CreateDirectory(outputDirectory);
         var path = Path.Combine(outputDirectory, FileName);
-        var temp = path + ".tmp";
+        // Its own name each time, so that two writers never write the same temporary file.
+        var temp = $"{path}.{Guid.NewGuid():N}.tmp";
         // What a script printed may hold a secret: readable by its owner only, as the other stores.
         var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
         if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        using (var stream = new FileStream(temp, options))
-            stream.Write(JsonSerializer.SerializeToUtf8Bytes(output));
-        File.Move(temp, path, overwrite: true);
+        try
+        {
+            using (var stream = new FileStream(temp, options))
+                stream.Write(JsonSerializer.SerializeToUtf8Bytes(output));
+            File.Move(temp, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
     }
 
     /// <summary>Null when the folder holds no output, or one that cannot be read.</summary>
