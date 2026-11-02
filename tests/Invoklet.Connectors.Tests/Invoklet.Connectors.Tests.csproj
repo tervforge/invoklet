@@ -8,10 +8,6 @@
     <RootNamespace>Invoklet.Connectors.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <!-- A real provider for the tests of Invoklet.Connectors.EfCore, which a local file can stand in for a server. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" VersionOverride="3.1.5">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

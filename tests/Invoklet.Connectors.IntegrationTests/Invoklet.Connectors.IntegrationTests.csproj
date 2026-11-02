@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- The connection drivers against real database servers. A test runs where its INVOKLET_TEST_* variable names a server and skips itself elsewhere.
-       The project is built with the solution but not run when CI is set (IsTestProject is false then): run it by hand against local servers, see
-       CONTRIBUTING.md. The unit tests (Invoklet.Connectors.Tests) never reach a server. -->
+  <!-- Real SQLite files, provider reverse engineering and compiled scripts. Server tests require INVOKLET_TEST_* variables.
+       Built with the solution but not run when CI is set; see CONTRIBUTING.md for local execution. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -11,6 +10,7 @@
     <RootNamespace>Invoklet.Connectors.IntegrationTests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" VersionOverride="3.1.5">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -19,6 +19,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\main\Invoklet\Invoklet.csproj" />
     <ProjectReference Include="..\..\src\connectors\Invoklet.Connectors.Postgres\Invoklet.Connectors.Postgres.csproj" />
     <ProjectReference Include="..\..\src\connectors\Invoklet.Connectors.SqlServer\Invoklet.Connectors.SqlServer.csproj" />
   </ItemGroup>
