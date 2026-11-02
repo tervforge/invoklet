@@ -108,4 +108,59 @@ public sealed class AtomicFileTests : IDisposable
         Assert.Equal([2], File.ReadAllBytes(target));
         Assert.Equal([2], File.ReadAllBytes(link));
     }
+
+    // umask is the process's, and it is what leaves a file readable by others: made 022 here, as it is on most systems.
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "umask")]
+    private static extern uint Umask(uint mask);
+
+    private const UnixFileMode OwnerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task WriteAllBytes_WhileTheTemporaryFileIsBeingWritten_NobodyButTheOwnerCanReadIt(bool async)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        // Arrange
+        var path = PathOf("private.inv");
+        File.WriteAllBytes(path, [1]);
+        File.SetUnixFileMode(path, OwnerOnly);
+        UnixFileMode? whileWriting = null;
+        var old = Umask(0x12); // 022
+        try
+        {
+            // Act
+            if (async) await AtomicFile.WriteAllBytesAsync(path, [2], temp => whileWriting = File.GetUnixFileMode(temp), TestContext.Current.CancellationToken);
+            else AtomicFile.WriteAllBytes(path, [2], temp => whileWriting = File.GetUnixFileMode(temp));
+        }
+        finally
+        {
+            Umask(old);
+        }
+
+        // Assert: the temporary file was the owner's from the moment it existed, and the file ends with the permissions it had.
+        Assert.Equal(OwnerOnly, whileWriting);
+        Assert.Equal(OwnerOnly, File.GetUnixFileMode(path));
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void WriteAllBytes_ANewFile_GetsThePermissionsANewFileGetsHere()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var old = Umask(0x12); // 022: a new file is readable by others
+        try
+        {
+            AtomicFile.WriteAllBytes(PathOf("new.inv"), [1]);
+            File.WriteAllBytes(PathOf("plain.txt"), [1]);
+        }
+        finally
+        {
+            Umask(old);
+        }
+
+        Assert.Equal(File.GetUnixFileMode(PathOf("plain.txt")), File.GetUnixFileMode(PathOf("new.inv")));
+        Assert.Equal([PathOf("new.inv"), PathOf("plain.txt")], Directory.EnumerateFileSystemEntries(_folder).Order());
+    }
 }
