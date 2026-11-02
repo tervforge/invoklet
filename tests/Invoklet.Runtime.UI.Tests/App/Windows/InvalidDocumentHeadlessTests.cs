@@ -100,13 +100,16 @@ public class InvalidDocumentHeadlessTests
     // Same teardown as DocumentSafetyHeadlessTests.Cleanup, after the assertions: dirty flags are
     // dropped so closing the window neither asks nor writes, then the window (whose Dispose releases
     // the EditorTabsControl and its tab controls) and the view model are disposed.
-    private static void Cleanup(Harness h)
+    private static async Task CleanupAsync(Harness h)
     {
         try
         {
             foreach (var tab in h.MainVm.Tabs)
                 tab.IsDirty = false;
+            var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            h.Window.Closed += (_, _) => closed.TrySetResult();
             h.Window.Close();
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
             Assert.False(h.Window.IsVisible);
         }
         finally
@@ -142,7 +145,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal("Invalid document", ctrl.State.ExecStatusText);
             Assert.False(tab.IsDirty);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -165,7 +168,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal(MalformedVb, File.ReadAllText(savedAs));
             Assert.Equal(savedAs, tab.FilePath);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaTheory]
@@ -186,7 +189,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal(RunState.Idle, tab.RunState);
             Assert.Equal(MalformedVb, File.ReadAllText(path));
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     // A numeric kind used to parse as an undefined MdRunKind and run.
@@ -212,7 +215,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal("Invalid document", ctrl.State.ExecStatusText);
             Assert.Equal(original, File.ReadAllText(path));
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -243,6 +246,6 @@ public class InvalidDocumentHeadlessTests
             await reopenedCtrl.RunAsync(false, Sdk);
             h.Registry.Verify(r => r.Create("vb", It.IsAny<ExecutionRequest>()), Times.Once);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 }
