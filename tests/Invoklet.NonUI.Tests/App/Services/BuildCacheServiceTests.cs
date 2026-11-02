@@ -125,4 +125,88 @@ public sealed class BuildCacheServiceTests : IDisposable
             Assert.Equal(upper, reloaded);
         }
     }
+
+    // Another running Invoklet that holds the lock of the index for long (a clean-up deleting folders): the window does not wait for it, the
+    // shared file is not written without the lock, the script has its folder, and the index gets the entry when the lock is free again.
+    private FileStream HoldTheLock()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(IndexPath)!);
+        return new FileStream(IndexPath + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+    }
+
+    [Fact]
+    public void EnsureOutputDirectory_TheLockIsHeldForLong_DoesNotWaitForItAndLeavesTheSharedIndexAlone()
+    {
+        // Arrange
+        var sut = NewInstance();
+        sut.EnsureOutputDirectory(Script("before.inv"), WorkDir);
+        var indexBefore = File.ReadAllText(IndexPath);
+        string folder;
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+
+        // Act
+        using (HoldTheLock())
+        {
+            folder = sut.EnsureOutputDirectory(Script("a.inv"), WorkDir);
+            waited.Stop();
+
+            // Assert: the script has its folder at once, the same one when asked again, and the file is as it was.
+            Assert.True(Directory.Exists(folder));
+            Assert.Equal(folder, sut.EnsureOutputDirectory(Script("a.inv"), WorkDir));
+            Assert.Equal(indexBefore, File.ReadAllText(IndexPath));
+        }
+        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(2), $"waited {waited.Elapsed}");
+    }
+
+    [Fact]
+    public void Update_TheLockIsFreeAgain_TheEntryMadeMeanwhileIsEnteredAndNothingIsLost()
+    {
+        // Arrange
+        var sut = NewInstance();
+        var other = NewInstance();
+        string folder;
+        using (HoldTheLock()) folder = sut.EnsureOutputDirectory(Script("a.inv"), WorkDir);
+
+        // Act: another instance enters its own script, then this one's next change enters the entry it made.
+        var otherFolder = other.EnsureOutputDirectory(Script("b.inv"), WorkDir);
+        sut.Touch(Script("a.inv"));
+
+        // Assert
+        Assert.Equal(2, Index().Count);
+        var later = NewInstance();
+        Assert.Equal(folder, later.EnsureOutputDirectory(Script("a.inv"), WorkDir));
+        Assert.Equal(otherFolder, later.EnsureOutputDirectory(Script("b.inv"), WorkDir));
+    }
+
+    [Fact]
+    public void PruneStale_TheLockIsHeldForLong_ChangesNothingAndDeletesNothing()
+    {
+        // Arrange
+        var sut = new BuildCacheService(NullLogger<BuildCacheService>.Instance, IndexPath) { BackgroundLockWait = TimeSpan.FromMilliseconds(100) };
+        var folder = sut.EnsureOutputDirectory(Script("a.inv"), WorkDir);
+        var indexBefore = File.ReadAllText(IndexPath);
+
+        // Act
+        using (HoldTheLock()) sut.PruneStale(TimeSpan.FromDays(-1));
+
+        // Assert
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal(indexBefore, File.ReadAllText(IndexPath));
+    }
+
+    [Fact]
+    public void PruneStale_ADayOldEntryAndAFolderBeingDeleted_DoesNotHoldThisInstanceWhileItDeletes()
+    {
+        // Arrange
+        var sut = NewInstance();
+        var folder = sut.EnsureOutputDirectory(Script("a.inv"), WorkDir);
+        File.WriteAllText(Path.Combine(folder, "x.bin"), "x");
+
+        // Act
+        sut.PruneStale(TimeSpan.FromDays(-1));
+
+        // Assert: the folder is gone, and the index no longer lists it.
+        Assert.False(Directory.Exists(folder));
+        Assert.Empty(Index());
+    }
 }
