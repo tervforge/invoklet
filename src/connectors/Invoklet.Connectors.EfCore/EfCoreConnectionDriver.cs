@@ -24,7 +24,7 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     public ConnectionCategory Category => ConnectionCategory.Database;
 
     /// <summary>Change when cached descriptions need to be read again after a driver update.</summary>
-    public virtual string SchemaVersion => "2";
+    public virtual string SchemaVersion => "3";
 
     /// <summary>The provider's EF Core package in the release Invoklet is built with.</summary>
     public abstract IReadOnlyDictionary<string, string> Packages { get; }

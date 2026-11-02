@@ -29,9 +29,10 @@ internal sealed record EfColumn(string Name, string Property, string Type, strin
 /// <param name="Properties">The properties of this row class that hold the key.</param>
 /// <param name="PrincipalProperties">The properties of the other row class they point to.</param>
 /// <param name="Reference">The navigation property on this row class, null when the model has none.</param>
-/// <param name="Collection">The navigation property on the other row class, null when the model has none.</param>
+/// <param name="Collection">The navigation property on the other row class, null when the model has none: a collection of the rows that point to it, or the one row when <paramref name="IsUnique"/>.</param>
+/// <param name="IsUnique">At most one row points to a row of the other table (the key is unique): a one-to-one relationship, not one-to-many.</param>
 internal sealed record EfForeignKey(string ReferencedSchema, string Table, List<string> Columns, List<string> ReferencedColumns, string PrincipalClass,
-    List<string> Properties, List<string> PrincipalProperties, string? Reference, string? Collection);
+    List<string> Properties, List<string> PrincipalProperties, string? Reference, string? Collection, bool IsUnique = false);
 
 /// <summary>A failure to read the database, in words for the user.</summary>
 public sealed class EfConnectionException(string message) : Exception(message);

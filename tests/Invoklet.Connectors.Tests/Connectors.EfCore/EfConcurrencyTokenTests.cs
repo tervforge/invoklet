@@ -93,8 +93,8 @@ public sealed class EfConcurrencyTokenTests : IDisposable
     public void TheDescriptionOfADatabase_ThatHasNoConcurrencyTokenYet_IsReadAgain()
     {
         // The descriptions already kept were made without the mark: a new version of the format makes them be read again.
-        Assert.Equal("2", new SqlServerConnectionDriver().SchemaVersion);
-        Assert.Equal("2", new Invoklet.Connectors.Postgres.PostgresConnectionDriver().SchemaVersion);
-        Assert.Equal("5", new Invoklet.Connectors.Sqlite.SqliteConnectionDriver().SchemaVersion);
+        Assert.Equal("3", new SqlServerConnectionDriver().SchemaVersion);
+        Assert.Equal("3", new Invoklet.Connectors.Postgres.PostgresConnectionDriver().SchemaVersion);
+        Assert.Equal("6", new Invoklet.Connectors.Sqlite.SqliteConnectionDriver().SchemaVersion);
     }
 }

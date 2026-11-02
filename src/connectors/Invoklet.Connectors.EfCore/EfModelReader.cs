@@ -68,7 +68,7 @@ internal static class EfModelReader
                 fk.PrincipalEntityType.GetTableName() ?? fk.PrincipalEntityType.GetViewName() ?? "",
                 [.. fk.Properties.Select(p => p.GetColumnName())], [.. fk.PrincipalKey.Properties.Select(p => p.GetColumnName())],
                 fk.PrincipalEntityType.Name, [.. fk.Properties.Select(p => p.Name)], [.. fk.PrincipalKey.Properties.Select(p => p.Name)],
-                fk.DependentToPrincipal?.Name, fk.PrincipalToDependent?.Name)).ToList();
+                fk.DependentToPrincipal?.Name, fk.PrincipalToDependent?.Name, fk.IsUnique)).ToList();
             result.Add(new EfEntity(entityType.GetSchema() ?? entityType.GetViewSchema() ?? "", entityType.GetViewName() ?? entityType.GetTableName() ?? entityType.Name,
                 isView, entityType.Name, entityType.GetDbSetName() ?? entityType.Name + "s", columns)
             { ForeignKeys = foreignKeys });
