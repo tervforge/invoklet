@@ -28,7 +28,7 @@ internal sealed class ShopDatabaseFixture : IDisposable
 
     public string Path => System.IO.Path.Combine(_folder, "shop.db");
 
-    public string ConnectionString => $"Data Source={Path}";
+    public string ConnectionString => $"Data Source={Path};Pooling=False";
 
     public void Dispose() => Directory.Delete(_folder, true);
 }
