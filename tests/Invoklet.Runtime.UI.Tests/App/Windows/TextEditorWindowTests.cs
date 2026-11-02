@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Invoklet.Avalonia.CodeTextEditor;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Runtime.UI.Tests.Infrastructure;
@@ -229,7 +230,7 @@ public sealed class TextEditorWindowTests : IDisposable
         Assert.True(window.Editor.TextArea.Focus());
 
         window.KeyPressQwerty(PhysicalKey.S, RawInputModifiers.Control);
-        await Task.Delay(50);
+        Dispatcher.UIThread.RunJobs(); // a key that is not Save does nothing: what is queued has run
 
         Assert.True(window.ViewModel.IsDirty);
         Assert.Equal("a=1", await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
@@ -252,7 +253,7 @@ public sealed class TextEditorWindowTests : IDisposable
         prefs.Raise(p => p.Changed += null);
 
         window.KeyPressQwerty(PhysicalKey.S, RawInputModifiers.Control);
-        await Task.Delay(50);
+        Dispatcher.UIThread.RunJobs(); // a key that is not Save does nothing: what is queued has run
         Assert.True(window.ViewModel.IsDirty);
 
         window.KeyPressQwerty(PhysicalKey.S, RawInputModifiers.Control | RawInputModifiers.Alt);

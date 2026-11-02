@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
@@ -95,15 +96,10 @@ public class MainWindowHotkeysTests
     // solve this same race for itself.
     private static async Task<EditorsTabItemControl?> WaitForActiveTabControlAsync(Window window)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            if (window.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault() is { } ctrl)
-                return ctrl;
-            await Task.Delay(20);
-        }
-
-        return null;
+        EditorsTabItemControl? Control() => window.GetVisualDescendants().OfType<TabItem>()
+            .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
+        await TestWait.WhileAsync(() => Control() is null);
+        return Control();
     }
 
     [AvaloniaFact]
@@ -206,7 +202,7 @@ public class MainWindowHotkeysTests
         var tabCountBefore = vm.Tabs.Count;
 
         window.KeyPress(Key.W, RawInputModifiers.Control, PhysicalKey.W, null);
-        await Task.Delay(50);
+        Dispatcher.UIThread.RunJobs(); // the dialog is answered at once: nothing is left to wait for
 
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);
         Assert.Equal(tabCountBefore, vm.Tabs.Count); // Cancel — still open

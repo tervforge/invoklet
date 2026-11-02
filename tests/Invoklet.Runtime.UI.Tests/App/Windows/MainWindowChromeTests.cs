@@ -398,17 +398,15 @@ public class MainWindowChromeTests
     // MainWindowHotkeysTests.WaitForActiveTabControlAsync); tab-level commands no-op until it exists.
     private static async Task<TextEditor> WaitForActiveEditorAsync(Window window)
     {
-        for (var i = 0; i < 100; i++)
+        TextEditor? Editor()
         {
             Dispatcher.UIThread.RunJobs();
-            if (window.GetVisualDescendants().OfType<TabItem>()
-                    .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault() is { } control
-                && control.GetVisualDescendants().OfType<TextEditor>().FirstOrDefault() is { IsEffectivelyVisible: true } editor)
-                return editor;
-            await Task.Delay(20);
+            return window.GetVisualDescendants().OfType<TabItem>().Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault() is { } control
+                && control.GetVisualDescendants().OfType<TextEditor>().FirstOrDefault() is { IsEffectivelyVisible: true } editor ? editor : null;
         }
 
-        throw new TimeoutException("The active tab's editor was not created.");
+        await TestWait.WhileAsync(() => Editor() is null);
+        return Editor() ?? throw new TimeoutException("The active tab's editor was not created.");
     }
 
     private static bool IsLeaf(string path)

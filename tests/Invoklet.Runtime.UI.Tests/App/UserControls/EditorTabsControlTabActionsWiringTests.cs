@@ -69,16 +69,13 @@ public class EditorTabsControlTabActionsWiringTests
         return (editorTabs, mainVm, fileSystem, rootFolder);
     }
 
+    private static EditorsTabItemControl? SoleControl(EditorTabsControl editorTabs) => editorTabs.GetVisualDescendants().OfType<TabItem>()
+        .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
+
     private static async Task<EditorsTabItemControl> GetSoleControlAsync(EditorTabsControl editorTabs)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = editorTabs.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
-            if (ctrl is not null) return ctrl;
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("No EditorsTabItemControl was realized in time.");
+        await TestWait.WhileAsync(() => SoleControl(editorTabs) is null);
+        return SoleControl(editorTabs) ?? throw new TimeoutException("No EditorsTabItemControl was realized in time.");
     }
 
     [AvaloniaFact]

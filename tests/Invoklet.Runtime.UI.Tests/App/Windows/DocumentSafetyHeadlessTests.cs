@@ -80,15 +80,10 @@ public class DocumentSafetyHeadlessTests
 
     private static async Task<EditorsTabItemControl> FindControlAsync(MainWindow window, EditorTabItemViewModel tab)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = window.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>()
-                .FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
-            if (ctrl is not null && tab.FrontMatter is not null) return ctrl;
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("The tab's control was not realized in time.");
+        EditorsTabItemControl? Realized() => window.GetVisualDescendants().OfType<TabItem>()
+            .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
+        await TestWait.WhileAsync(() => Realized() is null || tab.FrontMatter is null);
+        return Realized() ?? throw new TimeoutException("The tab's control was not realized in time.");
     }
 
     private static void ThrowDiskFull(string _) => throw new IOException("disk full");
@@ -131,8 +126,7 @@ public class DocumentSafetyHeadlessTests
             h.WindowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()))
                 .ReturnsAsync(UnsavedChangesResult.Cancel);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Contains(tab, h.MainVm.Tabs);
             Assert.True(tab.IsDirty);
@@ -160,7 +154,7 @@ public class DocumentSafetyHeadlessTests
             var closed = false;
             h.Window.Closed += (_, _) => closed = true;
             h.Window.Close();
-            await Task.Delay(50);
+            await h.Window.ClosingTask;
 
             Assert.False(closed);
             Assert.Contains(tab, h.MainVm.Tabs);
@@ -193,8 +187,7 @@ public class DocumentSafetyHeadlessTests
             Assert.True(tab.IsDirty);
             Assert.Contains("Save failed", ctrl.State.ExecStatusText);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Contains(tab, h.MainVm.Tabs);
             h.WindowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);

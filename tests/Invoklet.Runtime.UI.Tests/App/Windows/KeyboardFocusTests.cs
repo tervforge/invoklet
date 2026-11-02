@@ -96,16 +96,14 @@ public class KeyboardFocusTests
     private static async Task<T> WaitForControlAsync<T>(Window window, Func<T, bool>? predicate = null)
         where T : Control
     {
-        for (var i = 0; i < 100; i++)
+        T? Found()
         {
             Dispatcher.UIThread.RunJobs();
-            var control = window.GetVisualDescendants().OfType<T>().FirstOrDefault(c => predicate?.Invoke(c) ?? true);
-            if (control is not null)
-                return control;
-            await Task.Delay(10, TestContext.Current.CancellationToken);
+            return window.GetVisualDescendants().OfType<T>().FirstOrDefault(c => predicate?.Invoke(c) ?? true);
         }
 
-        throw new Xunit.Sdk.XunitException($"Timed out waiting for {typeof(T).Name}.");
+        await TestWait.WhileAsync(() => Found() is null);
+        return Found() ?? throw new Xunit.Sdk.XunitException($"Timed out waiting for {typeof(T).Name}.");
     }
 
     // A side-panel section header shown in the window (Expander.bundle in MainWindow), which replaced the

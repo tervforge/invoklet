@@ -204,9 +204,8 @@ public class EditorTabsControlTests
             var host = new Window { Content = editorTabs };
             host.Show();
             editorTabs.Attach(mainVm); // opens the initial untitled tab — no dialog wait needed, no disk file to parse
-            for (var i = 0; i < 100 && editorTabs.GetVisualDescendants().OfType<TabItem>()
-                     .Select(t => t.Content).OfType<EditorsTabItemControl>().SingleOrDefault() is null; i++)
-                await Task.Delay(20);
+            await TestWait.WhileAsync(() => editorTabs.GetVisualDescendants().OfType<TabItem>()
+                .Select(t => t.Content).OfType<EditorsTabItemControl>().SingleOrDefault() is null);
 
             var tab = Assert.Single(mainVm.Tabs);
             var ctrl = editorTabs.GetVisualDescendants().OfType<TabItem>()
@@ -350,7 +349,7 @@ public class EditorTabsControlTests
             // resolves to Vb synchronously, see the comment above), so there's no async gap to wait
             // out here — but poll a little longer anyway rather than assert immediately, in case that
             // assumption ever stops holding.
-            await Task.Delay(50);
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, intelliSenseFactoryCalls);
         }
         finally

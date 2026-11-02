@@ -7,6 +7,7 @@ using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
@@ -114,13 +115,12 @@ public class ResultsOutputSettingsTests
     {
         var (ctrl, _, _) = Create();
         await ctrl.RunAsync(false, Sdk).WaitAsync(TimeSpan.FromSeconds(10));
-        for (var i = 0; i < 20 &&
-             (!ctrl.State.Output.Content.Contains("plain line", StringComparison.Ordinal) ||
-              !ctrl.State.Output.Content.Contains("error line", StringComparison.Ordinal)); i++)
+        await TestWait.WhileAsync(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
+            return !ctrl.State.Output.Content.Contains("plain line", StringComparison.Ordinal) ||
+                   !ctrl.State.Output.Content.Contains("error line", StringComparison.Ordinal);
+        });
 
         Assert.Contains("class=\"out\"", ctrl.State.Output.Content);
         Assert.Contains("plain line", ctrl.State.Output.Content);
