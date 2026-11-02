@@ -3,7 +3,13 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
-## [Unreleased]
+## [0.11.1] — 2026-11-02
+
+This release adds PostgreSQL and SQL Server connections, exports a table of the results as CSV, lets you drag the heights of the sidebar sections, and
+closes six security gaps around secrets, downloads and connections.
+
+**Changed behaviour:** SQLite connections now name their sets and rows as Entity Framework Core does (`order_items` is `OrderItems`, a table `log` is
+`Logs`). A script that uses a set by its old name must be changed to the new one.
 
 ### Added
 
@@ -1007,5 +1013,6 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.10.3]: https://github.com/tervforge/invoklet/releases/tag/v0.10.3
 [0.10.5]: https://github.com/tervforge/invoklet/releases/tag/v0.10.5
 [0.11.0]: https://github.com/tervforge/invoklet/releases/tag/v0.11.0
+[0.11.1]: https://github.com/tervforge/invoklet/releases/tag/v0.11.1
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5
