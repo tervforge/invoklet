@@ -103,6 +103,8 @@ public sealed class SqlServerServerTests : IAsyncLifetime
         Assert.NotNull(customers.Columns.Single(c => c.Name == "doubled").ComputedSql);
         Assert.Equal("OnAddOrUpdate", customers.Columns.Single(c => c.Name == "version").Generated);
         Assert.Equal("byte[]", customers.Columns.Single(c => c.Name == "version").ClrType);
+        // A rowversion guards updates: without the mark a script would overwrite a row another client has changed.
+        Assert.True(customers.Columns.Single(c => c.Name == "version").ConcurrencyToken);
 
         // A column of an alias type is the type it is an alias of.
         var orders = entities.Single(e => e.Name == "orders");

@@ -17,8 +17,9 @@ internal sealed record EfEntity(string Schema, string Name, bool IsView, string 
 /// <param name="PrimaryKey">Its position in the primary key, from 1; 0 when it isn't part of it.</param>
 /// <param name="Generated">Never, OnAdd (identity, a sequence) or OnAddOrUpdate (computed, a row version).</param>
 /// <param name="ColumnType">The database's own type, when the context must say it (<c>jsonb</c>, <c>decimal(19,4)</c>); null otherwise.</param>
+/// <param name="ConcurrencyToken">The column's value is part of the condition of an update (a SQL Server <c>rowversion</c>), so an update of a row another client has changed since it was read fails.</param>
 internal sealed record EfColumn(string Name, string Property, string Type, string ClrType, bool IsValueType, bool NotNull, int PrimaryKey,
-    string Generated = "Never", string? ColumnType = null, string? DefaultSql = null, string? ComputedSql = null);
+    string Generated = "Never", string? ColumnType = null, string? DefaultSql = null, string? ComputedSql = null, bool ConcurrencyToken = false);
 
 /// <param name="ReferencedSchema">The schema of the table the key points to.</param>
 /// <param name="Table">The table the key points to.</param>

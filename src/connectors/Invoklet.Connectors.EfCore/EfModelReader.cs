@@ -60,7 +60,8 @@ internal static class EfModelReader
                     },
                     // The type is spelled out only where the provider would not choose it from the C# type.
                     property.FindAnnotation(RelationalAnnotationNames.ColumnType)?.Value as string,
-                    property.GetDefaultValueSql() is { Length: > 0 } defaultSql ? defaultSql : null, computed is { Length: > 0 } ? computed : null));
+                    property.GetDefaultValueSql() is { Length: > 0 } defaultSql ? defaultSql : null, computed is { Length: > 0 } ? computed : null,
+                    property.IsConcurrencyToken));
             }
             var foreignKeys = entityType.GetForeignKeys().Select(fk => new EfForeignKey(
                 fk.PrincipalEntityType.GetSchema() ?? fk.PrincipalEntityType.GetViewSchema() ?? "",

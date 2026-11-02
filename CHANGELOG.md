@@ -19,6 +19,8 @@ closes six security gaps around secrets, downloads and connections.
   provider is a library of its own.
   A PostgreSQL connection can leave the password out and use the pgpass file; a SQL Server one can use `Integrated Security=true`. The form says
   so, and a failed sign-in names the pgpass line looked for or the Kerberos ticket needed.
+  A column the database uses to detect concurrent changes (a SQL Server `rowversion`) is honoured: saving a row that another client has changed since it
+  was read fails with `DbUpdateConcurrencyException` instead of overwriting the other change.
 - A "…" button in the header of the last column of every table in the results opens a menu with **Export to CSV...**, which saves that table as a CSV file (UTF-8 with a byte order mark,
   so Excel reads it right). "Save results as HTML..." moved from the output settings to the context menu of the results panel.
 - The heights of the sections of the sidebar (Connections, Scripts, Samples) can be changed by dragging the line between two open sections, and are

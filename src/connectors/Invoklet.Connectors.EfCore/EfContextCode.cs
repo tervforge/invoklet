@@ -75,6 +75,8 @@ internal static class EfContextCode
                 else if (column.DefaultSql is { } defaultSql)
                     sb.Append("            ").Append(ef).Append(".RelationalPropertyBuilderExtensions.HasDefaultValueSql(e.Property(x => x.")
                         .Append(column.Property).Append("), ").Append(ConnectionCodeContext.Literal(defaultSql)).Append(");\n");
+                if (column.ConcurrencyToken)
+                    sb.Append("            e.Property(x => x.").Append(column.Property).Append(").IsConcurrencyToken();\n");
                 if (column.Generated == "OnAdd")
                     sb.Append("            e.Property(x => x.").Append(column.Property).Append(").ValueGeneratedOnAdd();\n");
                 else if (column.Generated == "OnAddOrUpdate")
