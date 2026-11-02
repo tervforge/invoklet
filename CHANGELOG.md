@@ -44,6 +44,8 @@ closes six security gaps around secrets, downloads and connections.
 - The Test button and the OpenAPI schema read no longer follow a redirect, which would have sent a connection's headers, a secret among them, to
   whatever host the server named.
 - A script's saved output (`run-output.json`) is readable by its owner only on macOS and Linux.
+- The command-line runner ends with exit code 130 when it is stopped with Ctrl+C at any stage, also while it reads the script or a connection's description (it used
+  to print an exception), and a script or output file it cannot read or write is a message with exit code 2 (1 for `convert`).
 - A settings file that holds `null` for a group of settings (`"Logging": null`) no longer stops Invoklet from starting: the group has its default values.
   A settings file that cannot be read is kept as `settings.json.bad` before the defaults are saved over it.
 - In database connections a foreign key on a unique column is a one-to-one relationship: the row on the other side is one row (`person.Passport`), not a
