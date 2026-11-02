@@ -2535,6 +2535,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // resolution take as long as the script's schemas are large, so they run on a worker and the
     // editor keeps typing meanwhile. A refresh that is overtaken by a newer one is dropped, never
     // applied over it. The text is analysed again, once, only when asked and only for the newest.
+    // The latest refresh: complete when it has applied the context and, if it was asked to, the text has been analysed again. For a test to wait for instead of polling.
+    internal Task ContextRefreshTask { get; private set; } = Task.CompletedTask;
+
     private void RefreshIntelliSenseContext(bool reanalyze)
     {
         if (_disposed || _intelliSense is not { } intelliSense) return;
@@ -2558,7 +2561,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var language = frontMatter?.Language ?? MdRunLanguage.CSharp;
         List<string> packageIds = frontMatter is null ? [] : [.. frontMatter.Packages.Keys];
         var scriptDirectory = ScriptDirectory;
-        _ = Task.Run(async () =>
+        ContextRefreshTask = Task.Run(async () =>
         {
             try
             {
@@ -2572,7 +2575,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 token.ThrowIfCancellationRequested();
                 intelliSense.ApplyExecutionContext(baseRequest with { Connections = generated }, token);
                 if (shouldReanalyze)
-                    Dispatcher.Post(() =>
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         // The classes the script's code refers to are new: analyse it again now rather than at the next keystroke.
                         if (!_disposed && !token.IsCancellationRequested) _intelliSense?.NotifyTextChanged(State.Editor.Text);
