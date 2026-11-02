@@ -4,6 +4,7 @@ using Invoklet.Contracts.IntelliSense;
 using Invoklet.Contracts.Models;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.CSharp.IntelliSense;
+using Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Fixtures;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -19,7 +20,8 @@ public sealed class CSharpIntelliSenseContextUpdateTests
     {
         var references = new CSharpReferenceService();
         return new CSharpIntelliSenseService(
-            references.GetDefault().Append(references.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance)
+            references.GetDefault().Append(references.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance, null,
+            new FixedReferenceResolver(CSharpIntelliSenseFixture.Framework))
         {
             BackgroundAnalysisDebounce = TimeSpan.Zero,
         };

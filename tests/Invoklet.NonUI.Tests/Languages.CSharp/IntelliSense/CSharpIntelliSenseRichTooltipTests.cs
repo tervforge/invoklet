@@ -11,6 +11,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // tests exercise that through the real CSharpIntelliSenseService/Roslyn pipeline, not just the
 // isolated XmlDocSummary/SignatureFormatting helpers, since XML-doc-comment retrieval only works
 // against a real compiled symbol.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseRichTooltipTests
 {
     private const string DocumentedGreeter =
