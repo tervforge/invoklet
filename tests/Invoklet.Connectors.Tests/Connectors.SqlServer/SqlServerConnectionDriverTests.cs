@@ -1,7 +1,5 @@
 using Invoklet.Connectors.SqlServer;
-using Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
 using Invoklet.Format.MdRun;
-using Invoklet.Languages.DotnetCommon.Sdk;
 using Xunit;
 
 namespace Invoklet.Connectors.Tests.Connectors.SqlServer;
@@ -54,15 +52,4 @@ public class SqlServerConnectionDriverTests
         Assert.Equal("The database can't be read: x", SqlServerConnectionDriver.Explain("Server=db;User Id=a;Password=b", "x"));
     }
 
-    [Fact]
-    [Trait("Category", "RealBuild")]
-    public async Task TheGeneratedContext_Should_CompileAgainstTheSqlServerProvider()
-    {
-        if (!new DotnetSdkProvider().Get().Any()) return;
-        using var fixture = new ProviderCompileFixture();
-
-        var output = await fixture.RunAsync(new SqlServerConnectionDriver(), "Server=localhost;Database=shop", ProviderCompileFixture.ModelScript);
-
-        Assert.Equal(["Id", "Customer", "True"], output.TakeLast(3));
-    }
 }

@@ -168,6 +168,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         State = new EditorTabState(editor);
         _watchEvaluator = new WatchEvaluator(() => State.CurrentDebugCtx, w => _vm.DebugPanel.WatchExpressions.Contains(w));
         ResultsOutput.DataContext = State.Output;
+        // A change of the output makes a snapshot of it that is being written to disk out of date (see ContentRelease).
+        State.Output.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(OutputHtmlViewModel.Content)) Interlocked.Increment(ref _outputVersion);
+        };
         ResultsOutput.SaveHtmlRequested += () => _ = ExportResultsAsync();
         ResultsOutput.ExportTableRequested += table => _ = _resultsExporter?.ExportTableCsvAsync(table);
         _resultsWordWrap = prefs.Editor.ResultsWordWrap;
@@ -385,8 +390,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // The editor is empty while its text is on disk: writing it would replace the script with nothing.
         if (_contentReleased) throw new IOException("The text of this tab is not loaded.");
         var written = _documentWriter.Serialize(State.MdRunDocument, State.Editor.Text, path, _vm.FilePath, _vm.ReferenceAnchorPath);
+        // A write that fails leaves the file as it was (and so the tab's idea of it): the ID and the state are taken only after it.
+        AtomicFile.WriteAllBytes(path, written.Bytes);
         if (written.DocumentId is { } id) _writtenId = (path, id);
-        File.WriteAllBytes(path, written.Bytes);
         _vm.LastWrite = (path, ScriptFileState.Of(written.Bytes));
     }
 
@@ -784,7 +790,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 if (ReferenceEquals(s.RunCts, runCts)) s.RunCts = null;
                 runCts.Dispose();
                 _run.End();
-                SaveRunOutput();
+                _ = SaveRunOutput();
             }
         }
     }
@@ -1976,7 +1982,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             // character moves the caret, and editor.Text here copied the whole document per keystroke
             var snapshot = editor.Document.CreateSnapshot();
 
-            _ = Task.Run(async () =>
+            RefactoringsTask = Task.Run(async () =>
             {
                 try
                 {
@@ -2461,18 +2467,25 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     /// Undo brings back the text it replaced — and leaves the tab saved. The caller decides whether
     /// unsaved edits may go.
     /// </summary>
-    internal DiskReload ReloadFromDisk()
+    internal DiskReload ReloadFromDisk() => ReloadFromDisk(_vm.FilePath is { } path ? TryReadBytes(path) : null);
+
+    // Null when the file cannot be read. Safe off the UI thread.
+    internal static byte[]? TryReadBytes(string path)
     {
-        if (_disposed || _vm.FilePath is not { } path) return DiskReload.Unavailable;
-        byte[] bytes;
         try
         {
-            bytes = File.ReadAllBytes(path);
+            return File.ReadAllBytes(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return DiskReload.Unavailable;
+            return null;
         }
+    }
+
+    /// <summary>The same, with the bytes of the file already read (null: it could not be), for a caller that read them off the UI thread.</summary>
+    internal DiskReload ReloadFromDisk(byte[]? bytes)
+    {
+        if (_disposed || _vm.FilePath is null || bytes is null) return DiskReload.Unavailable;
 
         // This tab's editor services, grammar and snippets are its language's; a script that is now
         // in another language needs a tab of its own.
@@ -2522,6 +2535,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // resolution take as long as the script's schemas are large, so they run on a worker and the
     // editor keeps typing meanwhile. A refresh that is overtaken by a newer one is dropped, never
     // applied over it. The text is analysed again, once, only when asked and only for the newest.
+    // The latest refresh: complete when it has applied the context and, if it was asked to, the text has been analysed again. For a test to wait for instead of polling.
+    internal Task ContextRefreshTask { get; private set; } = Task.CompletedTask;
+
+    // The latest request for the refactorings at the caret: complete when its answer is on the lightbulb, or it was superseded. For a test to wait for instead of polling.
+    internal Task RefactoringsTask { get; private set; } = Task.CompletedTask;
+
     private void RefreshIntelliSenseContext(bool reanalyze)
     {
         if (_disposed || _intelliSense is not { } intelliSense) return;
@@ -2545,7 +2564,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var language = frontMatter?.Language ?? MdRunLanguage.CSharp;
         List<string> packageIds = frontMatter is null ? [] : [.. frontMatter.Packages.Keys];
         var scriptDirectory = ScriptDirectory;
-        _ = Task.Run(async () =>
+        ContextRefreshTask = Task.Run(async () =>
         {
             try
             {
@@ -2559,7 +2578,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 token.ThrowIfCancellationRequested();
                 intelliSense.ApplyExecutionContext(baseRequest with { Connections = generated }, token);
                 if (shouldReanalyze)
-                    Dispatcher.Post(() =>
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         // The classes the script's code refers to are new: analyse it again now rather than at the next keystroke.
                         if (!_disposed && !token.IsCancellationRequested) _intelliSense?.NotifyTextChanged(State.Editor.Text);

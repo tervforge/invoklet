@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services.Tabs;
 
+[Trait("Platform", "Independent")]
 public sealed class RecentTabsResidencyPolicyTests
 {
     private static void UseInOrder(RecentTabsResidencyPolicy sut, IEnumerable<RecentTabsResidencyPolicyFixture.Tab> tabs)

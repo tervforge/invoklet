@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
@@ -66,16 +67,13 @@ public class MainWindowClosingTests
         return (window, mainVm, windowService);
     }
 
+    private static EditorsTabItemControl? SoleControl(MainWindow window) => window.GetVisualDescendants().OfType<TabItem>()
+        .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
+
     private static async Task<EditorsTabItemControl> GetSoleControlAsync(MainWindow window)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = window.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
-            if (ctrl is not null) return ctrl;
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("No EditorsTabItemControl was realized in time.");
+        await TestWait.WhileAsync(() => SoleControl(window) is null);
+        return SoleControl(window)!;
     }
 
     [AvaloniaFact]
@@ -88,10 +86,91 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.True(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    // The output of a run that has just ended is written in the background: closing waits for it, so that the last result is not lost, and
+    // the window is not frozen while it waits.
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhileTheOutputOfTheLastRunIsBeingWritten_Should_WaitForItAndThenClose()
+    {
+        var (window, _, _) = CreateMainWindow();
+        var ctrl = await GetSoleControlAsync(window);
+        using var gate = new ManualResetEventSlim(false);
+        var written = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+        var closedFired = false;
+        window.Closed += (_, _) => closedFired = true;
+
+        window.Close();
+        var closing = window.ClosingTask;
+
+        Assert.False(closing.IsCompleted); // waiting for the write
+        Assert.False(closedFired);
+        var dispatched = false;
+        await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
+        Assert.True(dispatched);
+
+        gate.Set();
+        await written;
+        await closing;
+
+        Assert.True(closedFired);
+    }
+
+    // The confirmations come first, and a Save As made by one of them writes the output of its tab again: the last wait is after them, just before the
+    // close, and covers that write too.
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhenAConfirmationQueuesAnOutputWrite_Should_WaitForThatWriteToo()
+    {
+        var (window, _, windowService) = CreateMainWindow();
+        var ctrl = await GetSoleControlAsync(window);
+        ctrl.State.Editor.Text = "Console.WriteLine(1);";
+        using var gate = new ManualResetEventSlim(false);
+        Task<bool>? written = null;
+        windowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>())).ReturnsAsync(() =>
+        {
+            written = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+            return UnsavedChangesResult.DontSave;
+        });
+        var closedFired = false;
+        window.Closed += (_, _) => closedFired = true;
+
+        window.Close();
+        var closing = window.ClosingTask;
+        await TestWait.WhileAsync(() => written is null); // the confirmation has been answered
+
+        Assert.False(closing.IsCompleted);
+        Assert.False(closedFired); // the answer came, and the write it made is still being waited for
+
+        gate.Set();
+        await written!;
+        await closing;
+
+        Assert.True(closedFired);
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhileTheOutputIsNotWrittenInTime_Should_GiveItUpAndClose()
+    {
+        var (window, _, _) = CreateMainWindow();
+        window.OutputFlushLimit = TimeSpan.FromMilliseconds(100);
+        var ctrl = await GetSoleControlAsync(window);
+        using var gate = new ManualResetEventSlim(false);
+        _ = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+        var closedFired = false;
+        window.Closed += (_, _) => closedFired = true;
+
+        try
+        {
+            window.Close();
+            await window.ClosingTask;
+
+            Assert.True(closedFired);
+        }
+        finally { gate.Set(); }
     }
 
     [AvaloniaFact]
@@ -107,7 +186,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.False(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);
@@ -126,7 +205,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         // The confirmed, second Close() has to make it all the way through the (now no-op) Closing
         // handler again — this is what actually proves the _confirmedClose re-entry guard works,
@@ -149,15 +228,15 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(20);
+        var closing = window.ClosingTask;
         window.Close();
-        await Task.Delay(20);
 
+        Assert.False(closing.IsCompleted);
         Assert.False(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);
 
         answer.SetResult(UnsavedChangesResult.DontSave);
-        await Task.Delay(50);
+        await closing;
 
         Assert.True(closedFired);
     }
@@ -199,7 +278,7 @@ public class MainWindowClosingTests
         editor.Closed += (_, _) => editorClosed = true;
 
         ExecuteFileExit(window);
-        await Task.Delay(100);
+        await window.ClosingTask;
 
         Assert.Equal(closes, mainClosed);
         Assert.Equal(closes, editorClosed);
@@ -227,7 +306,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         ExecuteFileExit(window);
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.False(closedFired);
         Assert.True(window.IsVisible);
@@ -247,7 +326,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         ExecuteFileExit(window);
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.True(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);

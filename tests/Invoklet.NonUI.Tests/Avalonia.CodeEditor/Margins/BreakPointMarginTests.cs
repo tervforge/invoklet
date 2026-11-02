@@ -10,6 +10,7 @@ namespace Invoklet.NonUI.Tests.Avalonia.CodeEditor.Margins;
 // function of IBreakpoint, no live DrawingContext/TextView needed — so this exercises the actual new
 // branching without a rendering harness (same "extract the decision from the drawing" precedent as
 // CodeFixMarginTests/ComputeIconTransform).
+[Trait("Platform", "Independent")]
 public class BreakPointMarginTests
 {
     private static Breakpoint MakeBreakpoint(

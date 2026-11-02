@@ -17,6 +17,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // rules — "latest", floating versions and ranges included, which used to find nothing because the
 // version text was used as a folder name. Everything runs against a temporary package folder and a
 // local folder feed with their own NuGet.Config: never the network or the user's package cache.
+[Collection(RealBuildTestCollection.Name)]
 public sealed class NuGetIntelliSenseReferencesTests : IAsyncDisposable
 {
     private const string Tfm = "net8.0";

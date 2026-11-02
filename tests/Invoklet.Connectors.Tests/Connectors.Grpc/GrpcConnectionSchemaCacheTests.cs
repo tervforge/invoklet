@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.Connectors.Tests.Connectors.Grpc;
 
+[Trait("Platform", "Independent")]
 public sealed class GrpcConnectionSchemaCacheTests
 {
     [Fact]

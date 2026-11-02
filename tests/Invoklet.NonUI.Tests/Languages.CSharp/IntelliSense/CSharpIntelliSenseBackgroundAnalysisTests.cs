@@ -15,6 +15,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // (ComputeDiagnosticsAndCodeFixesAsync) that computes diagnostics once and reuses them for both.
 // These tests exercise the real background-analysis path (NotifyTextChanged) end-to-end to make
 // sure both events still fire correctly off the shared computation.
+// Not marked platform-independent: the CRLF regression it guards only shows where Environment.NewLine is "\r\n", so the Windows lane must run it.
 public class CSharpIntelliSenseBackgroundAnalysisTests
 {
     // NotifyTextChanged_Should_MarkUnusedVariableFix_AsWarningSeverity below was reproducibly timing
@@ -307,6 +308,6 @@ public class CSharpIntelliSenseBackgroundAnalysisTests
         using var service2 = new CSharpIntelliSenseService([path], NullLogger<CSharpIntelliSenseService>.Instance);
         Assert.True(ScriptContext.ReferenceCache.TryGetValue(path, out var afterSecond));
 
-        Assert.Same(afterFirst, afterSecond);
+        Assert.Same(afterFirst.Reference, afterSecond.Reference);
     }
 }

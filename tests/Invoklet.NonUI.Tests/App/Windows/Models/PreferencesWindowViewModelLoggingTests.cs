@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Windows.Models;
 
+[Trait("Platform", "Independent")]
 public class PreferencesWindowViewModelLoggingTests
 {
     [Fact]

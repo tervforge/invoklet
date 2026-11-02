@@ -8,6 +8,7 @@ using Invoklet.Contracts;
 using Invoklet.Contracts.Debugging;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
@@ -298,11 +299,11 @@ public class EditorTabItemControlExceptionStopTests
     private static async Task<RunState> RunUntilPausedAndContinueAsync(EditorsTabItemControl control, EditorTabItemViewModel vm)
     {
         var run = control.RunAsync(debug: true, new DotnetSdk("10.0.100", "net10.0", "10.0.0", ".NET 10.0"));
-        for (var i = 0; i < 200 && vm.RunState != RunState.Paused; i++)
+        await TestWait.WhileAsync(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
+            return vm.RunState != RunState.Paused;
+        });
 
         var pausedState = vm.RunState;
         control.ResumeDebug(DebugAction.Continue);

@@ -59,25 +59,11 @@ public static class TextFileCodec
     }
 
     /// <summary>
-    /// Writes <paramref name="text"/> to <paramref name="path"/> in <paramref name="encoding"/>: into a
-    /// temporary file in the same folder first, which then replaces the target. Throws (IOException,
-    /// UnauthorizedAccessException, ...) without having touched an existing file when the write fails.
+    /// Writes <paramref name="text"/> to <paramref name="path"/> in <paramref name="encoding"/> through <see cref="AtomicFile"/>:
+    /// throws (IOException, UnauthorizedAccessException, ...) without having touched an existing file when the write fails.
     /// </summary>
-    public static async Task SaveAsync(string path, string text, Encoding encoding, bool hasBom, CancellationToken cancellationToken = default)
-    {
-        var bytes = Encode(text, encoding, hasBom);
-        var folder = Path.GetDirectoryName(Path.GetFullPath(path))!;
-        var temp = Path.Combine(folder, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
-        try
-        {
-            await File.WriteAllBytesAsync(temp, bytes, cancellationToken);
-            File.Move(temp, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temp)) File.Delete(temp);
-        }
-    }
+    public static Task SaveAsync(string path, string text, Encoding encoding, bool hasBom, CancellationToken cancellationToken = default)
+        => AtomicFile.WriteAllBytesAsync(path, Encode(text, encoding, hasBom), cancellationToken);
 
     /// <summary>"CRLF", "LF", "CR", "Mixed", or "" for text without any line break.</summary>
     public static string NewLineLabel(string text)

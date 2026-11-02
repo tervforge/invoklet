@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Features;
 
+[Trait("Platform", "Independent")]
 public sealed class RefactoringServiceTests
 {
     [Fact]

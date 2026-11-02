@@ -9,6 +9,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // Features (confirmed directly — see the method's own comment), so this is a from-scratch
 // implementation using only public SemanticModel/SyntaxToken API; these tests are what actually
 // pins its symbol-matching behavior down, not just "some Roslyn service handles it".
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseDocumentHighlightsTests
 {
     [Fact]

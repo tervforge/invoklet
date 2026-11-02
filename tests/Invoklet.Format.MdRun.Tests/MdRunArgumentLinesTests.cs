@@ -3,6 +3,7 @@ using Xunit;
 namespace Invoklet.Format.MdRun.Tests;
 
 // An argument list as one line per argument (the Dependencies window's Arguments tab).
+[Trait("Platform", "Independent")]
 public class MdRunArgumentLinesTests
 {
     [Theory]

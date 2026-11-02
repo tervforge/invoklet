@@ -63,12 +63,11 @@ public class StartupWorkspaceReadyTests
         try
         {
             window.Show();
-            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
-            while (Volatile.Read(ref created) < paths.Length && DateTime.UtcNow < deadline)
+            await TestWait.WhileAsync(() =>
             {
                 Dispatcher.UIThread.RunJobs();
-                await Task.Delay(20, TestContext.Current.CancellationToken);
-            }
+                return Volatile.Read(ref created) < paths.Length;
+            });
             Dispatcher.UIThread.RunJobs();
             Assert.False(ready.IsCompleted);
 

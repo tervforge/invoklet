@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services.QuickOpen;
 using Invoklet.Windows;
 using Xunit;
@@ -198,11 +199,11 @@ public class QuickOpenDialogTests
             _ = dialog.ShowDialog<QuickOpenEntry?>(owner);
             Dispatcher.UIThread.RunJobs();
             dialog.FindControl<CheckBox>("OtherFilesCheck")!.IsChecked = true;
-            for (var i = 0; i < 200 && !Names(dialog).Contains("notes.md"); i++)
+            await TestWait.WhileAsync(() =>
             {
-                await Task.Delay(10, TestContext.Current.CancellationToken);
                 Dispatcher.UIThread.RunJobs();
-            }
+                return !Names(dialog).Contains("notes.md");
+            });
             after = Names(dialog);
         }
         finally
@@ -277,12 +278,12 @@ public class QuickOpenDialogTests
             Dispatcher.UIThread.RunJobs();
             dialog.FindControl<CheckBox>("SearchInsideCheck")!.IsChecked = true;
             dialog.FindControl<TextBox>("QueryBox")!.Text = "needle";
-            for (var i = 0; i < 300 && !names.Contains("Gamma"); i++)
+            await TestWait.WhileAsync(() =>
             {
-                await Task.Delay(10, TestContext.Current.CancellationToken);
                 Dispatcher.UIThread.RunJobs();
                 names = Names(dialog);
-            }
+                return !names.Contains("Gamma");
+            });
         }
         finally
         {

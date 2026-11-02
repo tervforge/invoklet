@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.ScriptDocument;
 
+[Trait("Platform", "Independent")]
 public sealed class ScriptDocumentProjectionTests
 {
     [Fact]

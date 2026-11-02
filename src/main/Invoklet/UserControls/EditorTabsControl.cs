@@ -135,7 +135,22 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
 
     // ── Tab lifecycle ──────────────────────────────────────────────────────────
 
+    // The changes of the tab collection that are being handled (a tab is added once its language services exist): complete when every tab that
+    // was added has its control. For a test to wait for instead of polling; nothing else uses it.
+    private readonly HashSet<Task> _tabChanges = [];
+
+    internal Task TabsReadyForTests() => Task.WhenAll(_tabChanges.ToArray());
+
     private async void OnTabsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // Runs up to its first wait here, so the change is tracked before this returns; an error is raised here as when this did the work itself.
+        var work = TabsChangedAsync(e);
+        _tabChanges.Add(work);
+        try { await work; }
+        finally { _tabChanges.Remove(work); }
+    }
+
+    private async Task TabsChangedAsync(NotifyCollectionChangedEventArgs e)
     {
         var fileTabControl = this.FindControl<TabControl>("FileTabControl")!;
 
@@ -267,6 +282,33 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
     }
 
     internal Task IdleForTests() => _lifecycle?.WhenIdleAsync() ?? Task.CompletedTask;
+
+    /// <summary>Some tab has output of a run that is not on disk yet.</summary>
+    internal bool HasPendingOutputWrites() => _tabs.Values.Any(t => !t.Control.OutputWrites.IsCompleted);
+
+    /// <summary>
+    /// Completes once the output of the runs of every tab is on disk (so that the last result is not lost when the application is closed), or when
+    /// <paramref name="limit"/> has passed: False then, and what was not written is not waited for any more. A write that failed has been logged by
+    /// its writer; there is nothing more to wait for.
+    /// </summary>
+    internal async Task<bool> FlushOutputWritesAsync(TimeSpan limit)
+    {
+        var pending = _tabs.Values.Select(t => t.Control.OutputWrites).Where(task => !task.IsCompleted).ToList();
+        if (pending.Count == 0) return true;
+        try
+        {
+            await Task.WhenAll(pending).WaitAsync(limit);
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            // A failed write: reported where it happened.
+        }
+        return true;
+    }
 
     internal bool IsLoadedForTests(EditorTabItemViewModel vm) => _lifecycle?.IsContentLoaded(vm) ?? HasControl(vm);
 

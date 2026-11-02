@@ -177,7 +177,7 @@ public class EditorTabSnippetsTests
             editorTabs.Attach(mainVm); // opens the initial blank tab
 
             mainVm.OpenTab(filePath);
-            await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+            await editorTabs.TabsReadyForTests();
 
             var fileTabControl = editorTabs.GetVisualDescendants().OfType<TabControl>()
                 .First(t => t.Name == "FileTabControl");

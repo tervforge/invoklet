@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Features;
 
+[Trait("Platform", "Independent")]
 public sealed class SignatureHelpTests
 {
     private const string Methods = "class C { public void M(int a, int b) { } public void M(int a) { } }\n";

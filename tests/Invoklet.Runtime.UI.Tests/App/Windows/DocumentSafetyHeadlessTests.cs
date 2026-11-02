@@ -80,15 +80,10 @@ public class DocumentSafetyHeadlessTests
 
     private static async Task<EditorsTabItemControl> FindControlAsync(MainWindow window, EditorTabItemViewModel tab)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = window.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>()
-                .FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
-            if (ctrl is not null && tab.FrontMatter is not null) return ctrl;
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("The tab's control was not realized in time.");
+        EditorsTabItemControl? Realized() => window.GetVisualDescendants().OfType<TabItem>()
+            .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
+        await TestWait.WhileAsync(() => Realized() is null || tab.FrontMatter is null);
+        return Realized() ?? throw new TimeoutException("The tab's control was not realized in time.");
     }
 
     private static void ThrowDiskFull(string _) => throw new IOException("disk full");
@@ -96,13 +91,16 @@ public class DocumentSafetyHeadlessTests
     // Runs after the assertions: the tabs' dirty flags are dropped first so closing the window
     // neither asks nor writes anything (no production Save/Cancel path), then the window — whose
     // Dispose releases the EditorTabsControl and its tab controls — and the view model are disposed.
-    private static void Cleanup(Harness h)
+    private static async Task CleanupAsync(Harness h)
     {
         try
         {
             foreach (var tab in h.MainVm.Tabs)
                 tab.IsDirty = false;
+            var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            h.Window.Closed += (_, _) => closed.TrySetResult();
             h.Window.Close();
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
             Assert.False(h.Window.IsVisible);
         }
         finally
@@ -128,8 +126,7 @@ public class DocumentSafetyHeadlessTests
             h.WindowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()))
                 .ReturnsAsync(UnsavedChangesResult.Cancel);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Contains(tab, h.MainVm.Tabs);
             Assert.True(tab.IsDirty);
@@ -137,7 +134,7 @@ public class DocumentSafetyHeadlessTests
             Assert.Equal("Console.WriteLine(\"unsaved\");", ctrl.State.Editor.Text);
             h.WindowService.Verify(w => w.ShowErrorAsync("Save Failed", It.Is<string>(m => m.Contains("disk full"))), Times.Once);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -157,7 +154,7 @@ public class DocumentSafetyHeadlessTests
             var closed = false;
             h.Window.Closed += (_, _) => closed = true;
             h.Window.Close();
-            await Task.Delay(50);
+            await h.Window.ClosingTask;
 
             Assert.False(closed);
             Assert.Contains(tab, h.MainVm.Tabs);
@@ -165,7 +162,7 @@ public class DocumentSafetyHeadlessTests
             Assert.Same(ctrl, await FindControlAsync(h.Window, tab));
             Assert.Equal("Console.WriteLine(\"unsaved\");", ctrl.State.Editor.Text);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     // Kind/usings/packages edits were written without ever flagging the tab dirty.
@@ -190,8 +187,7 @@ public class DocumentSafetyHeadlessTests
             Assert.True(tab.IsDirty);
             Assert.Contains("Save failed", ctrl.State.ExecStatusText);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Contains(tab, h.MainVm.Tabs);
             h.WindowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);
@@ -199,7 +195,7 @@ public class DocumentSafetyHeadlessTests
         finally
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            Cleanup(h);
+            await CleanupAsync(h);
         }
     }
 
@@ -217,7 +213,7 @@ public class DocumentSafetyHeadlessTests
             var saved = MdRunParser.TryParse(File.ReadAllText(tab.FilePath!));
             Assert.Equal(MdRunKind.Program, saved!.FrontMatter.Kind);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     // Dependencies window edits the front matter in place; only a real change counts — merely
@@ -239,7 +235,7 @@ public class DocumentSafetyHeadlessTests
             ctrl.OnDependenciesEdited();
             Assert.True(tab.IsDirty);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     // Dependencies dialog driven through MainWindowViewModel.OpenDependenciesCommand: the mocked
@@ -281,7 +277,7 @@ public class DocumentSafetyHeadlessTests
             Assert.True(tab.IsDirty);
             Assert.DoesNotContain("System.Linq", tab.FrontMatter!.Namespaces ?? []);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -299,7 +295,7 @@ public class DocumentSafetyHeadlessTests
             var saved = MdRunParser.TryParse(File.ReadAllText(tab.FilePath!));
             Assert.Contains("System.Linq", saved!.FrontMatter.Namespaces!);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -324,7 +320,7 @@ public class DocumentSafetyHeadlessTests
         finally
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            Cleanup(h);
+            await CleanupAsync(h);
         }
     }
     [AvaloniaFact]
@@ -355,7 +351,7 @@ public class DocumentSafetyHeadlessTests
             Assert.Equal(edited + "\n", MdRunParser.TryParse(File.ReadAllText(destination))!.RunCode);
             Assert.Equal(oldBytes, File.ReadAllBytes(oldPath));
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
 }

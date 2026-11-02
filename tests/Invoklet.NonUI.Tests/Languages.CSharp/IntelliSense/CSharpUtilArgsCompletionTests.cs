@@ -4,16 +4,18 @@ using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.CSharp.IntelliSense;
+using Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Fixtures;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 
+[Trait("Platform", "Independent")]
 public sealed class CSharpUtilArgsCompletionTests
 {
     private static CSharpIntelliSenseService CreateService(CSharpReferenceService references) =>
         new(references.GetDefault().Append(references.GetExtensionReference()),
-            NullLogger<CSharpIntelliSenseService>.Instance);
+            NullLogger<CSharpIntelliSenseService>.Instance, null, new FixedReferenceResolver(CSharpIntelliSenseFixture.Framework));
 
     [Fact]
     public async Task Completion_Should_ExposeTheEnumTypeAndItsValues()

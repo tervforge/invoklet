@@ -102,7 +102,7 @@ public class DependenciesRealTabIntegrationTests
                 // Act: open the already-saved .inv file, same as double-clicking it in the file tree,
                 // and wait for the async tab load (EditorTabsControl.CreateControlAsync) to finish.
                 mainVm.OpenTab(filePath);
-                await TestWait.WhileAsync(() => mainVm.ActiveTab?.FrontMatter is null);
+                await editorTabs.TabsReadyForTests();
 
                 Assert.NotNull(mainVm.ActiveTab?.FrontMatter);
 

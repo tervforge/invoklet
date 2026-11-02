@@ -5,6 +5,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Completion;
 
 // Where the editor offers the property template: inside an empty class/struct/record/interface
 // body, and nowhere else. '|' marks the position.
+[Trait("Platform", "Independent")]
 public class CSharpMemberPositionTests
 {
     private static bool At(string marked)

@@ -49,6 +49,13 @@ public class RunSaveConflictTests : IDisposable
         Directory.Delete(_root, recursive: true);
     }
 
+    private static async Task CleanupAsync(Window window, EditorsTabItemControl ctrl)
+    {
+        window.Close();
+        await ctrl.OutputWrites.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        ctrl.Dispose();
+    }
+
     private (EditorsTabItemControl Ctrl, EditorTabItemViewModel Vm, Window Host) Open()
     {
         var prefs = new Mock<IPreferencesService>();
@@ -109,7 +116,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal(original, File.ReadAllBytes(_script));
             Assert.True(vm.IsDirty);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -117,7 +124,7 @@ public class RunSaveConflictTests : IDisposable
     {
         var (ctrl, _, window) = Open();
         try { await ctrl.RunSelectionAsync(Sdk); Assert.Empty(_runs); }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -164,7 +171,7 @@ public class RunSaveConflictTests : IDisposable
             await restart;
             Assert.Equal(2, _runs.Count);
         }
-        finally { finish.TrySetResult(); disposed.TrySetResult(); window.Close(); ctrl.Dispose(); }
+        finally { finish.TrySetResult(); disposed.TrySetResult(); await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -185,7 +192,7 @@ public class RunSaveConflictTests : IDisposable
             await restart;
             Assert.Single(_runs);
         }
-        finally { finish.TrySetResult(); window.Close(); ctrl.Dispose(); }
+        finally { finish.TrySetResult(); await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -202,7 +209,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal("Console.WriteLine(2);", Assert.Single(_scripts).Trim());
             Assert.Equal(MdRunKind.Program, ctrl.State.MdRunDocument.FrontMatter.Kind); // the script keeps its own kind
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -217,7 +224,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Empty(_runs);
             Assert.Equal("Execute Selection is not available in Expression mode", ctrl.State.ExecStatusText);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaTheory]
@@ -240,7 +247,7 @@ public class RunSaveConflictTests : IDisposable
             await restart;
             Assert.Equal(stopQueuedRestart ? 0 : 1, _runs.Count);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -256,7 +263,7 @@ public class RunSaveConflictTests : IDisposable
             await ctrl.RunSelectionAsync(Sdk);
             Assert.Equal("   (1);\n   (2);\n   (3);", Assert.Single(_scripts));
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     private void ChangeExternally() => File.WriteAllText(_script, MdRunWriter.NewFile(External + "\n", "Demo"));
@@ -286,7 +293,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal(RunState.Idle, vm.RunState);
             Assert.StartsWith("Not saved", ctrl.State.ExecStatusText, StringComparison.Ordinal);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -311,7 +318,7 @@ public class RunSaveConflictTests : IDisposable
             _windows.Verify(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>()), Times.Once);
             Assert.Equal("Console.WriteLine(2);", CodeIn(_script));
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     // Without any change by another program: no question, the run happens, and what Run wrote is the
@@ -335,7 +342,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal("Console.WriteLine(2);", CodeIn(_script));
             Assert.False(vm.IsDirty);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -356,7 +363,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal(External, CodeIn(_script));
             Assert.False(vm.IsDirty);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -377,7 +384,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.True(vm.IsDirty);
             Assert.Equal(RunState.Idle, vm.RunState);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     [AvaloniaFact]
@@ -400,7 +407,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal(RunState.Idle, vm.RunState);
             Assert.Contains("Cannot save 'query.inv'", System.Net.WebUtility.HtmlDecode(ctrl.State.Output.Content));
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     // While the question is open, another Run starts nothing; one answer, one run.
@@ -422,7 +429,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Single(_runs);
             _windows.Verify(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>()), Times.Once);
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 
     // An untitled script still runs without being saved.
@@ -440,6 +447,6 @@ public class RunSaveConflictTests : IDisposable
             _windows.Verify(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>()), Times.Never);
             Assert.False(File.Exists(_script));
         }
-        finally { window.Close(); ctrl.Dispose(); }
+        finally { await CleanupAsync(window, ctrl); }
     }
 }

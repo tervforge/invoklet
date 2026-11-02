@@ -4,6 +4,7 @@ using Invoklet.Contracts.IntelliSense;
 using Invoklet.Contracts.Models;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.CSharp.IntelliSense;
+using Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Fixtures;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -12,13 +13,15 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // The editor's execution context (references, generated connection classes) is replaced from a
 // worker thread while the user keeps typing: a request that is overtaken must not be applied over
 // the newer one, and analysis of an obsolete solution must not reach the editor.
+[Trait("Platform", "Independent")]
 public sealed class CSharpIntelliSenseContextUpdateTests
 {
     private static CSharpIntelliSenseService Create()
     {
         var references = new CSharpReferenceService();
         return new CSharpIntelliSenseService(
-            references.GetDefault().Append(references.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance)
+            references.GetDefault().Append(references.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance, null,
+            new FixedReferenceResolver(CSharpIntelliSenseFixture.Framework))
         {
             BackgroundAnalysisDebounce = TimeSpan.Zero,
         };

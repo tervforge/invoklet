@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.UserControls;
 
+[Trait("Platform", "Independent")]
 public sealed class IntelliSenseEventSubscriptionsTests
 {
     [Fact]

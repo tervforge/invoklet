@@ -1,3 +1,4 @@
+using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
@@ -86,27 +87,25 @@ public class InvalidDocumentHeadlessTests
     {
         h.MainVm.OpenTab(path);
         var tab = h.MainVm.Tabs.Single(t => t.FilePath == path);
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = h.Window.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>()
-                .FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
-            if (ctrl is not null) return (tab, ctrl);
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("The tab's control was not realized in time.");
+        EditorsTabItemControl? Realized() => h.Window.GetVisualDescendants().OfType<TabItem>()
+            .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
+        await TestWait.WhileAsync(() => Realized() is null);
+        return (tab, Realized() ?? throw new TimeoutException("The tab's control was not realized in time."));
     }
 
     // Same teardown as DocumentSafetyHeadlessTests.Cleanup, after the assertions: dirty flags are
     // dropped so closing the window neither asks nor writes, then the window (whose Dispose releases
     // the EditorTabsControl and its tab controls) and the view model are disposed.
-    private static void Cleanup(Harness h)
+    private static async Task CleanupAsync(Harness h)
     {
         try
         {
             foreach (var tab in h.MainVm.Tabs)
                 tab.IsDirty = false;
+            var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            h.Window.Closed += (_, _) => closed.TrySetResult();
             h.Window.Close();
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
             Assert.False(h.Window.IsVisible);
         }
         finally
@@ -142,7 +141,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal("Invalid document", ctrl.State.ExecStatusText);
             Assert.False(tab.IsDirty);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -165,7 +164,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal(MalformedVb, File.ReadAllText(savedAs));
             Assert.Equal(savedAs, tab.FilePath);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaTheory]
@@ -186,7 +185,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal(RunState.Idle, tab.RunState);
             Assert.Equal(MalformedVb, File.ReadAllText(path));
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     // A numeric kind used to parse as an undefined MdRunKind and run.
@@ -212,7 +211,7 @@ public class InvalidDocumentHeadlessTests
             Assert.Equal("Invalid document", ctrl.State.ExecStatusText);
             Assert.Equal(original, File.ReadAllText(path));
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 
     [AvaloniaFact]
@@ -227,8 +226,7 @@ public class InvalidDocumentHeadlessTests
             ctrl.State.Editor.Text = MalformedVb.Replace("kind: nonsense", "kind: Statements");
             ctrl.SaveIfNeeded();
             Assert.False(tab.IsDirty);
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
             Assert.DoesNotContain(tab, h.MainVm.Tabs);
 
             var (reopened, reopenedCtrl) = await OpenAsync(h, path);
@@ -243,6 +241,6 @@ public class InvalidDocumentHeadlessTests
             await reopenedCtrl.RunAsync(false, Sdk);
             h.Registry.Verify(r => r.Create("vb", It.IsAny<ExecutionRequest>()), Times.Once);
         }
-        finally { Cleanup(h); }
+        finally { await CleanupAsync(h); }
     }
 }

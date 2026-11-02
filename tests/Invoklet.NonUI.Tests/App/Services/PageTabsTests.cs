@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class PageTabsTests
 {
     private static PageTabsFixture.Page P(string title) => new(title);

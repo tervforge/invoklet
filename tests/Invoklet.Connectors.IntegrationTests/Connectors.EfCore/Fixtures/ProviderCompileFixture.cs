@@ -9,7 +9,7 @@ using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
+namespace Invoklet.Connectors.IntegrationTests.Connectors.EfCore.Fixtures;
 
 // Compiles the context of a provider's connection against that provider's real EF Core package, with no server: the script only looks at the model.
 internal sealed class ProviderCompileFixture : IDisposable

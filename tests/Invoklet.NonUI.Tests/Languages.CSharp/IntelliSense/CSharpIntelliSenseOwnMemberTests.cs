@@ -7,6 +7,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // completed should render bold in the list; an inherited member (from a base class) should render
 // normal weight — ICompletionItem.IsOwnMember carries that distinction from the language service down
 // to DisplaySegmentRenderer.BuildListRow.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseOwnMemberTests
 {
     [Fact]

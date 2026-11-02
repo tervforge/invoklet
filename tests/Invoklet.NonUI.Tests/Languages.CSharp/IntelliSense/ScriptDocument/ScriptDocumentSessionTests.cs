@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.ScriptDocument;
 
+[Trait("Platform", "Independent")]
 public sealed class ScriptDocumentSessionTests
 {
     private static async Task<string> TextOfAsync(Document document)

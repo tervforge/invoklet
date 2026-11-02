@@ -10,6 +10,7 @@ namespace Invoklet.Runtime.Tests;
 // any other test's rendering assertions run concurrently in the same process (xunit parallelizes
 // across test classes by default). CombineWith's own logic is fully exercised without touching that
 // shared instance at all.
+[Trait("Platform", "Independent")]
 public class DumpOptionsTests
 {
     [Fact]

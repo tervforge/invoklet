@@ -272,21 +272,11 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
     internal static readonly TimeSpan DefaultWatcherRefreshDebounce = TimeSpan.FromMilliseconds(300);
     private readonly TimeSpan _watcherRefreshDebounce;
 
-    // OrdinalIgnoreCase matches Windows'/macOS' default case-insensitive filesystem; Linux's is
-    // case-sensitive, where it would incorrectly collapse two distinct files differing only in
-    // case (e.g. Query1.inv/query1.inv) into one dictionary entry.
-    private static readonly StringComparer FilePathComparer =
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
+    // The rule for comparing paths (FilePaths): on Linux two files that differ only in case are two files, and must not
+    // collapse into one entry. The StringComparison is for "is this tab's path inside the folder being deleted or renamed".
+    private static StringComparer FilePathComparer => FilePaths.Comparer;
 
-    // Same case-(in)sensitivity as FilePathComparer above, but as a StringComparison — needed for
-    // "is this tab's path nested inside the folder being deleted/renamed" prefix checks, which
-    // StringComparer (only usable for equality/sorting) can't express.
-    private static readonly StringComparison FilePathComparison =
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
+    private static StringComparison FilePathComparison => FilePaths.Comparison;
 
     private readonly Dictionary<string, EditorTabItemViewModel> _openTabs = new(FilePathComparer);
     private int _untitledTabNumber;

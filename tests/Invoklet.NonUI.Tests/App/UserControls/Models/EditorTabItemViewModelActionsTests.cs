@@ -10,6 +10,7 @@ namespace Invoklet.NonUI.Tests.App.UserControls.Models;
 // subscribed onto them from EditorTabsControl — a class that's neither this tab's View nor its
 // ViewModel. Now each command's body directly calls the injected IEditorTabActions, so invoking the
 // command IS the behavior, provable here with nothing but a mock and no Avalonia involved at all.
+[Trait("Platform", "Independent")]
 public class EditorTabItemViewModelActionsTests
 {
     private static (EditorTabItemViewModel Vm, Mock<IEditorTabActions> Actions) CreateVm()

@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services.Preferences;
 
+[Trait("Platform", "Independent")]
 public sealed class LoggingSettingsTests
 {
     [Fact]

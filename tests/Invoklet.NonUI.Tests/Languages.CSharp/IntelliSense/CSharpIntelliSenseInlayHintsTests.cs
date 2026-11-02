@@ -8,6 +8,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // CSharpIntelliSenseService.ComputeInlayHintsAsync, wired to
 // NotifyTextChanged the same way SemanticTokensChanged/DiagnosticsChanged are (see
 // CSharpIntelliSenseBackgroundAnalysisTests.cs, same real-background-pass end-to-end approach).
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseInlayHintsTests
 {
     private static readonly TimeSpan BackgroundAnalysisTimeout = TimeSpan.FromSeconds(30);

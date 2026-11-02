@@ -17,8 +17,9 @@ internal sealed record EfEntity(string Schema, string Name, bool IsView, string 
 /// <param name="PrimaryKey">Its position in the primary key, from 1; 0 when it isn't part of it.</param>
 /// <param name="Generated">Never, OnAdd (identity, a sequence) or OnAddOrUpdate (computed, a row version).</param>
 /// <param name="ColumnType">The database's own type, when the context must say it (<c>jsonb</c>, <c>decimal(19,4)</c>); null otherwise.</param>
+/// <param name="ConcurrencyToken">The column's value is part of the condition of an update (a SQL Server <c>rowversion</c>), so an update of a row another client has changed since it was read fails.</param>
 internal sealed record EfColumn(string Name, string Property, string Type, string ClrType, bool IsValueType, bool NotNull, int PrimaryKey,
-    string Generated = "Never", string? ColumnType = null, string? DefaultSql = null, string? ComputedSql = null);
+    string Generated = "Never", string? ColumnType = null, string? DefaultSql = null, string? ComputedSql = null, bool ConcurrencyToken = false);
 
 /// <param name="ReferencedSchema">The schema of the table the key points to.</param>
 /// <param name="Table">The table the key points to.</param>
@@ -28,9 +29,10 @@ internal sealed record EfColumn(string Name, string Property, string Type, strin
 /// <param name="Properties">The properties of this row class that hold the key.</param>
 /// <param name="PrincipalProperties">The properties of the other row class they point to.</param>
 /// <param name="Reference">The navigation property on this row class, null when the model has none.</param>
-/// <param name="Collection">The navigation property on the other row class, null when the model has none.</param>
+/// <param name="Collection">The navigation property on the other row class, null when the model has none: a collection of the rows that point to it, or the one row when <paramref name="IsUnique"/>.</param>
+/// <param name="IsUnique">At most one row points to a row of the other table (the key is unique): a one-to-one relationship, not one-to-many.</param>
 internal sealed record EfForeignKey(string ReferencedSchema, string Table, List<string> Columns, List<string> ReferencedColumns, string PrincipalClass,
-    List<string> Properties, List<string> PrincipalProperties, string? Reference, string? Collection);
+    List<string> Properties, List<string> PrincipalProperties, string? Reference, string? Collection, bool IsUnique = false);
 
 /// <summary>A failure to read the database, in words for the user.</summary>
 public sealed class EfConnectionException(string message) : Exception(message);

@@ -6,6 +6,7 @@ using Xunit;
 namespace Invoklet.NonUI.Tests.App.Services;
 
 // OverloadDescription is a static function of two strings; the parameter is the only thing to fake.
+[Trait("Platform", "Independent")]
 public sealed class OverloadDescriptionTests
 {
     private static ISignatureHelpParameter Parameter(string name, string? summary)

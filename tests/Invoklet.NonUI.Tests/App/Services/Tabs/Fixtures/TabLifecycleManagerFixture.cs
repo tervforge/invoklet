@@ -13,9 +13,11 @@ internal sealed class TabViewDouble
     {
         View.SetupGet(v => v.IsContentReleased).Returns(() => Released);
         View.SetupGet(v => v.HasRunningProcess).Returns(() => Running);
-        View.Setup(v => v.TryReleaseContent()).Returns(() =>
+        View.Setup(v => v.TryReleaseContentAsync(It.IsAny<Func<bool>>())).Returns(async (Func<bool> stillWanted) =>
         {
             if (!CanRelease) return false;
+            if (ReleaseGate is { } gate) await gate.Task; // the write is going on
+            if (!stillWanted()) return false;
             Released = true;
             return true;
         });
@@ -40,6 +42,9 @@ internal sealed class TabViewDouble
 
     /// <summary>When set, the restore ends when this does.</summary>
     public TaskCompletionSource<bool>? RestoreGate { get; set; }
+
+    /// <summary>When set, the write of a release ends when this does; the view asks whether the release is still wanted after that.</summary>
+    public TaskCompletionSource<bool>? ReleaseGate { get; set; }
 }
 
 internal sealed class TabLifecycleManagerFixture

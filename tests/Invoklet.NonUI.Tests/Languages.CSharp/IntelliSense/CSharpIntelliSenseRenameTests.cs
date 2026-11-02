@@ -7,6 +7,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // GetRenameInfoAsync shares its "find the symbol under the caret and every occurrence" scan with
 // GetDocumentHighlightsAsync (see CSharpIntelliSenseDocumentHighlightsTests.cs), only adding a
 // filter for symbols the user's own script doesn't declare.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseRenameTests
 {
     [Fact]

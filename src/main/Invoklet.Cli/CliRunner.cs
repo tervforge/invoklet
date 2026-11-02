@@ -19,7 +19,28 @@ public static class CliRunner
         string[] args, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
         => RunAsync(args, CliServices.CreateDefault(), stdout, stderr, cancellationToken);
 
+    // One boundary for the whole command: a cancellation in any phase (reading the script, reading a connection's description,
+    // compiling, running) is the same 130, and a file that cannot be read or written is a message, not a stack trace.
     public static async Task<int> RunAsync(
+        string[] args, CliServices services, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await RunCoreAsync(args, services, stdout, stderr, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Conventional shell exit code for a SIGINT-cancelled process (128 + SIGINT's 2).
+            return CancelledExitCode;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            stderr.WriteLine($"error: {ex.Message}");
+            return args.Length > 0 && string.Equals(args[0], "convert", StringComparison.OrdinalIgnoreCase) ? 1 : NotRunExitCode;
+        }
+    }
+
+    private static async Task<int> RunCoreAsync(
         string[] args, CliServices services, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
     {
         if (args.Length == 0)
@@ -121,57 +142,49 @@ public static class CliRunner
 
             RunResult result;
             await using var host = registry.Create(languageId, request);
-            try
+            if (cli.CompileOnly)
             {
-                if (cli.CompileOnly)
+                var compilation = await host.CompileAsync(document.RunCode, cancellationToken);
+                foreach (var diagnostic in compilation.Diagnostics)
                 {
-                    var compilation = await host.CompileAsync(document.RunCode, cancellationToken);
-                    foreach (var diagnostic in compilation.Diagnostics)
-                    {
-                        stderr.WriteLine(FormatDiagnostic(diagnostic));
-                    }
-                    return compilation.Success ? 0 : NotRunExitCode;
+                    stderr.WriteLine(FormatDiagnostic(diagnostic));
                 }
+                return compilation.Success ? 0 : NotRunExitCode;
+            }
 
-                // Whether the script's stdout is in the middle of a line (Console.Write without a
-                // line break): a Dump then starts on a new line instead of being glued to that text.
-                var stdoutMidLine = false;
-                result = await host.RunAsync(document.RunCode, (data, outputKind) =>
-                {
-                    switch (outputKind)
-                    {
-                        case OutputKind.StandardOutput:
-                            stdout.WriteLine(data);
-                            stdoutMidLine = false;
-                            break;
-                        case OutputKind.StandardOutputPartial:
-                            stdout.Write(data);
-                            stdoutMidLine = data.Length > 0;
-                            break;
-                        case OutputKind.StandardError:
-                            stderr.WriteLine(data);
-                            break;
-                        case OutputKind.StandardErrorPartial:
-                            stderr.Write(data);
-                            break;
-                        // Compiler warnings are not script output: stdout carries only what the script wrote.
-                        case OutputKind.Diagnostic:
-                            stderr.WriteLine(data);
-                            break;
-                        case OutputKind.DumpHtml:
-                            var html = Encoding.UTF8.GetString(Convert.FromBase64String(data));
-                            if (stdoutMidLine) stdout.WriteLine();
-                            stdoutMidLine = false;
-                            stdout.Write(DumpHtmlSpectreRenderer.Render(html));
-                            break;
-                    }
-                }, cancellationToken);
-            }
-            catch (OperationCanceledException)
+            // Whether the script's stdout is in the middle of a line (Console.Write without a
+            // line break): a Dump then starts on a new line instead of being glued to that text.
+            var stdoutMidLine = false;
+            result = await host.RunAsync(document.RunCode, (data, outputKind) =>
             {
-                // Conventional shell exit code for a SIGINT-cancelled process (128 + SIGINT's 2).
-                return 130;
-            }
+                switch (outputKind)
+                {
+                    case OutputKind.StandardOutput:
+                        stdout.WriteLine(data);
+                        stdoutMidLine = false;
+                        break;
+                    case OutputKind.StandardOutputPartial:
+                        stdout.Write(data);
+                        stdoutMidLine = data.Length > 0;
+                        break;
+                    case OutputKind.StandardError:
+                        stderr.WriteLine(data);
+                        break;
+                    case OutputKind.StandardErrorPartial:
+                        stderr.Write(data);
+                        break;
+                    // Compiler warnings are not script output: stdout carries only what the script wrote.
+                    case OutputKind.Diagnostic:
+                        stderr.WriteLine(data);
+                        break;
+                    case OutputKind.DumpHtml:
+                        var html = Encoding.UTF8.GetString(Convert.FromBase64String(data));
+                        if (stdoutMidLine) stdout.WriteLine();
+                        stdoutMidLine = false;
+                        stdout.Write(DumpHtmlSpectreRenderer.Render(html));
+                        break;
+                }
+            }, cancellationToken);
 
             if (result.Outcome == RunOutcome.StartFailed)
                 stderr.WriteLine("Failed to start the compiled script.");
@@ -187,6 +200,8 @@ public static class CliRunner
     // The exit code when the script never ran: a bad command line, file or SDK, or a compile error —
     // the same 2 as NetPad's npad, so a caller can tell it from a script that ran and failed.
     internal const int NotRunExitCode = 2;
+
+    internal const int CancelledExitCode = 130;
 
     private static void WriteUsage(IAnsiConsole console)
     {

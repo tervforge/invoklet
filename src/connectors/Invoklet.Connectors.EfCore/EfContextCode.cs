@@ -75,6 +75,8 @@ internal static class EfContextCode
                 else if (column.DefaultSql is { } defaultSql)
                     sb.Append("            ").Append(ef).Append(".RelationalPropertyBuilderExtensions.HasDefaultValueSql(e.Property(x => x.")
                         .Append(column.Property).Append("), ").Append(ConnectionCodeContext.Literal(defaultSql)).Append(");\n");
+                if (column.ConcurrencyToken)
+                    sb.Append("            e.Property(x => x.").Append(column.Property).Append(").IsConcurrencyToken();\n");
                 if (column.Generated == "OnAdd")
                     sb.Append("            e.Property(x => x.").Append(column.Property).Append(").ValueGeneratedOnAdd();\n");
                 else if (column.Generated == "OnAddOrUpdate")
@@ -84,9 +86,12 @@ internal static class EfContextCode
             {
                 var principal = classNames.GetValueOrDefault(foreignKey.PrincipalClass);
                 if (principal is null) continue;
+                // One row per row of the other table: a one-to-one relationship, which EF Core wants told which side holds the key.
+                var one = foreignKey.IsUnique;
                 sb.Append("            e.HasOne").Append(foreignKey.Reference is null ? "<" + principal + ">(" : "(x => x." + foreignKey.Reference).Append(")")
-                    .Append(".WithMany(").Append(foreignKey.Collection is null ? "" : "x => x." + foreignKey.Collection).Append(")")
-                    .Append(".HasForeignKey(").Append(Properties(foreignKey.Properties)).Append(").HasPrincipalKey(").Append(Properties(foreignKey.PrincipalProperties)).Append(");\n");
+                    .Append(one ? ".WithOne(" : ".WithMany(").Append(foreignKey.Collection is null ? "" : "x => x." + foreignKey.Collection).Append(")")
+                    .Append(".HasForeignKey").Append(one ? "<" + classNames[entity.ClassName] + ">" : "").Append("(").Append(Properties(foreignKey.Properties)).Append(")")
+                    .Append(".HasPrincipalKey").Append(one ? "<" + principal + ">" : "").Append("(").Append(Properties(foreignKey.PrincipalProperties)).Append(");\n");
             }
             sb.Append("        });\n");
         }
@@ -108,9 +113,15 @@ internal static class EfContextCode
                     .Append("        public ").Append(classNames[foreignKey.PrincipalClass]).Append("? ").Append(foreignKey.Reference).Append(" { get; set; }\n");
             foreach (var (dependent, foreignKey) in entities.SelectMany(e => e.ForeignKeys.Select(f => (Dependent: e, Key: f)))
                          .Where(x => x.Key.Collection is not null && x.Key.PrincipalClass == entity.ClassName))
-                sb.Append("        /// <summary>The rows of the table ").Append(ConnectionCodeContext.Doc(dependent.Name)).Append(" that point to this row.</summary>\n")
-                    .Append("        public global::System.Collections.Generic.ICollection<").Append(classNames[dependent.ClassName]).Append("> ").Append(foreignKey.Collection)
-                    .Append(" { get; set; } = new global::System.Collections.Generic.List<").Append(classNames[dependent.ClassName]).Append(">();\n");
+            {
+                if (foreignKey.IsUnique)
+                    sb.Append("        /// <summary>The row of the table ").Append(ConnectionCodeContext.Doc(dependent.Name)).Append(" that points to this row, if there is one.</summary>\n")
+                        .Append("        public ").Append(classNames[dependent.ClassName]).Append("? ").Append(foreignKey.Collection).Append(" { get; set; }\n");
+                else
+                    sb.Append("        /// <summary>The rows of the table ").Append(ConnectionCodeContext.Doc(dependent.Name)).Append(" that point to this row.</summary>\n")
+                        .Append("        public global::System.Collections.Generic.ICollection<").Append(classNames[dependent.ClassName]).Append("> ").Append(foreignKey.Collection)
+                        .Append(" { get; set; } = new global::System.Collections.Generic.List<").Append(classNames[dependent.ClassName]).Append(">();\n");
+            }
             sb.Append("    }\n");
         }
         sb.Append('}');

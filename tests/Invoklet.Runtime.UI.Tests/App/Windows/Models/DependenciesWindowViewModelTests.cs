@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Contracts;
 using Invoklet.Format.MdRun;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services.Preferences;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows;
@@ -48,11 +49,11 @@ public class DependenciesWindowViewModelTests
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
-        for (var i = 0; i < 250 && !condition(); i++)
+        await TestWait.WhileAsync(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            await Task.Delay(20);
-        }
+            return !condition();
+        });
         Assert.True(condition());
     }
 

@@ -2,6 +2,7 @@ using Xunit;
 
 namespace Invoklet.Runtime.Tests;
 
+[Trait("Platform", "Independent")]
 public class DumpRendererTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────

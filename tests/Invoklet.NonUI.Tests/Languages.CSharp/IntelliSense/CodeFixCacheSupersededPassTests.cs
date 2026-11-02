@@ -13,6 +13,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // them. A pass for older text — superseded, so cancelled, and its results already ignored by the
 // editor — used to replace that cache anyway when it had nothing to fix (the only cancellation check
 // sat in the per-fix loop), so clicking an entry on screen silently did nothing.
+[Trait("Platform", "Independent")]
 public sealed class CodeFixCacheSupersededPassTests
 {
     private const string WithFix = "class C { void M() { var m = Regex.Match(\"a\", \"a\"); } }";

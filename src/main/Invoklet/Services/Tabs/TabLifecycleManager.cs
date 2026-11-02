@@ -21,6 +21,7 @@ public sealed class TabLifecycleManager
         public bool UnseenResult { get; set; }
         public IDisposable? RunSubscription { get; set; }
         public Task? Restoring { get; set; }
+        public Task? Releasing { get; set; }
     }
 
     private readonly IResidencyPolicy _policy;
@@ -92,14 +93,14 @@ public sealed class TabLifecycleManager
     }
 
     /// <summary>
-    /// Completes once no tab is being brought back, the release that follows each restore included. A restore that
-    /// starts while this waits is waited for too; one that starts after it has completed is not its concern.
+    /// Completes once no tab is being brought back or given up, the release that follows each restore included. A restore or a
+    /// release that starts while this waits is waited for too; one that starts after it has completed is not its concern.
     /// </summary>
     internal async Task WhenIdleAsync()
     {
         while (true)
         {
-            var running = _entries.Values.Select(e => e.Restoring).Where(t => t is { IsCompleted: false }).Select(t => t!).ToList();
+            var running = _entries.Values.SelectMany(e => new[] { e.Restoring, e.Releasing }).Where(t => t is { IsCompleted: false }).Select(t => t!).ToList();
             if (running.Count == 0) return;
             try
             {
@@ -112,19 +113,43 @@ public sealed class TabLifecycleManager
         }
     }
 
-    /// <summary>Releases the content of the tabs the policy gives up and colours only the tab being looked at.</summary>
+    /// <summary>Starts releasing the content of the tabs the policy gives up, and colours only the tab being looked at.</summary>
     internal void Rebalance()
     {
         var active = _activeTab?.Invoke();
-        var loaded = _entries.Where(e => !e.Value.View.IsContentReleased).Select(e => e.Key).ToList();
-        foreach (var tab in _policy.ColdTabs(loaded, tab => CanRelease(tab, _entries[tab], active)))
-        {
-            if (!_entries[tab].View.TryReleaseContent())
-                _logger?.LogWarning("The content of a tab could not be released");
-        }
+        // A tab being released is still loaded, but not one to pick again.
+        var loaded = _entries.Where(e => !e.Value.View.IsContentReleased && e.Value.Releasing is null).Select(e => e.Key).ToList();
+        foreach (var tab in _policy.ColdTabs(loaded, tab => CanRelease(tab, _entries[tab], active)).ToList())
+            ReleaseAsync(tab, _entries[tab]);
 
         foreach (var (tab, entry) in _entries)
             entry.View.SetHighlightingActive(ReferenceEquals(tab, active));
+    }
+
+    // The text goes to disk off the UI thread; the tab lets go of it only if, when that is done, it is still one to give up.
+    private void ReleaseAsync(EditorTabItemViewModel tab, Entry entry)
+    {
+        var releasing = ReleaseCoreAsync(tab, entry);
+        // Not when it already finished: its end has cleared the field, and a stale task would stay.
+        if (!releasing.IsCompleted) entry.Releasing = releasing;
+    }
+
+    private async Task ReleaseCoreAsync(EditorTabItemViewModel tab, Entry entry)
+    {
+        try
+        {
+            // The tab was closed while its text was being written: nothing is asked of its view any more.
+            if (!await entry.View.TryReleaseContentAsync(() => _entries.ContainsKey(tab) && CanRelease(tab, entry, _activeTab?.Invoke())))
+                _logger?.LogDebug("The content of a tab was not released");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "The content of a tab could not be released");
+        }
+        finally
+        {
+            entry.Releasing = null;
+        }
     }
 
     // One restore at a time per tab: selecting it again, or saving it, while its content is being read waits for it.

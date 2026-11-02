@@ -82,6 +82,13 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     /// such as Invoklet.Runtime.</param>
     public CSharpIntelliSenseService(IEnumerable<string> referencePaths, ILogger<CSharpIntelliSenseService> logger,
         IEnumerable<string>? additionalReferencePaths = null)
+        : this(referencePaths, logger, additionalReferencePaths, referenceResolver: null)
+    {
+    }
+
+    // With a resolver of its own for the assemblies that packages and the target stand for, as a test that looks at nothing on the disk gives.
+    internal CSharpIntelliSenseService(IEnumerable<string> referencePaths, ILogger<CSharpIntelliSenseService> logger,
+        IEnumerable<string>? additionalReferencePaths, IReferenceResolver? referenceResolver)
     {
         _logger = logger;
         _scheduler = new AnalysisScheduler(
@@ -92,7 +99,7 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
 
         var references = ReferenceSet.Classify(referencePaths, additionalReferencePaths);
         _session = new ScriptDocumentSession(_layout, references.All.Select(p => (MetadataReference)ScriptContext.CreateReference(p)).ToList());
-        _context = new ScriptContext(_session, _layout, references, logger);
+        _context = new ScriptContext(_session, _layout, references, logger, referenceResolver);
         _codeFixEngine = new RoslynCodeFixEngine(InvokletRoslynHost.CompositionHost, logger);
         _analyzerEngine = new RoslynAnalyzerEngine(logger);
         _completion = new CompletionService(_session, SyncDocument, _layout, _context, logger);

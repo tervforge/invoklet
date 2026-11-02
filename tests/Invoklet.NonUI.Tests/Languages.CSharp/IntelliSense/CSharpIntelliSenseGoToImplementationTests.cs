@@ -7,6 +7,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // CSharpIntelliSenseService.GetImplementationsAsync. A single script's own
 // AdhocWorkspace only ever contains the script itself, so every result is an in-document offset —
 // no decompiling branch needed here, unlike GetDefinitionAsync.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseGoToImplementationTests
 {
     [Fact]

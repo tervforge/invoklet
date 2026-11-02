@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.Connectors.Tests.Connectors.Http;
 
+[Trait("Platform", "Independent")]
 public class OpenApiReaderTests
 {
     private const string OpenApi3 = """

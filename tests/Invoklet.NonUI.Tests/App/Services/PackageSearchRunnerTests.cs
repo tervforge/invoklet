@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class PackageSearchRunnerTests
 {
     private static readonly PackageSearchPage OnePage = new([], HasMore: true);

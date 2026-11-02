@@ -7,6 +7,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // remaining settable members inside the `{ }` — every completion branch checked for a dot/member
 // access or fell through to whatever's visible in the enclosing scope, nothing ever special-cased an
 // object-initializer position.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseObjectInitializerCompletionTests
 {
     private const string ClassDeclaration =

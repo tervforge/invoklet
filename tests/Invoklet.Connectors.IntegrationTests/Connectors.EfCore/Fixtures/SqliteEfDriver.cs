@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Sqlite.Design.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Invoklet.Connectors.Tests.Connectors.EfCore.Fixtures;
+namespace Invoklet.Connectors.IntegrationTests.Connectors.EfCore.Fixtures;
 
 // A SQLite file standing in for a server: the same reverse engineering and the same generated context, with a provider that needs no server.
 internal sealed class SqliteEfDriver : EfCoreConnectionDriver

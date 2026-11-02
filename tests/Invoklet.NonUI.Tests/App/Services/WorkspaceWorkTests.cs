@@ -3,6 +3,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
+[Trait("Platform", "Independent")]
 public sealed class WorkspaceWorkTests
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);
@@ -158,5 +159,36 @@ public sealed class WorkspaceWorkTests
 
         // Assert
         Assert.Contains(added, tabs);
+    }
+
+    // A tab that is not ready yet is waited for last; a save that begins while it is waited for must be waited for too,
+    // or a snapshot would be taken in the middle of that save (or of a Save As that is rebasing paths).
+    [Fact]
+    public async Task WaitUntilIdleAsync_ASaveBeginsWhileALateTabGetsReady_WaitsForThatSaveToo()
+    {
+        // Arrange
+        var fixture = new WorkspaceWorkFixture();
+        var firstSave = WorkspaceWorkFixture.NewGate();
+        var newSave = WorkspaceWorkFixture.NewGate();
+        var saving = new WorkspaceWorkFixture.FakeTab("saving") { PendingSave = firstSave.Task }.AlreadyReady();
+        var late = new WorkspaceWorkFixture.FakeTab("late"); // its editor is still being created
+        fixture.Tabs.Add(saving);
+        var sut = fixture.CreateSut();
+        var idle = fixture.WaitUntilIdle(sut);
+        fixture.Tabs.Add(late);
+
+        // Act
+        firstSave.SetResult();
+        await Task.Delay(20, TestContext.Current.CancellationToken); // the wait is now on the late tab
+        saving.PendingSaveAs = newSave.Task;
+        late.Ready.SetResult();
+        await Task.Delay(20, TestContext.Current.CancellationToken);
+        var doneBeforeTheNewSave = idle.IsCompleted;
+        newSave.SetResult();
+        var tabs = await idle.WaitAsync(Limit, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(doneBeforeTheNewSave);
+        Assert.Equal([saving, late], tabs);
     }
 }

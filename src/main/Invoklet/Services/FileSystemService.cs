@@ -81,7 +81,16 @@ public sealed class FileSystemService : IFileSystemService
     // which resolves the real Environment.SpecialFolder.MyDocuments as a side effect.
     internal static IReadOnlyList<FileSystemItem> GetFilesTreeInternal(
         string folder, ILogger? logger = null, CancellationToken ct = default)
+        => GetFilesTreeInternal(folder, RealPathOf(folder), logger, ct);
+
+    // realPath is where the folder really is (a link resolved), and every folder being walked, up to the root, is told to the one inside it:
+    // a link that leads back to one of them, or to a folder above the root, is listed but not entered, so a loop (loop -> ..) or a link to / cannot
+    // make the walk go on for ever or through the whole disk. Links to other folders are entered as ordinary folders are.
+    private static IReadOnlyList<FileSystemItem> GetFilesTreeInternal(
+        string folder, string realPath, ILogger? logger, CancellationToken ct, string? rootRealPath = null, IReadOnlyCollection<string>? walking = null)
     {
+        rootRealPath ??= realPath;
+        walking = [.. walking ?? [], realPath];
         // Checked per folder, so a cancelled refresh (window disposed) stops mid-walk instead of
         // finishing a possibly huge/slow network tree nobody will look at. OperationCanceledException
         // isn't an IOException, so the per-child handlers below let it through.
@@ -110,7 +119,10 @@ public sealed class FileSystemService : IFileSystemService
             IReadOnlyList<FileSystemItem> children;
             try
             {
-                children = GetFilesTreeInternal(dir, logger, ct);
+                var dirRealPath = IsLink(dir) ? RealPathOf(dir) : Path.Combine(realPath, Path.GetFileName(dir));
+                children = LeadsBack(dirRealPath, rootRealPath, walking)
+                    ? []
+                    : GetFilesTreeInternal(dir, dirRealPath, logger, ct, rootRealPath, walking);
             }
             catch (DirectoryNotFoundException e)
             {
@@ -135,6 +147,23 @@ public sealed class FileSystemService : IFileSystemService
         }
 
         return result;
+    }
+
+    private static bool IsLink(string directory) => new DirectoryInfo(directory).LinkTarget is not null;
+
+    // The folder a path really is, its links (the last one, and any in the path of the target) resolved.
+    private static string RealPathOf(string directory)
+    {
+        var info = new DirectoryInfo(directory);
+        return info.LinkTarget is not null ? info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? info.FullName : info.FullName;
+    }
+
+    // A folder being walked, or one the root is inside of.
+    private static bool LeadsBack(string realPath, string rootRealPath, IReadOnlyCollection<string> walking)
+    {
+        if (walking.Contains(realPath, FilePaths.Comparer)) return true;
+        var target = realPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return rootRealPath.StartsWith(target, FilePaths.Comparison);
     }
 
     internal static bool IsDotDirectory(string path) =>

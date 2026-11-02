@@ -28,11 +28,13 @@ The slow tests that use the real compiler, decompiler and highlighter (`tests/In
 built and formatted with the solution but not run when the `CI` environment variable is set; run them with
 `dotnet test tests/Invoklet.IntegrationTests`.
 
-### Tests against real database servers
+### Connection integration tests
 
-`tests/Invoklet.Connectors.IntegrationTests` reads a real PostgreSQL and a real SQL Server through the
-connection drivers. Each test skips itself unless its environment variable holds a connection string, so a
-plain `dotnet test` needs nothing. The project is built and formatted with the solution but, like
+`tests/Invoklet.Connectors.IntegrationTests` covers real SQLite files, EF Core reverse engineering and
+compilation/execution of scripts using database providers. Run these local scenarios with the .NET 10 SDK:
+`dotnet test tests/Invoklet.Connectors.IntegrationTests`. PostgreSQL and SQL Server tests additionally need
+the servers below; only those server tests skip themselves unless their environment variable holds a
+connection string. The project is built and formatted with the solution but, like
 `tests/Invoklet.IntegrationTests`, not run when the `CI` environment variable is set: CI has no database servers.
 
 To run them locally you need Docker (or Podman) and the .NET 10 SDK.

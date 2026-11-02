@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Avalonia.Themes;
 
+[Trait("Platform", "Independent")]
 public class HtmlThemeStylesheetTests
 {
     [Fact]

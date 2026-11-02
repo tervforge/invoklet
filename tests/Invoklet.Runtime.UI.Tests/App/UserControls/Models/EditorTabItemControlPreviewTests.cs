@@ -119,12 +119,11 @@ public class EditorTabItemControlPreviewTests
 
     private static async Task WaitUntil(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-        while (!condition() && DateTime.UtcNow < deadline)
+        await TestWait.WhileAsync(() =>
         {
-            await Task.Delay(20);
             Dispatcher.UIThread.RunJobs();
-        }
+            return !condition();
+        });
         Assert.True(condition());
     }
 

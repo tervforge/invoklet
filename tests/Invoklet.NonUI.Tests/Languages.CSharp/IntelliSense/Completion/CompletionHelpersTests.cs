@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Completion;
 
+[Trait("Platform", "Independent")]
 public sealed class CompletionHelpersTests
 {
     private static SimpleCompletionItem Item(string text, CompletionItemKind kind, bool own = false)

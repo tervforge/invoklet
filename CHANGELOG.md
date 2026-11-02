@@ -3,6 +3,39 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.2] — 2026-11-02
+
+This release improves the safety of saving scripts, database updates and session recovery,
+and fixes tab switching, saved results, IntelliSense and command-line error handling.
+
+### Fixed
+
+- Saving a script writes a temporary file before replacing the original, so a failed write
+  leaves the original intact and the tab unsaved. Existing permissions and symbolic links
+  are preserved; temporary files are readable only by their owner on macOS and Linux.
+- Session recovery waits for saves that begin while newly opened editors are becoming ready,
+  including Save As, before taking a snapshot.
+- Database connections preserve concurrency tokens such as SQL Server rowversion: saving a row
+  changed by another client raises a concurrency error instead of silently overwriting it.
+- Database foreign keys on unique columns generate one-to-one navigation properties instead
+  of collections.
+- Build-cache updates coordinate between running Invoklet instances without writing an
+  unlocked shared index. Linux scripts whose names differ only in case use separate folders.
+- Saved results follow the shared build-cache folder when another instance registered it
+  while the index was busy, including when a tab releases its content.
+- Switching tabs writes and reads released content off the UI thread. Edits and selections
+  made during a pending release keep their current content.
+- Saved output is written in order in the background, so older writes cannot replace newer
+  results. Closing waits for queued writes after Save All and Save As, with a bounded timeout.
+- An older IntelliSense context request no longer replaces part of a newer request.
+  Referenced libraries rebuilt at the same path are reread when their file stamp changes.
+- Null settings groups use their defaults instead of preventing startup. An unreadable
+  settings file is kept as settings.json.bad before defaults are saved.
+- Folder links leading back into the current traversal or above the scripts root are listed
+  without recursively walking the same folders again.
+- The command-line runner returns 130 for Ctrl+C during preparation as well as execution.
+  File access failures are reported as messages with exit code 2, or 1 for convert.
+
 ## [0.11.1] — 2026-11-02
 
 This release adds PostgreSQL and SQL Server connections, exports a table of the results as CSV, lets you drag the heights of the sidebar sections, and
@@ -1014,5 +1047,6 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.10.5]: https://github.com/tervforge/invoklet/releases/tag/v0.10.5
 [0.11.0]: https://github.com/tervforge/invoklet/releases/tag/v0.11.0
 [0.11.1]: https://github.com/tervforge/invoklet/releases/tag/v0.11.1
+[0.11.2]: https://github.com/tervforge/invoklet/releases/tag/v0.11.2
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5

@@ -9,6 +9,7 @@ using Xunit;
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 
 // Where an argument starts, completion offers `name:` for the parameters still open.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseNamedArgumentTests
 {
     private const string Declarations =

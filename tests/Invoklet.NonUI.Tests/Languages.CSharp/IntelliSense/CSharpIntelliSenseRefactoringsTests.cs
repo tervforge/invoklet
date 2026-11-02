@@ -13,6 +13,7 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 // (discovered via the same MEF composition RoslynCodeFixEngine already uses for CodeFixProviders),
 // not mocked — the thing under test is whether a real provider's CodeAction survives the whole
 // pipeline (CodeRefactoringContext -> materialize -> preamble-relocation) intact.
+[Trait("Platform", "Independent")]
 public class CSharpIntelliSenseRefactoringsTests
 {
     // Keeps RoslynCodeFixEngine's debug log (raw TextChanges, which discard branch fired, swallowed

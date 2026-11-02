@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Invoklet.Services.Preferences;
 
 public sealed class AppSettings
@@ -17,4 +19,12 @@ public sealed class AppSettings
     /// its default. Kept as plain values so a settings file moved to another OS keeps them unread.
     /// </summary>
     public Dictionary<string, bool> System { get; set; } = [];
+
+    /// <summary>The settings in a file: what it lacks, and what it holds as null, is as in a new one. Throws (JsonException) for a file that is not JSON.</summary>
+    internal static AppSettings Parse(string json)
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new();
+        SettingsDefaults.FillNulls(settings);
+        return settings;
+    }
 }

@@ -7,6 +7,7 @@ namespace Invoklet.Connectors.Tests.Connectors.Grpc;
 // Reproduces the malformed Postman Echo HelloService descriptor (root.proto, syntax "proto3" with
 // a LABEL_REQUIRED field) that made protoc reject an otherwise-successfully-reflected schema:
 // "Required fields are not allowed in proto3". See handoffs/grpc-postman-invalid-descriptor.md.
+[Trait("Platform", "Independent")]
 public sealed class GrpcProto3RequiredFieldNormalizationTests
 {
     private static FieldDescriptorProto Field(string name, FieldDescriptorProto.Types.Label label) => new()

@@ -6,6 +6,7 @@ namespace Invoklet.NonUI.Tests.Contracts.Models;
 
 // Which installed SDK runs a script: the one its targetSdk names (the same rule in the window and
 // the command-line runner). The providers list the newest stable SDK first.
+[Trait("Platform", "Independent")]
 public class TargetSdkResolverTests
 {
     private static readonly DotnetSdk Net10 = new(".NET", "net10.0", "10.0.0", ".NET 10.0.100");

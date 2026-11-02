@@ -84,8 +84,7 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
         {
             tab.State.MdRunDocument = new MdRunDocument { FrontMatter = new MdRunFrontMatter { Connections = [listed] }, RunCode = "" };
             // The refresh the new document starts has landed before the test counts.
-            await TestWait.WhileAsync(() => intelliSense.Invocations.All(i => i.Method.Name != nameof(IIntelliSenseService.NotifyTextChanged)));
-            await TestWait.WhileAsync(() => intelliSense.Invocations.All(i => i.Method.Name != nameof(IIntelliSenseService.ApplyExecutionContext)));
+            await tab.ContextRefreshTask;
             await TestWait.SettleAsync(() => intelliSense.Invocations.Count); // and any further ones it started
             intelliSense.Invocations.Clear();
 
@@ -94,11 +93,12 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
             await TestWait.WhileAsync(() => false, TimeSpan.FromMilliseconds(200)); // let a wrong refresh show
             intelliSense.Verify(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
 
+            var previous = tab.ContextRefreshTask;
             await Task.Run(() => schemas.Cache.Put(listed, new ConnectionSchema("2 services", [], "")),
                 TestContext.Current.CancellationToken);
-            await TestWait.WhileAsync(() => intelliSense.Invocations.All(i => i.Method.Name != nameof(IIntelliSenseService.ApplyExecutionContext)));
+            await TestWait.WhileAsync(() => ReferenceEquals(tab.ContextRefreshTask, previous)); // the change reaches the tab on the UI thread
             // The text is analysed again once the new classes are in, which happens off the UI thread.
-            await TestWait.WhileAsync(() => intelliSense.Invocations.All(i => i.Method.Name != nameof(IIntelliSenseService.NotifyTextChanged)));
+            await tab.ContextRefreshTask;
             intelliSense.Verify(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Once);
             intelliSense.Verify(s => s.NotifyTextChanged(It.IsAny<string>()), Times.Once);
 

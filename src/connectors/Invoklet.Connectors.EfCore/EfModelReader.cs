@@ -60,14 +60,15 @@ internal static class EfModelReader
                     },
                     // The type is spelled out only where the provider would not choose it from the C# type.
                     property.FindAnnotation(RelationalAnnotationNames.ColumnType)?.Value as string,
-                    property.GetDefaultValueSql() is { Length: > 0 } defaultSql ? defaultSql : null, computed is { Length: > 0 } ? computed : null));
+                    property.GetDefaultValueSql() is { Length: > 0 } defaultSql ? defaultSql : null, computed is { Length: > 0 } ? computed : null,
+                    property.IsConcurrencyToken));
             }
             var foreignKeys = entityType.GetForeignKeys().Select(fk => new EfForeignKey(
                 fk.PrincipalEntityType.GetSchema() ?? fk.PrincipalEntityType.GetViewSchema() ?? "",
                 fk.PrincipalEntityType.GetTableName() ?? fk.PrincipalEntityType.GetViewName() ?? "",
                 [.. fk.Properties.Select(p => p.GetColumnName())], [.. fk.PrincipalKey.Properties.Select(p => p.GetColumnName())],
                 fk.PrincipalEntityType.Name, [.. fk.Properties.Select(p => p.Name)], [.. fk.PrincipalKey.Properties.Select(p => p.Name)],
-                fk.DependentToPrincipal?.Name, fk.PrincipalToDependent?.Name)).ToList();
+                fk.DependentToPrincipal?.Name, fk.PrincipalToDependent?.Name, fk.IsUnique)).ToList();
             result.Add(new EfEntity(entityType.GetSchema() ?? entityType.GetViewSchema() ?? "", entityType.GetViewName() ?? entityType.GetTableName() ?? entityType.Name,
                 isView, entityType.Name, entityType.GetDbSetName() ?? entityType.Name + "s", columns)
             { ForeignKeys = foreignKeys });
