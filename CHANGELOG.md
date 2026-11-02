@@ -6,7 +6,8 @@ Notable changes in each Invoklet release. Downloads are on the
 ## [0.11.1] — 2026-11-02
 
 This release adds PostgreSQL and SQL Server connections, exports a table of the results as CSV, lets you drag the heights of the sidebar sections, and
-closes six security gaps around secrets, downloads and connections.
+closes six security gaps around secrets, downloads and connections. It also makes saving a script safe against a failed write, and fixes a number of smaller
+problems in the editor, the sidebar, tab switching, the settings and the command line (see Fixed).
 
 **Changed behaviour:** SQLite connections now name their sets and rows as Entity Framework Core does (`order_items` is `OrderItems`, a table `log` is
 `Logs`). A script that uses a set by its old name must be changed to the new one.
