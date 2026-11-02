@@ -39,8 +39,12 @@ public class EditorTabsControlResidencyTests
         public bool FailWrites { get; set; }
         public ManualResetEventSlim? WritesWait { get; set; }
 
+        // Set when a write has reached the disk (and waits there, if WritesWait is set): a test waits for it instead of pausing.
+        public ManualResetEventSlim WriteStarted { get; } = new(false);
+
         public bool TryWrite(Guid tab, ReleasedContent content)
         {
+            WriteStarted.Set();
             WritesWait?.Wait(TimeSpan.FromSeconds(30));
             return !FailWrites && inner.TryWrite(tab, content);
         }
@@ -473,7 +477,7 @@ public class EditorTabsControlResidencyTests
             var count = vm.Tabs.Count;
             vm.NewMdRunFile();
             await TestWait.WhileAsync(() => vm.Tabs.Count <= count || tabs.ControlForTests(vm.Tabs[^1]) is null);
-            await Task.Delay(100);
+            await TestWait.WhileAsync(() => !spill.WriteStarted.IsSet);
 
             // A run produced output and ended: its output is asked to be written, and the window goes on while the write waits.
             control.State.Output.Append("<div>new</div>");
@@ -672,7 +676,7 @@ public class EditorTabsControlResidencyTests
             var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
 
             // The UI thread is free (this test runs on it) and the tab still has its text while the write waits.
-            await Task.Delay(100);
+            await TestWait.WhileAsync(() => !spill.WriteStarted.IsSet);
             Assert.False(control.IsContentReleased);
             Assert.Equal("var first = 1;", control.State.Editor.Text);
             spill.WritesWait!.Set();

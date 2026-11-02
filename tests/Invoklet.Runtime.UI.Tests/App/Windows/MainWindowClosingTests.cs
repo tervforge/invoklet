@@ -67,16 +67,13 @@ public class MainWindowClosingTests
         return (window, mainVm, windowService);
     }
 
+    private static EditorsTabItemControl? SoleControl(MainWindow window) => window.GetVisualDescendants().OfType<TabItem>()
+        .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
+
     private static async Task<EditorsTabItemControl> GetSoleControlAsync(MainWindow window)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = window.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
-            if (ctrl is not null) return ctrl;
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("No EditorsTabItemControl was realized in time.");
+        await TestWait.WhileAsync(() => SoleControl(window) is null);
+        return SoleControl(window)!;
     }
 
     [AvaloniaFact]
@@ -89,7 +86,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.True(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Never);
@@ -108,16 +105,17 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(100);
+        var closing = window.ClosingTask;
 
-        Assert.False(closedFired); // waiting for the write
+        Assert.False(closing.IsCompleted); // waiting for the write
+        Assert.False(closedFired);
         var dispatched = false;
         await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
         Assert.True(dispatched);
 
         gate.Set();
         await written;
-        await Task.Delay(100);
+        await closing;
 
         Assert.True(closedFired);
     }
@@ -141,14 +139,15 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(200);
+        var closing = window.ClosingTask;
+        await TestWait.WhileAsync(() => written is null); // the confirmation has been answered
 
-        Assert.NotNull(written);
+        Assert.False(closing.IsCompleted);
         Assert.False(closedFired); // the answer came, and the write it made is still being waited for
 
         gate.Set();
-        await written;
-        await Task.Delay(200);
+        await written!;
+        await closing;
 
         Assert.True(closedFired);
     }
@@ -167,7 +166,7 @@ public class MainWindowClosingTests
         try
         {
             window.Close();
-            await Task.Delay(500);
+            await window.ClosingTask;
 
             Assert.True(closedFired);
         }
@@ -187,7 +186,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.False(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);
@@ -206,7 +205,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         // The confirmed, second Close() has to make it all the way through the (now no-op) Closing
         // handler again — this is what actually proves the _confirmedClose re-entry guard works,
@@ -229,15 +228,15 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         window.Close();
-        await Task.Delay(20);
+        var closing = window.ClosingTask;
         window.Close();
-        await Task.Delay(20);
 
+        Assert.False(closing.IsCompleted);
         Assert.False(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);
 
         answer.SetResult(UnsavedChangesResult.DontSave);
-        await Task.Delay(50);
+        await closing;
 
         Assert.True(closedFired);
     }
@@ -279,7 +278,7 @@ public class MainWindowClosingTests
         editor.Closed += (_, _) => editorClosed = true;
 
         ExecuteFileExit(window);
-        await Task.Delay(100);
+        await window.ClosingTask;
 
         Assert.Equal(closes, mainClosed);
         Assert.Equal(closes, editorClosed);
@@ -307,7 +306,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         ExecuteFileExit(window);
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.False(closedFired);
         Assert.True(window.IsVisible);
@@ -327,7 +326,7 @@ public class MainWindowClosingTests
         window.Closed += (_, _) => closedFired = true;
 
         ExecuteFileExit(window);
-        await Task.Delay(50);
+        await window.ClosingTask;
 
         Assert.True(closedFired);
         windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Once);

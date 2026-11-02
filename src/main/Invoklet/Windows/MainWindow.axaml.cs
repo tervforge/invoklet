@@ -116,7 +116,19 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     // How long closing waits for the output of the last runs to be written to disk.
     internal TimeSpan OutputFlushLimit { get; set; } = TimeSpan.FromSeconds(10);
 
+    // The close that is going on (the confirmations, the wait for the output): complete when it is over, whether the window closed or not.
+    // For a test to wait for instead of a pause; nothing else uses it.
+    internal Task ClosingTask { get; private set; } = Task.CompletedTask;
+
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // Runs up to its first wait here, so that e.Cancel is set before this returns; an error is raised here as it was when this did the work itself.
+        var closing = ClosingAsync(e);
+        ClosingTask = closing;
+        await closing;
+    }
+
+    private async Task ClosingAsync(WindowClosingEventArgs e)
     {
         if (_confirmedClose) return;
         if (_closeConfirmationInProgress)

@@ -1,3 +1,4 @@
+using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
@@ -99,16 +100,13 @@ public class EditorTabsControlCloseConfirmationTests
         Directory.Delete(h.RootFolder, recursive: true);
     }
 
+    private static EditorsTabItemControl? SoleControl(EditorTabsControl editorTabs) => editorTabs.GetVisualDescendants().OfType<TabItem>()
+        .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
+
     private static async Task<EditorsTabItemControl> GetSoleControlAsync(EditorTabsControl editorTabs)
     {
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = editorTabs.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault();
-            if (ctrl is not null) return ctrl;
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("No EditorsTabItemControl was realized in time.");
+        await TestWait.WhileAsync(() => SoleControl(editorTabs) is null);
+        return SoleControl(editorTabs)!;
     }
 
     [AvaloniaFact]
@@ -122,8 +120,7 @@ public class EditorTabsControlCloseConfirmationTests
             var tab = Assert.Single(mainVm.Tabs);
             Assert.False(tab.IsDirty); // never edited — nothing worth asking about
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             windowService.Verify(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()), Times.Never);
             Assert.Empty(mainVm.Tabs);
@@ -146,8 +143,7 @@ public class EditorTabsControlCloseConfirmationTests
             windowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()))
                 .ReturnsAsync(UnsavedChangesResult.Cancel);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Single(mainVm.Tabs); // still there
             Assert.True(tab.IsDirty); // untouched
@@ -169,8 +165,7 @@ public class EditorTabsControlCloseConfirmationTests
             windowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()))
                 .ReturnsAsync(UnsavedChangesResult.DontSave);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Empty(mainVm.Tabs);
             Assert.Empty(Directory.GetFiles(rootFolder)); // nothing was ever written
@@ -221,8 +216,7 @@ public class EditorTabsControlCloseConfirmationTests
             windowService.Setup(w => w.ShowSaveFileDialogAsync(It.IsAny<string>(), rootFolder))
                 .ReturnsAsync((string?)null); // user picked Save, then backed out of the file picker
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             // "Save" was chosen but never actually completed — closing anyway would silently lose
             // the content the user just said they wanted to keep.
@@ -251,8 +245,7 @@ public class EditorTabsControlCloseConfirmationTests
             ctrl.State.Editor.Text = "Console.WriteLine(2);";
             Assert.True(tab.IsDirty);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             // A dirty tab with a real path is written in place before it's removed —
             // nothing to confirm while that write succeeds.
@@ -385,14 +378,10 @@ public class EditorTabsControlCloseConfirmationTests
             firstCtrl.State.Editor.Text = "Console.WriteLine(1);";
 
             mainVm.NewMdRunFile();
-            EditorsTabItemControl? secondCtrl = null;
-            for (var i = 0; i < 100 && secondCtrl is null; i++)
-            {
-                secondCtrl = editorTabs.GetVisualDescendants().OfType<TabItem>()
-                    .Select(t => t.Content).OfType<EditorsTabItemControl>()
-                    .FirstOrDefault(c => !ReferenceEquals(c, firstCtrl));
-                if (secondCtrl is null) await Task.Delay(20);
-            }
+            EditorsTabItemControl? SecondControl() => editorTabs.GetVisualDescendants().OfType<TabItem>()
+                .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault(c => !ReferenceEquals(c, firstCtrl));
+            await TestWait.WhileAsync(() => SecondControl() is null);
+            var secondCtrl = SecondControl();
             Assert.NotNull(secondCtrl);
             secondCtrl!.State.Editor.Text = "Console.WriteLine(2);";
 
@@ -414,15 +403,10 @@ public class EditorTabsControlCloseConfirmationTests
     {
         mainVm.OpenTab(filePath);
         var tab = mainVm.Tabs.Single(t => t.FilePath == filePath);
-        for (var i = 0; i < 100; i++)
-        {
-            var ctrl = editorTabs.GetVisualDescendants().OfType<TabItem>()
-                .Select(t => t.Content).OfType<EditorsTabItemControl>()
-                .FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
-            if (ctrl is not null && tab.FrontMatter is not null) return (tab, ctrl);
-            await Task.Delay(20);
-        }
-        throw new TimeoutException("The named tab was not realized in time.");
+        EditorsTabItemControl? Realized() => editorTabs.GetVisualDescendants().OfType<TabItem>()
+            .Select(t => t.Content).OfType<EditorsTabItemControl>().FirstOrDefault(c => ReferenceEquals(c.DataContext, tab));
+        await TestWait.WhileAsync(() => Realized() is null || tab.FrontMatter is null);
+        return (tab, Realized()!);
     }
 
     [AvaloniaFact]
@@ -442,8 +426,7 @@ public class EditorTabsControlCloseConfirmationTests
             windowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>()))
                 .ReturnsAsync(UnsavedChangesResult.Cancel);
 
-            tab.CloseCommand.Execute().Subscribe();
-            await Task.Delay(50);
+            await tab.CloseCommand.Execute();
 
             Assert.Contains(tab, mainVm.Tabs);
             Assert.True(tab.IsDirty);
