@@ -198,7 +198,7 @@ public class AssemblyExplorerWindowViewTests
         Assert.Contains(".class", window.Editor.Text);
 
         window.GoBack(); // Run(), rendered as C# before the switch
-        await TestWait.WhileAsync(() => !window.Editor.Text.Contains(".method"));
+        await window.WhenIdleAsync();
 
         Assert.Equal("Run() : void", window.Title);
         Assert.Contains(".method", window.Editor.Text);
@@ -216,7 +216,7 @@ public class AssemblyExplorerWindowViewTests
         Assert.True(versionBox.IsVisible);
 
         languageBox.SelectedIndex = 1;
-        await TestWait.WhileAsync(() => !window.Editor.Text.Contains(".class"));
+        await window.WhenIdleAsync();
 
         Assert.Equal(DecompilerLanguage.IL, window.View.Language);
         Assert.Contains(".class", window.Editor.Text);
@@ -239,7 +239,7 @@ public class AssemblyExplorerWindowViewTests
         Assert.Equal(IlGrammar.ScopeName, window.GrammarScope);
 
         window.GoBack();
-        await TestWait.WhileAsync(() => !window.Editor.Text.Contains(".method"));
+        await window.WhenIdleAsync();
 
         Assert.Equal(IlGrammar.ScopeName, window.GrammarScope);
         Assert.Contains(".method", window.Editor.Text);
@@ -476,7 +476,7 @@ public class AssemblyExplorerWindowViewTests
             Assert.Equal("Alpha", window.Title);
             Assert.Contains(".class", window.Editor.Text);
             window.GoBack();
-            await TestWait.WhileAsync(() => !window.Editor.Text.Contains(".method"));
+            await window.WhenIdleAsync();
             Assert.Equal("Run() : void", window.Title);
         }
         finally { window.Close(); }
@@ -504,12 +504,12 @@ public class AssemblyExplorerWindowViewTests
             await window.SetViewAsync(DecompilerView.Default);
             window.ActivateNextTab(+1); // Alpha's tab, re-rendered as C#
             await left;
-            await TestWait.WhileAsync(() => !window.Editor.Text.Contains("class Alpha"));
+            await window.WhenIdleAsync();
 
             Assert.Equal(["Run() : void", "Alpha"], window.TabTitles); // the left tab's selection didn't land
             Assert.Equal("Alpha", window.Title);
             window.ActivateNextTab(-1);
-            await TestWait.WhileAsync(() => !window.Editor.Text.Contains("void Run()"));
+            await window.WhenIdleAsync();
             Assert.False(window.CanGoBack);
         }
         finally { window.Close(); }
@@ -590,7 +590,8 @@ public class AssemblyExplorerWindowViewTests
         var searchBox = window.FindControl<TextBox>("SearchBox")!;
 
         searchBox.Text = "Gamm";
-        await TestWait.WhileAsync(() => Results(window).Count == 0);
+        Dispatcher.UIThread.RunJobs(); // the box reports its change through the UI queue
+        await window.WhenIdleAsync();
         Assert.Contains(Results(window), r => r is { Text: "Gamma", Location: "Foo.Bar" });
 
         window.SearchResultList.SelectedItem = Results(window).First(r => r.Text == "Gamma");
@@ -710,7 +711,7 @@ public class AssemblyExplorerWindowViewTests
         Assert.Contains(Node(runtime).Reference!.ResolvedPath!, window.Editor.Text);
 
         await window.OpenReferenceAsync(Node(runtime).Reference!);
-        await TestWait.WhileAsync(() => window.Title?.StartsWith("System.Runtime", StringComparison.Ordinal) != true);
+        await window.WhenIdleAsync();
 
         Assert.Equal(2, window.LoadedAssemblyPaths.Count);
         var second = AssemblyRow(window, 1);
@@ -743,7 +744,7 @@ public class AssemblyExplorerWindowViewTests
         Assert.NotEmpty(Results(window));
 
         window.RemoveAssembly(AssemblyRow(window, 0));
-        await TestWait.WhileAsync(() => Results(window).Count > 0);
+        await window.WhenIdleAsync();
 
         Assert.Single(window.Tree.Items);
         Assert.Single(window.LoadedAssemblyPaths);
@@ -823,7 +824,7 @@ public class AssemblyExplorerWindowViewTests
         Assert.Empty(AnalysisHits(window)); // Use(Delta) calls Delta.Go, not Epsilon.Go
 
         box.IsChecked = true;
-        await TestWait.WhileAsync(() => AnalysisHits(window).Count == 0);
+        await window.WhenIdleAsync();
 
         var hit = Assert.Single(AnalysisHits(window));
         Assert.Equal("Use(Delta) : void", hit.Text);
@@ -883,7 +884,7 @@ public class AssemblyExplorerWindowViewTests
         var pane = window.FindControl<Border>("AnalysisPanel")!;
 
         window.KeyPressQwerty(PhysicalKey.R, RawInputModifiers.Control);
-        await TestWait.WhileAsync(() => AnalysisHits(window).Count == 0);
+        await window.WhenIdleAsync();
 
         Assert.Equal("Used By: Run() : void", window.FindControl<TextBlock>("AnalysisTitle")!.Text);
         Assert.Equal("Call() : void", Assert.Single(AnalysisHits(window)).Text);
@@ -1150,7 +1151,7 @@ public class AssemblyExplorerWindowViewTests
 
         window.KeyPressQwerty(PhysicalKey.S, RawInputModifiers.Control);
 
-        await TestWait.WhileAsync(() => service.Invocations.All(i => i.Method.Name != nameof(IWindowService.ShowSaveCodeFileDialogAsync)));
+        await window.WhenIdleAsync();
         service.Verify(s => s.ShowSaveCodeFileDialogAsync("Run", "cs", It.IsAny<string>()), Times.Once);
     }
 
@@ -1269,7 +1270,7 @@ public class AssemblyExplorerWindowViewTests
 
         window.Tree.SelectedItem = alpha;
 
-        await TestWait.WhileAsync(() => window.Title != "Alpha");
+        await window.WhenIdleAsync();
         Assert.Contains("class Alpha", window.Editor.Text);
     }
 
