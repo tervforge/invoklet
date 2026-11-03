@@ -104,6 +104,38 @@ internal sealed class SymbolNavigation(
         catch (Exception ex) { _logger.LogWarning(ex, "Rename info failed"); return null; }
     }
 
+    internal Task<string?> CheckRenameAsync(string code, int position, string newName, CancellationToken ct = default)
+        => RoslynMessageCulture.RunAsync(async () => await TryCheckRenameAsync(code, position, newName, ct), ct);
+
+    private async Task<string?> TryCheckRenameAsync(string code, int position, string newName, CancellationToken ct)
+    {
+        try
+        {
+            if (!SyntaxFacts.IsValidIdentifier(newName) || SyntaxFacts.GetKeywordKind(newName) != SyntaxKind.None)
+                return $"'{newName}' is not a valid identifier.";
+
+            var found = await FindSymbolAndOccurrencesAsync(code, position, ct);
+            if (found is not { } result || result.Symbol.Name == newName) return null;
+
+            var model = await _syncDocument(code).GetSemanticModelAsync(ct);
+            if (model == null) return null;
+
+            // A symbol of the new name visible at any place the rename touches would capture or
+            // clash with the renamed one: LookupSymbols sees locals, parameters, fields and outer scopes.
+            foreach (var span in result.Spans)
+            {
+                var pos = _layout.ToDocumentOffset(code, span.Start);
+                var clash = model.LookupSymbols(pos, name: newName)
+                    .FirstOrDefault(s => !SymbolEqualityComparer.Default.Equals(s, result.Symbol));
+                if (clash != null)
+                    return $"'{newName}' already exists in this scope ({clash.Kind.ToString().ToLowerInvariant()}). Nothing was renamed.";
+            }
+            return null;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { _logger.LogWarning(ex, "Rename check failed"); return null; }
+    }
+
     // ── Go to Definition (F12) ───────────────────────────────────────────────────
 
     internal Task<IDefinitionResult?> GetDefinitionAsync(string code, int position, CancellationToken ct = default)

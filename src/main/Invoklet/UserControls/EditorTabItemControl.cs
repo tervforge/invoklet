@@ -1102,6 +1102,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var newName = await dialog.ShowDialog<string?>(owner);
         if (string.IsNullOrEmpty(newName) || newName == info.CurrentName) return;
 
+        var conflict = await intelliSense.CheckRenameAsync(State.Editor.Text, caretOffset, newName, CancellationToken.None);
+        if (conflict is not null)
+        {
+            SetStatus(conflict, "Invoklet.Status.ErrorBrush");
+            editor.Focus();
+            return;
+        }
+
         ApplyRenameEdits(editor.Document, info.Spans, newName);
         editor.Focus();
     }

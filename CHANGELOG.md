@@ -3,6 +3,13 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- Renaming a symbol to a name that already exists in its scope is refused with a message,
+  instead of silently merging the two or leaving the script broken.
+
 ## [0.11.2] — 2026-11-02
 
 This release improves the safety of saving scripts, database updates and session recovery,
