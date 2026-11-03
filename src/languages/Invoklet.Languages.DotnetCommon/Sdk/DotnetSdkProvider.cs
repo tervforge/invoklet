@@ -15,7 +15,7 @@ public sealed class DotnetSdkProvider : ISdkProvider
 
     public IReadOnlyList<DotnetSdk> Get(string? dotnetExecutableOverride = null)
     {
-        var fileName = string.IsNullOrWhiteSpace(dotnetExecutableOverride) ? "dotnet" : dotnetExecutableOverride;
+        var fileName = DotnetExecutableResolver.Resolve(dotnetExecutableOverride);
         List<(string tfm, NuGetVersion version)> versions = [];
 
         foreach (string line in ListSdks(fileName))

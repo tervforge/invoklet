@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Invoklet.Languages.DotnetCommon.Sdk;
 using Microsoft.Extensions.Logging;
 
 namespace Invoklet.Services.Preferences;
@@ -67,8 +68,12 @@ public sealed class PreferencesService : IPreferencesService
             // The settings are taken over only when the whole file has been read and migrated; a failure leaves the defaults.
             var loaded = AppSettings.Parse(File.ReadAllText(SettingsPath));
             var migrated = loaded.Keyboard.MigrateLegacy();
+            var resolvedDotnetPath = DotnetExecutableResolver.Resolve(loaded.Debugger.DotnetPath);
+            var dotnetPathChanged = !string.Equals(loaded.Debugger.DotnetPath, resolvedDotnetPath, StringComparison.Ordinal);
+            if (dotnetPathChanged)
+                loaded.Debugger.DotnetPath = resolvedDotnetPath;
             _settings = loaded;
-            if (migrated) Save();
+            if (migrated || dotnetPathChanged) Save();
         }
         catch (Exception ex)
         {

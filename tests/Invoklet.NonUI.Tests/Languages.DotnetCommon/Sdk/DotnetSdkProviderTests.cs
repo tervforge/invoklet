@@ -13,6 +13,32 @@ namespace Invoklet.NonUI.Tests.Languages.DotnetCommon.Sdk;
 public class DotnetSdkProviderTests
 {
     [Fact]
+    public void DefaultPath_Should_FallBackToAStandardInstall_WhenPathDoesNotContainDotnet()
+    {
+        var directory = Directory.CreateTempSubdirectory("Invoklet-standard-dotnet");
+        var standard = Path.Combine(directory.FullName, "dotnet");
+        File.WriteAllText(standard, string.Empty);
+        try
+        {
+            var resolved = DotnetExecutableResolver.ResolveFromCandidates("dotnet", [], [standard]);
+
+            Assert.Equal(standard, resolved);
+        }
+        finally
+        {
+            Directory.Delete(directory.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExplicitPath_Should_NotBeReplacedByStandardFallback()
+    {
+        const string configured = "/custom/dotnet";
+
+        Assert.Equal(configured, DotnetExecutableResolver.Resolve(configured));
+    }
+
+    [Fact]
     public void Get_Should_ListRealInstalledSdks_WhenNoOverrideIsGiven()
     {
         // No override — resolves "dotnet" via PATH, same as before this override existed. This
