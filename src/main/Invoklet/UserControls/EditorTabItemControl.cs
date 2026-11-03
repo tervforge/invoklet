@@ -1,4 +1,5 @@
 using System.Reactive.Linq;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Web;
 using Avalonia;
@@ -711,14 +712,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                     host.BreakpointVerified += (bp, verified, message) =>
                         PostRun(() => OnBreakpointVerified(bp, verified, message), host);
                     var hostResult = await HostExecutionAdapter.DebugAsync(host, script, @event => HandleHostEvent(host, @event), runCts.Token);
-                    if (hostResult.Error is not null) throw hostResult.Error;
+                    if (hostResult.Error is not null) ExceptionDispatchInfo.Capture(hostResult.Error).Throw();
                     cancelled = hostResult.Cancelled;
                     runResult = hostResult.RunResult;
                 }
                 else
                 {
                     var hostResult = await HostExecutionAdapter.RunAsync(host, script, @event => HandleHostEvent(host, @event), runCts.Token);
-                    if (hostResult.Error is not null) throw hostResult.Error;
+                    if (hostResult.Error is not null) ExceptionDispatchInfo.Capture(hostResult.Error).Throw();
                     cancelled = hostResult.Cancelled;
                     runResult = hostResult.RunResult;
                 }
