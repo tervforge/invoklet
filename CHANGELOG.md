@@ -3,7 +3,7 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
-## [Unreleased]
+## [0.11.3] — 2026-11-03
 
 ### Fixed
 
