@@ -27,6 +27,7 @@ public sealed class DumpContainer
     private object? _content;
     private string? _style;
     private string _appendedHtml = "";
+    private readonly object _appendLock = new();
     private bool _dumped;
     // Captured from the FIRST .Dump() call's own (already GlobalDefaults-merged) options and reused
     // for every later re-render — see ContentOptions()/RenderForFirstDump's own comment for why this
@@ -89,15 +90,21 @@ public sealed class DumpContainer
 
     /// <summary>
     /// Renders <paramref name="toAppend"/> after the current content instead of replacing it, and
-    /// returns it unchanged. <paramref name="inline"/> is accepted for LINQPad-signature
-    /// compatibility — Invoklet always appends as its own block regardless.
+    /// returns it unchanged. Each append is its own block, so lines appended from asynchronous
+    /// handlers do not run together; with <paramref name="inline"/> it continues the previous one.
     /// </summary>
     public T AppendContent<T>(T toAppend, bool inline = false)
     {
         ContentAppended?.Invoke(toAppend);
         _contentAppended.Publish(toAppend);
-        _appendedHtml += DumpRenderer.Render(toAppend, null, ContentOptions());
-        RefreshIfDumped();
+        var html = DumpRenderer.Render(toAppend, null, ContentOptions());
+        // Process.OutputDataReceived and ErrorDataReceived call this from different threads: without the lock
+        // an append is lost, or an older snapshot is written after a newer one.
+        lock (_appendLock)
+        {
+            _appendedHtml += inline ? html : $"<div class=\"dp-append\">{html}</div>";
+            RefreshIfDumped();
+        }
         return toAppend;
     }
 

@@ -11,6 +11,9 @@ Notable changes in each Invoklet release. Downloads are on the
   instead of silently merging the two or leaving the script broken.
 - Compiler warnings are shown in their own block in the results, not as if the script had
   printed them.
+- Lines added with `DumpContainer.AppendContent` stay separate lines instead of running together,
+  and none is lost when they arrive from several threads, such as a process's output and
+  error handlers.
 
 ## [0.11.2] — 2026-11-02
 
