@@ -1384,6 +1384,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         if (kind is OutputKind.StandardError or OutputKind.StandardErrorPartial)
             State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(data)}</div>");
+        else if (kind == OutputKind.Diagnostic)
+            State.Output.Append($"\n<div class=\"diagnostic\">{HttpUtility.HtmlEncode(data)}</div>");
         else
             State.Output.Append($"\n<div class=\"out\">{HttpUtility.HtmlEncode(data)}</div>");
         UpdateOutputUi();

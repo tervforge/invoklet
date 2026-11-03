@@ -9,6 +9,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - Renaming a symbol to a name that already exists in its scope is refused with a message,
   instead of silently merging the two or leaving the script broken.
+- Compiler warnings are shown in their own block in the results, not as if the script had
+  printed them.
 
 ## [0.11.2] — 2026-11-02
 
