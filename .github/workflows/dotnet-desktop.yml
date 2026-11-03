@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🚚 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Mock-REST tests for the draft-release helper the platform/release jobs run on push, and a
       # check that CHANGELOG.md describes the current <Version>. Run on every PR and push so a broken
@@ -44,7 +44,7 @@ jobs:
         run: node --test .github/scripts/draft-release.test.js
 
       - name: 🧲 Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -55,7 +55,7 @@ jobs:
       # cheapest job, before any Windows or macOS minute is paid for. Those two lanes leave them out; build-linux runs the whole suite, so its
       # coverage report still has them.
       - name: 📦 Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
@@ -86,15 +86,15 @@ jobs:
       version: ${{ steps.draft.outputs.version }}
     steps:
       - name: 🚚 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🧲 Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
       - name: 📦 Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
@@ -234,15 +234,15 @@ jobs:
       contents: write # uploads to the draft release on push only
     steps:
       - name: 🚚 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🧲 Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
       - name: 📦 Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
@@ -339,15 +339,15 @@ jobs:
       contents: write # uploads to the draft release on push only
     steps:
       - name: 🚚 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🧲 Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
       - name: 📦 Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
@@ -446,7 +446,7 @@ jobs:
       contents: write
     steps:
       - name: 🚚 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           sparse-checkout: .github/scripts
 
