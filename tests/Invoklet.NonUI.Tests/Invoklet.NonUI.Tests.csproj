@@ -32,6 +32,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\main\Invoklet\Invoklet.csproj" />
+    <ProjectReference Include="..\..\src\runtime\Invoklet.Runtime\Invoklet.Runtime.csproj" />
     <!-- Pure managed code, so their tests build on every OS although each OS's Invoklet ships only its own. -->
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.Linux\Invoklet.Desktop.Linux.csproj" />
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.MacOS\Invoklet.Desktop.MacOS.csproj" />

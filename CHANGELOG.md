@@ -3,6 +3,20 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.3] — 2026-11-03
+
+### Fixed
+
+- Renaming a symbol to a name that already exists in its scope is refused with a message,
+  instead of silently merging the two or leaving the script broken.
+- Compiler warnings are shown in their own block in the results, not as if the script had
+  printed them.
+- Lines added with `DumpContainer.AppendContent` stay separate lines instead of running together,
+  and none is lost when they arrive from several threads, such as a process's output and
+  error handlers.
+- A `.Dump()` result is no longer followed by its raw encoded text when the script also
+  writes to the error stream at the same time.
+
 ## [0.11.2] — 2026-11-02
 
 This release improves the safety of saving scripts, database updates and session recovery,

@@ -1,4 +1,5 @@
 using System.Reactive.Linq;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Web;
 using Avalonia;
@@ -711,14 +712,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                     host.BreakpointVerified += (bp, verified, message) =>
                         PostRun(() => OnBreakpointVerified(bp, verified, message), host);
                     var hostResult = await HostExecutionAdapter.DebugAsync(host, script, @event => HandleHostEvent(host, @event), runCts.Token);
-                    if (hostResult.Error is not null) throw hostResult.Error;
+                    if (hostResult.Error is not null) ExceptionDispatchInfo.Capture(hostResult.Error).Throw();
                     cancelled = hostResult.Cancelled;
                     runResult = hostResult.RunResult;
                 }
                 else
                 {
                     var hostResult = await HostExecutionAdapter.RunAsync(host, script, @event => HandleHostEvent(host, @event), runCts.Token);
-                    if (hostResult.Error is not null) throw hostResult.Error;
+                    if (hostResult.Error is not null) ExceptionDispatchInfo.Capture(hostResult.Error).Throw();
                     cancelled = hostResult.Cancelled;
                     runResult = hostResult.RunResult;
                 }
@@ -1102,6 +1103,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var newName = await dialog.ShowDialog<string?>(owner);
         if (string.IsNullOrEmpty(newName) || newName == info.CurrentName) return;
 
+        var conflict = await intelliSense.CheckRenameAsync(State.Editor.Text, caretOffset, newName, CancellationToken.None);
+        if (conflict is not null)
+        {
+            SetStatus(conflict, "Invoklet.Status.ErrorBrush");
+            editor.Focus();
+            return;
+        }
+
         ApplyRenameEdits(editor.Document, info.Spans, newName);
         editor.Focus();
     }
@@ -1376,6 +1385,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         if (kind is OutputKind.StandardError or OutputKind.StandardErrorPartial)
             State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(data)}</div>");
+        else if (kind == OutputKind.Diagnostic)
+            State.Output.Append($"\n<div class=\"diagnostic\">{HttpUtility.HtmlEncode(data)}</div>");
         else
             State.Output.Append($"\n<div class=\"out\">{HttpUtility.HtmlEncode(data)}</div>");
         UpdateOutputUi();

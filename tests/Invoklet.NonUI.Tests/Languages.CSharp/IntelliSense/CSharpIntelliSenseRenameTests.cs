@@ -10,6 +10,23 @@ namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
 [Trait("Platform", "Independent")]
 public class CSharpIntelliSenseRenameTests
 {
+    [Theory]
+    [InlineData("var alpha = 1;\nvar beta = 2;\nConsole.WriteLine(alpha);", "alpha", "beta", true)]   // local in same scope
+    [InlineData("int Twice(int nn, int mm) { return nn * 2; }\nTwice(1, 2);", "nn", "mm", true)] // parameter
+    [InlineData("var alpha = 1;\nif (alpha > 0) { var inner = 2; }", "alpha", "inner", false)]   // inner scope, declared after: no clash at a's spans
+    [InlineData("var alpha = 1;\nConsole.WriteLine(alpha);", "alpha", "fresh", false)]
+    [InlineData("var alpha = 1;\nConsole.WriteLine(alpha);", "alpha", "alpha", false)]               // same name: no-op
+    [InlineData("var alpha = 1;\nConsole.WriteLine(alpha);", "alpha", "class", true)]            // reserved word
+    public async Task CheckRenameAsync_Should_ReportConflicts(string code, string oldName, string newName, bool conflict)
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        var position = code.IndexOf(oldName, StringComparison.Ordinal);
+
+        var result = await service.CheckRenameAsync(code, position, newName, TestContext.Current.CancellationToken);
+
+        Assert.Equal(conflict, result is not null);
+    }
+
     [Fact]
     public async Task GetRenameInfoAsync_Should_ReturnCurrentNameAndEveryOccurrence_ForALocalVariable()
     {

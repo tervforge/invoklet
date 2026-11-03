@@ -176,6 +176,9 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     public Task<IRenameInfo?> GetRenameInfoAsync(string code, int position, CancellationToken ct = default)
         => _navigation.GetRenameInfoAsync(code, position, ct);
 
+    public Task<string?> CheckRenameAsync(string code, int position, string newName, CancellationToken ct = default)
+        => _navigation.CheckRenameAsync(code, position, newName, ct);
+
     public Task<IDefinitionResult?> GetDefinitionAsync(string code, int position, CancellationToken ct = default)
         => _navigation.GetDefinitionAsync(code, position, ct);
 

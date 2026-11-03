@@ -38,6 +38,15 @@ public interface IIntelliSenseService : IDisposable
         int position,
         CancellationToken cancellationToken = default);
 
+    // Why renaming the symbol at position to newName must not happen: null when it is safe (or when
+    // the language does not check), otherwise a message for the user. Nothing is edited by the check.
+    Task<string?> CheckRenameAsync(
+        string code,
+        int position,
+        string newName,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
+
     // Resolves what F12 at position should do — null when
     // position isn't on an identifier that resolves to any symbol. See IDefinitionResult for the
     // in-source-vs-external split.

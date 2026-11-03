@@ -25,7 +25,7 @@ public class HtmlThemeStylesheetTests
         var variant = isDark ? ThemeVariant.Dark : ThemeVariant.Light;
         var wrapped = HtmlThemeStylesheet.Generate(variant, isDark, wrapLongLines: true);
         var plain = HtmlThemeStylesheet.Generate(variant, isDark, wrapLongLines: false);
-        string[] wrapping = ["pre", ".out", ".error"];
+        string[] wrapping = ["pre", ".out", ".error", ".diagnostic"];
         string Rule(string css, string selector) => css.Split('\n').Single(l => l.TrimStart().StartsWith(selector + " "));
 
         foreach (var selector in wrapping)

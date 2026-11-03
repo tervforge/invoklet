@@ -648,7 +648,9 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
                         if (pending[i] != '\n') continue;
                         int end = i > start && pending[i - 1] == '\r' ? i - 1 : i;
                         string line = pending.ToString(start, end - start);
-                        Flush(other, otherHandler, otherPartial);
+                        // A stdout line that already holds the start of a record stays whole: delivered as a
+                        // partial line, its base64 would be shown as text, and so would the rest of it.
+                        if (!(isError && HoldsRecord(other))) Flush(other, otherHandler, otherPartial);
                         handler?.Invoke(line, kind);
                         start = i + 1;
                     }
@@ -660,6 +662,13 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             {
                 Flush(pending, handler, partial);
             }
+        }
+
+        private static bool HoldsRecord(StringBuilder pending)
+        {
+            for (int i = 0; i < pending.Length; i++)
+                if (pending[i] is RsPrefix or InputRequestPrefix) return true;
+            return false;
         }
 
         private static void Flush(StringBuilder pending, OutputReceivedHandler? handler, OutputKind kind)

@@ -47,6 +47,7 @@ public static class HtmlThemeStylesheet
             pre         { background-color:{{panel}}; color:{{fg}}; padding:4px 8px; margin:4px 0;{{preWrap}} }
             .out        { {{lines}} }
             .secondary  { color:{{fgSec}}; }
+            .diagnostic { color:{{fgSec}}; {{lines}} }
             .error      { color:{{errFg}}; {{lines}} }
             .stacktrace { color:{{stackFg}}; font-size:0.85em; }
             .dp-dump    { margin:8px 0; padding:4px 6px 4px 10px; border-left:3px solid {{dpAccent}}; background-color:{{dpDumpBg}}; border-radius:0 2px 2px 0; }

@@ -97,6 +97,47 @@ public class DumpContainerTests
     }
 
     [Fact]
+    public void AppendContent_FromManyThreads_KeepsEveryAppend()
+    {
+        var originalOut = Console.Out;
+        try
+        {
+            var sw = new StringWriter();
+            Console.SetOut(TextWriter.Synchronized(sw));
+
+            var dc = new DumpContainer("first");
+            dc.Dump();
+            Parallel.For(0, 200, i => dc.AppendContent($"line{i}"));
+
+            var decoded = DecodeLastLine(sw);
+            Assert.Equal(200, System.Text.RegularExpressions.Regex.Matches(decoded, "dp-append").Count);
+        }
+        finally { Console.SetOut(originalOut); }
+    }
+
+    [Fact]
+    public void AppendContent_PutsEachAppendInItsOwnBlock_UnlessInline()
+    {
+        var originalOut = Console.Out;
+        try
+        {
+            var sw = new StringWriter();
+            Console.SetOut(sw);
+
+            var dc = new DumpContainer("first");
+            dc.Dump();
+            dc.AppendContent("second");
+            dc.AppendContent("third");
+            dc.AppendContent("fourth", inline: true);
+
+            var decoded = DecodeLastLine(sw);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(decoded, "dp-append").Count);
+            Assert.DoesNotContain("<div class=\"dp-append\">fourth", decoded);
+        }
+        finally { Console.SetOut(originalOut); }
+    }
+
+    [Fact]
     public void ClearContent_RemovesBothSetAndAppendedContent()
     {
         var originalOut = Console.Out;

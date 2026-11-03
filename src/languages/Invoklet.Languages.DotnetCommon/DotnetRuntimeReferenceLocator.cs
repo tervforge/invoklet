@@ -8,7 +8,7 @@ namespace Invoklet.Languages.DotnetCommon;
 /// </summary>
 public sealed class DotnetRuntimeReferenceLocator : IRuntimeReferenceLocator
 {
-    public static string RuntimeAssemblyPath => typeof(ObjectExtensions).Assembly.Location;
+    public static string RuntimeAssemblyPath => Path.Combine(AppContext.BaseDirectory, "Invoklet.Runtime.dll");
 
     public string GetRuntimeAssemblyPath() => RuntimeAssemblyPath;
 }

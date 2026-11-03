@@ -164,7 +164,7 @@ public partial class AssemblyExplorerWindow : Window
         if (assemblyPath is null)
             return;
         _startFolder = Path.GetDirectoryName(assemblyPath) ?? "";
-        _ = LoadAndRevealDefinitionAsync(assemblyPath, definition, initialResult);
+        Track(LoadAndRevealDefinitionAsync(assemblyPath, definition, initialResult));
     }
 
     /// <summary>
@@ -269,7 +269,7 @@ public partial class AssemblyExplorerWindow : Window
             if (!newTab || (e.Source as Visual)?.FindAncestorOfType<TreeViewItem>(includeSelf: true)
                     is not { Header: AssemblyTreeNode node } row) return;
             e.Handled = true;
-            _ = OpenInNewTabAsync(node, row);
+            Track(OpenInNewTabAsync(node, row));
         }, RoutingStrategies.Tunnel);
         SaveCodeButton.Click += async (_, _) => await SaveCodeAsync();
 
@@ -284,7 +284,7 @@ public partial class AssemblyExplorerWindow : Window
         {
             e.Handled = true;
             var paths = e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
-            if (paths is { Count: > 0 }) _ = OpenDroppedFilesAsync(paths);
+            if (paths is { Count: > 0 }) Track(OpenDroppedFilesAsync(paths));
         });
         BackButton.Click += (_, _) => GoBack();
         ForwardButton.Click += (_, _) => GoForward();
@@ -303,18 +303,18 @@ public partial class AssemblyExplorerWindow : Window
             if (_suppressSelection) return;
             ++_openVersion; // an assembly still loading must not take the selection from the user
             if (TypeTree.SelectedItem is TreeViewItem { Header: AssemblyTreeNode node } item)
-                _ = SelectNodeAsync(node, item);
+                Track(SelectNodeAsync(node, item));
         };
         // A References row opens its assembly on double-click or Enter; Delete removes an assembly row.
         TypeTree.DoubleTapped += (_, _) =>
         {
             if (TypeTree.SelectedItem is TreeViewItem { Header: AssemblyTreeNode { Reference: { } reference } })
-                _ = OpenReferenceAsync(reference);
+                Track(OpenReferenceAsync(reference));
         };
         TypeTree.KeyDown += (_, e) =>
         {
             if (TypeTree.SelectedItem is not TreeViewItem { Header: AssemblyTreeNode node } item) return;
-            if (e.Key == Key.Enter && node.Reference is { } reference) _ = OpenReferenceAsync(reference);
+            if (e.Key == Key.Enter && node.Reference is { } reference) Track(OpenReferenceAsync(reference));
             else if (Keyboard.Matches(e, KeyCommands.ExplorerRemoveAssembly) && node.Kind == AssemblyNodeKind.Assembly) RemoveAssembly(item);
             else return;
             e.Handled = true;
@@ -323,7 +323,7 @@ public partial class AssemblyExplorerWindow : Window
         // toggling "Include virtual calls" re-runs the shown analysis
         IncludeVirtualCallsBox.IsCheckedChanged += (_, _) =>
         {
-            if (_lastAnalysis is var (node, kind) && AnalysisPanel.IsVisible) _ = AnalyzeAsync(node, kind);
+            if (_lastAnalysis is var (node, kind) && AnalysisPanel.IsVisible) Track(AnalyzeAsync(node, kind));
         };
         CloseAnalysisButton.Click += (_, _) =>
         {
@@ -349,7 +349,7 @@ public partial class AssemblyExplorerWindow : Window
             var kb = Keyboard;
             if (kb.Matches(e, KeyCommands.ExplorerBack)) GoBack();
             else if (kb.Matches(e, KeyCommands.ExplorerForward)) GoForward();
-            else if (kb.Matches(e, KeyCommands.Save)) _ = SaveCodeAsync();
+            else if (kb.Matches(e, KeyCommands.Save)) Track(SaveCodeAsync());
             else if (kb.Matches(e, KeyCommands.CloseTab)) CloseActiveTab();
             else if (kb.Matches(e, KeyCommands.ExplorerNextTab)) ActivateNextTab(+1);
             else if (kb.Matches(e, KeyCommands.ExplorerPreviousTab)) ActivateNextTab(-1);
@@ -363,13 +363,13 @@ public partial class AssemblyExplorerWindow : Window
                      && TypeTree.SelectedItem is TreeViewItem { Header: AssemblyTreeNode selected }
                      && CSharpDecompilerService.AnalysesFor(selected.Kind, selected.Member) is [var first, ..])
             {
-                _ = AnalyzeAsync(selected, first);
+                Track(AnalyzeAsync(selected, first));
             }
             else return;
             e.Handled = true;
         }, RoutingStrategies.Tunnel);
 
-        SearchBox.TextChanged += (_, _) => _ = SearchDebouncedAsync(SearchBox.Text ?? "");
+        SearchBox.TextChanged += (_, _) => Track(SearchDebouncedAsync(SearchBox.Text ?? ""));
         SearchBox.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape) SearchBox.Text = "";
@@ -403,7 +403,7 @@ public partial class AssemblyExplorerWindow : Window
             Background = themeService.GetBrush("Invoklet.Editor.BackgroundBrush")
         };
 
-        editor.GoToDefinitionRequested += (_, _) => _ = NavigateAsync();
+        editor.GoToDefinitionRequested += (_, _) => Track(NavigateAsync());
         // Ctrl+click = F12 at the clicked spot (Tunnel: before the text area starts a selection).
         editor.TextArea.AddHandler(PointerPressedEvent, (_, e) =>
         {
@@ -411,7 +411,7 @@ public partial class AssemblyExplorerWindow : Window
                 || !e.GetCurrentPoint(editor).Properties.IsLeftButtonPressed) return;
             if (editor.GetPositionFromPoint(e.GetPosition(editor)) is not { } position) return;
             e.Handled = true;
-            _ = NavigateAtAsync(position.Line, position.Column);
+            Track(NavigateAtAsync(position.Line, position.Column));
         }, RoutingStrategies.Tunnel);
 
         // Ctrl held over a navigable identifier underlines it and shows a hand cursor, like ILSpy/VS.
@@ -460,7 +460,7 @@ public partial class AssemblyExplorerWindow : Window
                 // decompiled as default C#; the row and target may already be known
                 Show(initial, _initialPageRow, _initialPageTarget, DecompilerView.Default);
                 if (_initialPageRow is not null) SelectSilently(_initialPageRow);
-                _ = RefreshCurrentAsync(); // with a target, in the current view if that's another one
+                Track(RefreshCurrentAsync()); // with a target, in the current view if that's another one
             }
         };
         editor.AttachedToVisualTree += onAttached;
@@ -677,7 +677,7 @@ public partial class AssemblyExplorerWindow : Window
         foreach (var path in _searchIndexes.Keys.Where(p => FindAssembly(p) is null).ToList())
             _searchIndexes.Remove(path);
         if (!string.IsNullOrWhiteSpace(_lastQuery))
-            _ = SearchAsync(_lastQuery);
+            Track(SearchAsync(_lastQuery));
     }
 
     // A References row: load that assembly into the tree (or find it there) and open it.
@@ -710,7 +710,7 @@ public partial class AssemblyExplorerWindow : Window
         item.PropertyChanged += (_, e) =>
         {
             if (e.Property == TreeViewItem.IsExpandedProperty && item.IsExpanded)
-                _ = ExpandAsync(item);
+                Track(ExpandAsync(item));
         };
         return item;
     }
@@ -880,7 +880,7 @@ public partial class AssemblyExplorerWindow : Window
             || node.Kind == AssemblyNodeKind.Assembly)
         {
             var newTab = new MenuItem { Header = "Open in New Tab", Tag = "row" };
-            newTab.Click += (_, _) => _ = OpenInNewTabAsync(node, selected);
+            newTab.Click += (_, _) => Track(OpenInNewTabAsync(node, selected));
             TreeContextMenu.Items.Insert(position++, newTab);
             TreeContextMenu.Items.Insert(position++, new Separator { Tag = "row" });
         }
@@ -891,7 +891,7 @@ public partial class AssemblyExplorerWindow : Window
             var kind = analyses[i];
             var item = new MenuItem { Header = "Analyze: " + AnalysisLabel(kind), Tag = "analysis" };
             if (i == 0) item.InputGesture = Keyboard.GestureFor(KeyCommands.ExplorerAnalyze);
-            item.Click += (_, _) => _ = AnalyzeAsync(node, kind);
+            item.Click += (_, _) => Track(AnalyzeAsync(node, kind));
             TreeContextMenu.Items.Insert(position++, item);
         }
         if (analyses.Count > 0)
@@ -1105,14 +1105,32 @@ public partial class AssemblyExplorerWindow : Window
         ("C# 1.0", LanguageVersion.CSharp1),
     ];
 
+    // What the window started without waiting for it (a click, a key, the back button): kept until it ends, so that a test can wait for all of it
+    // instead of polling the window. UI thread only.
+    private readonly HashSet<Task> _started = [];
+
+    private void Track(Task task)
+    {
+        _started.RemoveWhere(t => t.IsCompleted);
+        if (!task.IsCompleted) _started.Add(task);
+    }
+
+    /// <summary>Complete when everything the window started on its own is done, including what that started in turn.</summary>
+    internal async Task WhenIdleAsync()
+    {
+        while (_started.Where(t => !t.IsCompleted).ToArray() is { Length: > 0 } pending)
+            await Task.WhenAll(pending);
+        _started.Clear();
+    }
+
     internal DecompilerView View => _view;
 
     private void OnViewBoxChanged()
     {
         if (_syncingViewBoxes || LanguageBox.SelectedIndex < 0 || VersionBox.SelectedIndex < 0) return;
-        _ = SetViewAsync(new DecompilerView(
+        Track(SetViewAsync(new DecompilerView(
             LanguageBox.SelectedIndex == 1 ? DecompilerLanguage.IL : DecompilerLanguage.CSharp,
-            LanguageVersions[VersionBox.SelectedIndex].Version));
+            LanguageVersions[VersionBox.SelectedIndex].Version)));
     }
 
     // Switching language/version re-renders the page in place (not a new history page); pages left in
@@ -1402,7 +1420,7 @@ public partial class AssemblyExplorerWindow : Window
         ApplyResult(entry.Result, entry.CaretLine, entry.View);
         SelectSilently(entry.Item);
         UpdateHistoryButtons();
-        _ = RefreshCurrentAsync(); // rendered in another language/version than the current one
+        Track(RefreshCurrentAsync()); // rendered in another language/version than the current one
     }
 
     // A new page: the current one goes onto the Back stack, Forward is dropped (browser semantics).
@@ -1456,7 +1474,7 @@ public partial class AssemblyExplorerWindow : Window
         {
             ApplyResult(page.Result, page.CaretLine, page.View);
             SelectSilently(page.Item);
-            _ = RefreshCurrentAsync(); // rendered in another language/version than the current one
+            Track(RefreshCurrentAsync()); // rendered in another language/version than the current one
         }
         else
         {
