@@ -14,6 +14,8 @@ Notable changes in each Invoklet release. Downloads are on the
 - Lines added with `DumpContainer.AppendContent` stay separate lines instead of running together,
   and none is lost when they arrive from several threads, such as a process's output and
   error handlers.
+- A `.Dump()` result is no longer followed by its raw encoded text when the script also
+  writes to the error stream at the same time.
 
 ## [0.11.2] — 2026-11-02
 
