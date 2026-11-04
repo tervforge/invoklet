@@ -12,6 +12,7 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- The application icon on Windows (title bar, taskbar, Start menu) is no longer cut at its edges.
 - Go to Definition into Assembly Explorer scrolls to the symbol; a long page used to open at its top
   with only the caret on the right line. In a connection's generated code the caret is on the
   declaration, not on the line below it.
