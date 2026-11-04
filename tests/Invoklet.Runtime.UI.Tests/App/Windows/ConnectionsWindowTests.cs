@@ -99,18 +99,30 @@ public class ConnectionsWindowTests
         {
             var schemas = new ConnectionSchemas(drivers, schemaRoot.FullName,
                 new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
-            schemas.Cache.Put(connection, new ConnectionSchema("1 service", [],
+            // A message whose name starts like the client, and another service with a method of the same name, come first.
+            const string messages = "public sealed partial class HelloReply : pb::IMessage<HelloReply> { }\npublic sealed partial class HelloRequest : pb::IMessage<HelloRequest> { }\n";
+            const string source = "namespace Hello;\npublic class HelloServiceClientInfo { }\npublic static class Other\n{\n    public class OtherClient { public void SayHello() { } }\n}\npublic static class HelloService\n{\n    public class HelloServiceClient\n    {\n        public void SayHello() { }\n        public void Chat() { }\n    }\n}\n";
+            schemas.Cache.Put(connection, new ConnectionSchema("1 service", [new GeneratedSourceFile("Hello.cs", source), new GeneratedSourceFile("HelloMessages.cs", messages)],
                 "[{\"Service\":\"hello.HelloService\",\"ClientType\":\"global::Hello.HelloService.HelloServiceClient\",\"Property\":\"HelloService\",\"Methods\":["
                 + "{\"Name\":\"SayHello\",\"Input\":\"hello.HelloRequest\",\"Output\":\"hello.HelloReply\",\"ClientStreaming\":false,\"ServerStreaming\":false},"
                 + "{\"Name\":\"Chat\",\"Input\":\"hello.Msg\",\"Output\":\"hello.Msg\",\"ClientStreaming\":true,\"ServerStreaming\":true}]}]"));
             using var vm = new ConnectionsWindowViewModel(store.Object, drivers, secrets.Object, schemas);
 
-            var service = Assert.Single(vm.Resources);
+            var service = vm.Resources[0];
             Assert.Equal("hello.HelloService", service.Name);
             Assert.Equal(["SayHello", "Chat", "HelloService"], service.Children.Select(c => c.Name));
             Assert.Equal("HelloRequest → HelloReply · unary", service.Children[0].Details);
             Assert.Equal("Msg → Msg · bidirectional streaming", service.Children[1].Details);
             Assert.True(service.Children[0].ShowsDetailsInTree);
+            // Each one points at its line in the generated source, which Assembly Explorer shows.
+            Assert.Equal(9, service.Source?.Line);
+            Assert.Equal(11, service.Children[0].Source?.Line);
+            Assert.Equal(12, service.Children[1].Source?.Line);
+            // A method's messages are under it, and point at their classes; one from another library has none.
+            Assert.Equal(["HelloRequest", "HelloReply"], service.Children[0].Children.Select(c => c.Name));
+            Assert.Equal(2, service.Children[0].Children[0].Source?.Line);
+            Assert.Equal(1, service.Children[0].Children[1].Source?.Line);
+            Assert.Null(service.Children[1].Children[0].Source);
         }
         finally { schemaRoot.Delete(true); }
     }

@@ -328,16 +328,16 @@ public sealed class WindowService : IWindowService
         return Task.CompletedTask;
     }
 
-    public async Task ShowDefinitionInAssemblyExplorerAsync(DecompiledMemberResult decompiled, IDefinitionResult definition)
+    public async Task ShowDefinitionInAssemblyExplorerAsync(DecompiledMemberResult decompiled, IDefinitionResult? definition)
     {
         if (_assemblyExplorer is { } open)
         {
             open.Activate();
-            await open.OpenDefinitionInNewTabAsync(decompiled, definition.AssemblyPath, definition);
+            await open.OpenDefinitionInNewTabAsync(decompiled, definition?.AssemblyPath, definition);
             return;
         }
 
-        ShowTracked(new AssemblyExplorerWindow(_themeService, this, decompiled, definition.AssemblyPath, definition) { Preferences = _preferences });
+        ShowTracked(new AssemblyExplorerWindow(_themeService, this, decompiled, definition?.AssemblyPath, definition) { Preferences = _preferences });
     }
 
     private void ShowTracked(AssemblyExplorerWindow window)

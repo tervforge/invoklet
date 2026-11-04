@@ -3,6 +3,21 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Added
+
+- Double-clicking a gRPC service, method or generated file in the Connections window opens its
+  generated code in Assembly Explorer.
+
+### Fixed
+
+- Go to Definition into Assembly Explorer scrolls to the symbol; a long page used to open at its top
+  with only the caret on the right line. In a connection's generated code the caret is on the
+  declaration, not on the line below it.
+- Refresh on a gRPC connection reads the server's contract again; it used to reuse the files
+  it had read earlier when the address and metadata were the same.
+
 ## [0.11.3] — 2026-11-03
 
 ### Fixed

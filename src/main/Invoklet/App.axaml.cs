@@ -321,7 +321,13 @@ public class App : Application
         services.AddSingleton<Func<Windows_DependenciesWindow>>(sp => () => sp.GetRequiredService<Windows_DependenciesWindow>());
         services.AddSingleton<Func<Windows_PreferencesWindow>>(sp => () => sp.GetRequiredService<Windows_PreferencesWindow>());
         services.AddSingleton<Func<Windows_SecretStoreWindow>>(sp => () => sp.GetRequiredService<Windows_SecretStoreWindow>());
-        services.AddSingleton<Func<Windows_ConnectionsWindow>>(sp => () => sp.GetRequiredService<Windows_ConnectionsWindow>());
+        services.AddSingleton<Func<Windows_ConnectionsWindow>>(sp => () =>
+        {
+            var window = sp.GetRequiredService<Windows_ConnectionsWindow>();
+            var windows = sp.GetRequiredService<IWindowService>();
+            window.OpenSource = (text, line, title) => windows.ShowDefinitionInAssemblyExplorerAsync(new DecompiledMemberResult(text, line, title), null);
+            return window;
+        });
 
         var provider = services.BuildServiceProvider();
 

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Services.Connections;
@@ -377,6 +378,9 @@ public sealed class ConnectionResourceViewModel(string name, string kind, string
     public string Kind { get; } = kind;
     public string Details { get; } = details;
     public ObservableCollection<ConnectionResourceViewModel> Children { get; } = [];
+
+    /// <summary>The generated source this resource is declared in and its 1-based line, for Assembly Explorer; null when there is none.</summary>
+    public (string Text, int Line)? Source { get; init; }
 }
 
 public sealed record ConnectionResourceDetail(string Name, string Value);
@@ -809,6 +813,39 @@ public sealed class ConnectionsWindowViewModel : ViewModelBase, IDisposable
         Interlocked.Exchange(ref _browseCancellation, null)?.Cancel();
     }
 
+    // The client class protoc wrote for a service, by its full name ("global::Ns.Service.ServiceClient"): in the file
+    // with its namespace, inside the service's static class, so that a same-named client of another package or a
+    // message whose name starts the same is not taken for it. At is where the client's declaration starts.
+    private static (string Text, int At)? ClientSource(IEnumerable<GeneratedSourceFile> files, string clientType)
+    {
+        var parts = clientType.Replace("global::", "", StringComparison.Ordinal).Split('.');
+        if (parts.Length < 2) return null;
+        var ns = string.Join('.', parts[..^2]);
+        foreach (var file in files)
+        {
+            if (ns.Length > 0 && !Regex.IsMatch(file.Text, $@"\bnamespace {Regex.Escape(ns)}\s*[{{;]")) continue;
+            var service = Regex.Match(file.Text, $@"\bclass {Regex.Escape(parts[^2])}\b");
+            if (!service.Success) continue;
+            var client = new Regex($@"\bclass {Regex.Escape(parts[^1])}\b").Match(file.Text, service.Index);
+            if (client.Success) return (file.Text, client.Index);
+        }
+        return null;
+    }
+
+    // The class protoc wrote for a message, by its short name: in a file of the client's namespace first, as a service's
+    // messages usually share its package. Null for a message of another library (google.protobuf.Empty, say).
+    private static (string Text, int Line)? MessageSource(IReadOnlyList<GeneratedSourceFile> files, string name, string clientType)
+    {
+        var parts = clientType.Replace("global::", "", StringComparison.Ordinal).Split('.');
+        var ns = parts.Length > 2 ? string.Join('.', parts[..^2]) : "";
+        var declaration = new Regex($@"\bclass {Regex.Escape(name)} : pb::IMessage<{Regex.Escape(name)}>");
+        foreach (var file in files.OrderBy(f => ns.Length > 0 && Regex.IsMatch(f.Text, $@"\bnamespace {Regex.Escape(ns)}\s*[{{;]") ? 0 : 1))
+            if (declaration.Match(file.Text) is { Success: true } match) return (file.Text, LineAt(file.Text, match.Index));
+        return null;
+    }
+
+    private static int LineAt(string text, int offset) => 1 + text.AsSpan(0, offset).Count('\n');
+
     private void PopulateResources(string driverId, ConnectionSchema schema)
     {
         Resources.Clear();
@@ -857,7 +894,11 @@ public sealed class ConnectionsWindowViewModel : ViewModelBase, IDisposable
                 var name = ReadString(service, "Service") ?? "(unnamed service)";
                 var property = ReadString(service, "Property") ?? "";
                 var clientType = ReadString(service, "ClientType") ?? "";
-                var node = new ConnectionResourceViewModel(name, "gRPC service", "Client: Connections." + property);
+                var client = ClientSource(schema.Files, clientType);
+                var node = new ConnectionResourceViewModel(name, "gRPC service", "Client: Connections." + property)
+                {
+                    Source = client is { } c ? (c.Text, LineAt(c.Text, c.At)) : null,
+                };
                 if (service.TryGetProperty("Methods", out var methods) && methods.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var method in methods.EnumerateArray())
@@ -869,15 +910,28 @@ public sealed class ConnectionsWindowViewModel : ViewModelBase, IDisposable
                             (true, false) => "client streaming",
                             _ => "bidirectional streaming",
                         };
-                        node.Children.Add(new ConnectionResourceViewModel(ReadString(method, "Name") ?? "(unnamed method)", "Method",
-                            $"{ShortName(ReadString(method, "Input"))} → {ShortName(ReadString(method, "Output"))} · {kind}"));
+                        var methodName = ReadString(method, "Name") ?? "(unnamed method)";
+                        var input = ReadString(method, "Input");
+                        var output = ReadString(method, "Output");
+                        var methodNode = new ConnectionResourceViewModel(methodName, "Method", $"{ShortName(input)} → {ShortName(output)} · {kind}")
+                        {
+                            Source = client is { } owner && Regex.Match(owner.Text[owner.At..], $@"\b{Regex.Escape(methodName)}\(") is { Success: true } m
+                                ? (owner.Text, LineAt(owner.Text, owner.At + m.Index)) : null,
+                        };
+                        foreach (var (message, role) in new[] { (input, "Request message"), (output, "Response message") })
+                            if (message is not null)
+                                methodNode.Children.Add(new ConnectionResourceViewModel(ShortName(message), role, message)
+                                {
+                                    Source = MessageSource(schema.Files, ShortName(message), clientType),
+                                });
+                        node.Children.Add(methodNode);
                     }
                 }
                 node.Children.Add(new ConnectionResourceViewModel(property, "Client property", clientType));
                 Resources.Add(node);
             }
             foreach (var file in schema.Files)
-                Resources.Add(new ConnectionResourceViewModel(file.Name, "Generated protobuf type", "Generated C# source"));
+                Resources.Add(new ConnectionResourceViewModel(file.Name, "Generated protobuf type", "Generated C# source") { Source = (file.Text, 1) });
         }
         else if (driverId.Equals("openapi", StringComparison.OrdinalIgnoreCase) && data.RootElement.ValueKind == JsonValueKind.Object
                  && data.RootElement.TryGetProperty("Operations", out var operations) && operations.ValueKind == JsonValueKind.Array)

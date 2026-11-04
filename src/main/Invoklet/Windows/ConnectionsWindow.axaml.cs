@@ -1,6 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Invoklet.Services;
 using Invoklet.Windows.Models;
 
@@ -13,6 +16,8 @@ public partial class ConnectionsWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        // A row with children handles its own double tap (it expands or collapses), so the tree's handler asks for handled ones too.
+        ResourceTree.AddHandler(DoubleTappedEvent, ResourceTree_DoubleTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         Closing += OnClosing;
         Closed += (_, _) => viewModel.Dispose();
         // One Add entry per driver this Invoklet has, in registration order.
@@ -102,6 +107,18 @@ public partial class ConnectionsWindow : Window
         {
             _askingToSave = false;
         }
+    }
+
+    /// <summary>Shows a generated source at a line in Assembly Explorer; set by whoever opens the window.</summary>
+    internal Func<string, int, string, Task>? OpenSource { get; set; }
+
+    // The row under the pointer, not the selected one: a double tap on empty space opens nothing.
+    private async void ResourceTree_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        var visual = e.Source as Visual;
+        while (visual is not null and not TreeViewItem) visual = visual.GetVisualParent();
+        if (OpenSource is { } open && (visual as TreeViewItem)?.DataContext is ConnectionResourceViewModel { Source: { } source } resource)
+            await open(source.Text, source.Line, resource.Name);
     }
 
     private void ResourceTree_SelectionChanged(object? sender, SelectionChangedEventArgs e)

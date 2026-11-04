@@ -1555,6 +1555,9 @@ public partial class AssemblyExplorerWindow : Window
         return name.Length == 0 ? "Decompiled" : name;
     }
 
+    // Counts the pages put in the editor, so a scroll queued for one is dropped once another replaces it.
+    private int _appliedResults;
+
     private void ApplyResult(DecompiledMemberResult result, int caretLine, DecompilerView view)
     {
         Title = result.Title;
@@ -1566,6 +1569,13 @@ public partial class AssemblyExplorerWindow : Window
         Editor.TextArea.Caret.Line = caretLine;
         Editor.TextArea.Caret.Column = 1;
         Editor.ScrollToLine(caretLine);
+        // The new text's height (and, in a window just opened, the viewport) is only known after layout, so the
+        // scroll above can be clamped to the old extent and leave the page at its top: scroll again once laid out.
+        var applied = ++_appliedResults;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (applied == _appliedResults && Editor.TextArea.Caret.Line == caretLine) Editor.ScrollToLine(caretLine);
+        }, DispatcherPriority.Loaded);
     }
 
     // The text is IL in the IL view and C# otherwise; the grammar follows the page, so a page restored from
