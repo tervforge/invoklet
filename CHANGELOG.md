@@ -29,6 +29,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- The editor's errors and highlighting could stay missing for the last edit until the next keystroke
+  when it came just as the script's packages or connections were updated.
 - A divider between panels no longer stays highlighted after it was dragged with the mouse; it is
   highlighted while the pointer is over it, for as long as it is dragged, and when it is reached
   with the keyboard.
