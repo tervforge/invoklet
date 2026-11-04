@@ -7,6 +7,10 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Changed
 
+- The search in Preferences also looks inside each page: the settings' names and descriptions, their
+  tooltips, the choices of their lists, the values in their fields and the keys of the key bindings.
+  It opens the first page that has a match and highlights the words it matched there and in the list
+  of pages.
 - Invoklet logs only fatal errors by default (its own crashes and a start that failed); more can
   be turned on in Preferences → Logging. A level saved before keeps its value.
 - Inlay hints (the inferred type next to `var` and `foreach` variables) are off by default; turn them

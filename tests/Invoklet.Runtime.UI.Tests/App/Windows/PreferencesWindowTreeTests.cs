@@ -72,6 +72,84 @@ public class PreferencesWindowTreeTests
         }
     }
 
+    // Searching finds a setting written on a page, not only a node's name: the page is selected and the word is highlighted
+    // in its label and in the tree.
+    [AvaloniaFact]
+    public void Search_Should_FindALabelOnAPage_AndHighlightTheWord()
+    {
+        var theme = new Mock<IThemeService>();
+        theme.Setup(t => t.CurrentTheme).Returns(new ActiveTheme(
+            new InterfaceTheme("Test", ThemeVariant.Light, false),
+            new EditorTheme("Test", ThemeName.LightPlus, false)));
+        theme.Setup(t => t.InterfaceThemes).Returns([]);
+        theme.Setup(t => t.EditorThemes).Returns([]);
+        var prefs = new Mock<IPreferencesService>();
+        prefs.Setup(p => p.Keyboard).Returns(new KeyboardSettings());
+        prefs.Setup(p => p.Experimental).Returns(new ExperimentalSettings());
+        prefs.Setup(p => p.Editor).Returns(new EditorSettings());
+        prefs.Setup(p => p.Session).Returns(new SessionSettings());
+        var vm = new PreferencesWindowViewModel(theme.Object, prefs.Object, new LanguageHostRegistry());
+        var window = new PreferencesWindow(vm);
+        window.Show();
+        try
+        {
+            vm.FilterText = "restore open";
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("editor", vm.SelectedNode?.Id);
+            var label = window.GetVisualDescendants().OfType<CheckBox>()
+                .Select(c => c.Content).OfType<TextBlock>()
+                .Single(t => Invoklet.UserControls.SearchHighlight.GetText(t) == "Restore open tabs and unsaved changes");
+            var match = Assert.Single(label.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>(), r => r.FontWeight == FontWeight.SemiBold);
+            Assert.Equal("Restore open", match.Text);
+            Assert.Contains(window.GetVisualDescendants().OfType<TreeViewItem>(), item => item.DataContext is SettingsNode { Id: "editor" });
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // Not only the names: a description, a tooltip, a choice of a list and a field's value find their page too.
+    [AvaloniaTheory]
+    [InlineData("takes effect at once", "logging")]       // a description, written in the secondary colour
+    [InlineData("log files and console", "logging")]      // a tooltip
+    [InlineData("nothing is logged", "logging")]          // a choice of the verbosity list
+    [InlineData("IDE0055", "languages.csharp")]           // a value in a field (the excluded diagnostic IDs)
+    public void Search_Should_FindDescriptionsChoicesAndValues(string query, string page)
+    {
+        var settings = new AppSettings();
+        var theme = new Mock<IThemeService>();
+        theme.Setup(t => t.CurrentTheme).Returns(new ActiveTheme(
+            new InterfaceTheme("Test", ThemeVariant.Light, false),
+            new EditorTheme("Test", ThemeName.LightPlus, false)));
+        theme.Setup(t => t.InterfaceThemes).Returns([]);
+        theme.Setup(t => t.EditorThemes).Returns([]);
+        var prefs = new Mock<IPreferencesService>();
+        prefs.Setup(p => p.Keyboard).Returns(settings.Keyboard);
+        prefs.Setup(p => p.Experimental).Returns(settings.Experimental);
+        prefs.Setup(p => p.Editor).Returns(settings.Editor);
+        prefs.Setup(p => p.Session).Returns(settings.Session);
+        prefs.Setup(p => p.CSharp).Returns(settings.CSharp);
+        prefs.Setup(p => p.Logging).Returns(settings.Logging);
+        var registry = new LanguageHostRegistry();
+        registry.Register(new CSharpLanguageHostFactory(NullLoggerFactory.Instance));
+        var vm = new PreferencesWindowViewModel(theme.Object, prefs.Object, registry);
+        var window = new PreferencesWindow(vm);
+        window.Show();
+        try
+        {
+            vm.FilterText = query;
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(page, vm.SelectedNode?.Id);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static TextBlock TextOf(Window window, string text)
-        => window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == text);
+        => window.GetVisualDescendants().OfType<TextBlock>().Single(t => (Invoklet.UserControls.SearchHighlight.GetText(t) ?? t.Text) == text);
 }

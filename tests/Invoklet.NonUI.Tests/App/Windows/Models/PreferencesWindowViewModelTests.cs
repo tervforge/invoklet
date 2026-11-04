@@ -352,6 +352,76 @@ public class PreferencesWindowViewModelTests
         Assert.DoesNotContain(dotnetNode.Children, c => c.Id == "languages.vb");
     }
 
+    // The search looks inside the pages too: "open" finds Keyboard by its "Open Script" command, and shows that page.
+    [Fact]
+    public void FilterText_MatchingASettingOnAPage_Should_KeepAndSelectThatPage()
+    {
+        // Arrange
+        var vm = CreateViewModel(CreateRealRegistry());
+
+        // Act
+        vm.FilterText = "open";
+
+        // Assert
+        Assert.Contains(vm.Nodes, n => n.Id == "keyboard");
+        Assert.DoesNotContain(vm.Nodes, n => n.Id == "logging");
+        Assert.Equal("keyboard", vm.SelectedNode?.Id);
+    }
+
+    // A key binding is found by its keys too, the ones set and the defaults.
+    [Fact]
+    public void FilterText_MatchingAKey_Should_FindTheKeyboardPage()
+    {
+        // Arrange
+        var vm = CreateViewModel(CreateRealRegistry());
+
+        // Act
+        vm.FilterText = "f4"; // Dependencies, the same key on every system
+
+        // Assert
+        Assert.Equal("keyboard", Assert.Single(vm.Nodes).Id);
+    }
+
+    // Text that can change (a setting's value) is read again on every search.
+    [Fact]
+    public void AddSearchKeys_AValueThatChanges_Should_BeSearchedAsItIsNow()
+    {
+        // Arrange
+        var vm = CreateViewModel(CreateRealRegistry());
+        var value = "Menlo";
+        vm.AddSearchKeys("editor", () => [value]);
+        vm.FilterText = "consolas";
+        Assert.DoesNotContain(vm.Nodes, n => n.Id == "editor");
+
+        // Act
+        value = "Consolas";
+        vm.FilterText = "consola";
+
+        // Assert
+        Assert.Contains(vm.Nodes, n => n.Id == "editor");
+    }
+
+    // The labels a page shows are added by the window; the search then finds the page by them, and clearing the search
+    // keeps that page selected.
+    [Fact]
+    public void AddSearchKeys_Should_LetTheSearchFindTheNode_AndClearingKeepTheSelection()
+    {
+        // Arrange
+        var vm = CreateViewModel(CreateRealRegistry());
+        vm.AddSearchKeys("logging", ["Verbosity of the log files"]);
+
+        // Act
+        vm.FilterText = "verbosity";
+
+        // Assert
+        Assert.Equal("logging", Assert.Single(vm.Nodes).Id);
+        Assert.Equal("logging", vm.SelectedNode?.Id);
+
+        vm.FilterText = "";
+        Assert.Equal("logging", vm.SelectedNode?.Id);
+        Assert.Same(vm.SelectedNode, vm.Nodes.Single(n => n.Id == "logging"));
+    }
+
     private sealed class FakeThirdLanguageFactory : ILanguageHostFactory
     {
         public string Language => "fake";

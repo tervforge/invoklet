@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:Invoklet.Avalonia.Themes;assembly=Invoklet.Avalonia.Themes"
         xmlns:viewModels="clr-namespace:Invoklet.Windows.Models"
+        xmlns:uc="clr-namespace:Invoklet.UserControls"
         mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="480"
         x:Class="Invoklet.Windows.PreferencesWindow"
         Icon="/Assets/icon.ico"
@@ -70,7 +71,7 @@
 
         <!-- ── Settings navigator ────────────────────────────────────────── -->
         <Grid Grid.Column="0" RowDefinitions="Auto,*" Margin="6">
-            <TextBox Grid.Row="0"
+            <TextBox Grid.Row="0" x:Name="SearchBox"
                      Margin="0,0,0,6"
                      PlaceholderText="Search settings..."
                      Text="{Binding FilterText}"/>
@@ -84,7 +85,7 @@
                       SelectionMode="Single">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate DataType="viewModels:SettingsNode" ItemsSource="{Binding Children}">
-                        <TextBlock Text="{Binding Name}" Margin="0,1"/>
+                        <TextBlock uc:SearchHighlight.Text="{Binding Name}" uc:SearchHighlight.Query="{Binding $parent[Window].((viewModels:PreferencesWindowViewModel)DataContext).FilterText}" Margin="0,1"/>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
@@ -94,9 +95,9 @@
 
         <!-- ── Settings pages ────────────────────────────────────────────── -->
         <ScrollViewer Grid.Column="2">
-            <Panel Margin="16">
+            <Panel x:Name="Pages" Margin="16">
 
-                <StackPanel IsVisible="{Binding IsInterfaceSelected}" Spacing="6">
+                <StackPanel Tag="interface" IsVisible="{Binding IsInterfaceSelected}" Spacing="6">
                     <!-- Interface scale: everything in Invoklet's windows, code included -->
                     <TextBlock Text="Interface scale:" FontWeight="SemiBold" Margin="0,0,0,2"/>
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -154,7 +155,7 @@
 
                 </StackPanel>
 
-                <StackPanel x:Name="EditorSettingsPage" IsVisible="{Binding IsEditorSelected}"
+                <StackPanel x:Name="EditorSettingsPage" Tag="editor" IsVisible="{Binding IsEditorSelected}"
                             Spacing="{DynamicResource Invoklet.Space.Section}">
                     <StackPanel Spacing="{DynamicResource Invoklet.Space.Control}">
                         <TextBlock Classes="settings-heading" Text="Font and zoom"/>
@@ -232,7 +233,7 @@
                     </StackPanel>
                 </StackPanel>
 
-                <StackPanel IsVisible="{Binding IsDotnetSelected}" Spacing="4">
+                <StackPanel Tag="dotnet" IsVisible="{Binding IsDotnetSelected}" Spacing="4">
                     <TextBlock Text="Dotnet path:"/>
                     <TextBox PlaceholderText="Path to dotnet.exe" Text="{Binding DotnetPath}"/>
                     <TextBlock Text="Debugger path:" Margin="0,8,0,0"/>
@@ -243,13 +244,15 @@
                 <ItemsControl IsVisible="{Binding IsSystemSelected}" ItemsSource="{Binding SystemSettings}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="viewModels:SystemSettingViewModel">
-                            <CheckBox Content="{Binding Title}" IsChecked="{Binding Value}" Margin="0,0,0,8"
-                                      ToolTip.Tip="{Binding Description}"/>
+                            <CheckBox IsChecked="{Binding Value}" Margin="0,0,0,8"
+                                      ToolTip.Tip="{Binding Description}">
+                                <TextBlock uc:SearchHighlight.Text="{Binding Title}" uc:SearchHighlight.Query="{Binding $parent[Window].((viewModels:PreferencesWindowViewModel)DataContext).FilterText}"/>
+                            </CheckBox>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <StackPanel IsVisible="{Binding IsLoggingSelected}" Spacing="6">
+                <StackPanel Tag="logging" IsVisible="{Binding IsLoggingSelected}" Spacing="6">
                     <TextBlock Text="Logging:" FontWeight="SemiBold"
                                ToolTip.Tip="What Invoklet writes about its own work to its log files and console. Output of your scripts is never part of it."/>
                     <ComboBox ItemsSource="{Binding LogVerbosityChoices}"
@@ -263,7 +266,7 @@
                                Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
                 </StackPanel>
 
-                <StackPanel IsVisible="{Binding IsExperimentalSelected}" Spacing="6">
+                <StackPanel Tag="experimental" IsVisible="{Binding IsExperimentalSelected}" Spacing="6">
                     <TextBlock Text="Experimental:" FontWeight="SemiBold"
                                ToolTip.Tip="Features that work but are not finished yet. They are off by default and may change or go away."/>
                     <CheckBox Content="Invoklet analyzers (RPAD… warnings in C# scripts)"
@@ -271,25 +274,27 @@
                               ToolTip.Tip="Invoklet's own checks for code that always fails at run time, such as int.Parse(&quot;abc&quot;), shown as warnings while you type."/>
                 </StackPanel>
 
-                <StackPanel IsVisible="{Binding IsKeyboardSelected}" Spacing="4">
+                <StackPanel Tag="keyboard" IsVisible="{Binding IsKeyboardSelected}" Spacing="4">
                     <TextBlock Text="Key Bindings:" FontWeight="SemiBold"/>
                     <ItemsControl ItemsSource="{Binding KeyBindingGroups}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="viewModels:KeyBindingGroup">
                                 <StackPanel Margin="0,8,0,0">
-                                    <TextBlock Text="{Binding Category}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <TextBlock uc:SearchHighlight.Text="{Binding Category}" uc:SearchHighlight.Query="{Binding $parent[Window].((viewModels:PreferencesWindowViewModel)DataContext).FilterText}" FontWeight="SemiBold" Margin="0,0,0,4"/>
                                     <ItemsControl ItemsSource="{Binding Rows}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="viewModels:KeyBindingRowViewModel">
                                                 <Grid ColumnDefinitions="170,180,Auto,*" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
-                                                    <TextBlock Grid.Column="0" Text="{Binding Title}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                    <TextBlock Grid.Column="0" uc:SearchHighlight.Text="{Binding Title}" uc:SearchHighlight.Query="{Binding $parent[Window].((viewModels:PreferencesWindowViewModel)DataContext).FilterText}"
+                                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                     <TextBox Grid.Column="1" Text="{Binding Key, UpdateSourceTrigger=LostFocus}"
                                                              PlaceholderText="none"
                                                              ToolTip.Tip="Type a key combination such as Ctrl+Shift+S, Cmd+, or F5; leave it empty to remove the key. Changes apply when the field loses focus."/>
                                                     <Button Classes="secondary" Grid.Column="2" Content="Reset" Margin="6,0,0,0" Padding="8,2"
                                                             Command="{Binding ResetCommand}" IsVisible="{Binding IsCustomized}"
                                                             ToolTip.Tip="{Binding DefaultKeyText}"/>
-                                                    <TextBlock Grid.Column="3" Text="{Binding DefaultKeyText}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                    <TextBlock Grid.Column="3" uc:SearchHighlight.Text="{Binding DefaultKeyText}" uc:SearchHighlight.Query="{Binding $parent[Window].((viewModels:PreferencesWindowViewModel)DataContext).FilterText}"
+                                                               VerticalAlignment="Center" Margin="8,0,0,0"
                                                                IsVisible="{Binding !IsCustomized}"
                                                                Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
                                                     <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Warning}"
@@ -305,7 +310,7 @@
                     </ItemsControl>
                 </StackPanel>
 
-                <StackPanel IsVisible="{Binding IsLanguagesSelected}">
+                <StackPanel Tag="languages" IsVisible="{Binding IsLanguagesSelected}">
                     <TextBlock Text="Select a language from the list to configure its settings."
                                Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"
                                TextWrapping="Wrap"/>
@@ -317,7 +322,7 @@
                                TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <StackPanel IsVisible="{Binding IsCSharpNodeSelected}" Spacing="4">
+                <StackPanel Tag="languages.csharp" IsVisible="{Binding IsCSharpNodeSelected}" Spacing="4">
                     <CheckBox IsChecked="{Binding InlayHintsEnabled}"
                               Content="Inlay hints (inferred var/foreach types)"/>
 
