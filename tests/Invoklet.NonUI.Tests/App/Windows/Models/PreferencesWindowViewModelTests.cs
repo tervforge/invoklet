@@ -266,9 +266,11 @@ public class PreferencesWindowViewModelTests
         prefs.Setup(p => p.CSharp).Returns(csharpSettings);
         var vm = new PreferencesWindowViewModel(theme.Object, prefs.Object, CreateRealRegistry());
 
-        vm.InlayHintsEnabled = false;
+        Assert.False(vm.InlayHintsEnabled); // off by default
 
-        Assert.False(csharpSettings.InlayHintsEnabled);
+        vm.InlayHintsEnabled = true;
+
+        Assert.True(csharpSettings.InlayHintsEnabled);
         prefs.Verify(p => p.Save(), Times.Once);
     }
 

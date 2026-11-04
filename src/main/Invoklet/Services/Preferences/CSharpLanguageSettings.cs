@@ -7,9 +7,9 @@ namespace Invoklet.Services.Preferences;
 public sealed class CSharpLanguageSettings
 {
     // Inferred `var x`/`foreach (var x in ...)` type annotations
-    // (Rider/VS Code style). Global switch, same rationale as EditorSettings.CommitCharactersEnabled
-    // — some users find inline decorations distracting and want them off entirely.
-    public bool InlayHintsEnabled { get; set; } = true;
+    // (Rider/VS Code style). Off unless turned on: in a scratchpad most `var`s are short-lived and
+    // their types obvious, so the inline decorations are more distracting than useful by default.
+    public bool InlayHintsEnabled { get; set; }
 
     // Master switch for the lightbulb margin's Roslyn code
     // fixes/refactorings (RoslynCodeFixEngine). Diagnostics themselves (the squiggles) are unaffected
@@ -27,8 +27,6 @@ public sealed class CSharpLanguageSettings
     // IDE0055 ("Fix formatting") ships excluded by default: Invoklet already
     // has its own `dotnet format`-based CI gate and editor formatting (Ctrl+Format), so a live
     // "reformat this" suggestion firing on every whitespace deviation while typing was judged more
-    // noise than help for most users — same rationale as InlayHintsEnabled/CodeFixesEnabled being
-    // opt-OUT rather than opt-IN elsewhere in this file: default to what most users want, not to the
-    // maximal feature set.
+    // noise than help for most users — default to what most users want, not to the maximal feature set.
     public List<string> ExcludedDiagnosticIds { get; set; } = ["IDE0055"];
 }

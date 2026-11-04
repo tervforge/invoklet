@@ -7,6 +7,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Changed
 
+- Inlay hints (the inferred type next to `var` and `foreach` variables) are off by default; turn them
+  on in Preferences → Languages → .NET → C#. A setting saved before keeps its value.
 - At startup the window is shown once the scripts folder, the restored tabs and the connections
   are loaded, and the splash says which of them it is waiting for; if the workspace can't open
   after the setup wizard, an error window says so instead of the wizard seeming to do nothing.
