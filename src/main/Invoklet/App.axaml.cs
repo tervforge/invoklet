@@ -176,7 +176,7 @@ public class App : Application
             catch (Exception ex)
             {
                 // The same error window as a failure before the wizard, instead of a wizard that seems to do nothing.
-                logger.LogError(ex, "Opening the workspace after setup failed");
+                logger.LogCritical(ex, "Opening the workspace after setup failed");
                 var error = new Windows_SplashWindow();
                 desktop.MainWindow = error;
                 error.Show();

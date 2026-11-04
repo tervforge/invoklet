@@ -9,13 +9,13 @@ namespace Invoklet.NonUI.Tests.App.Services.Preferences;
 public sealed class LoggingSettingsTests
 {
     [Fact]
-    public void New_Settings_LogInformationLikeBefore()
+    public void New_Settings_LogOnlyFatalErrors()
     {
         // Arrange / Act
         var settings = new AppSettings();
 
         // Assert
-        Assert.Equal(LogVerbosity.Information, settings.Logging.Level);
+        Assert.Equal(LogVerbosity.Fatal, settings.Logging.Level);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class LoggingSettingsTests
         var settings = JsonSerializer.Deserialize<AppSettings>("{\"Editor\":{}}")!;
 
         // Assert
-        Assert.Equal(LogVerbosity.Information, settings.Logging.Level);
+        Assert.Equal(LogVerbosity.Fatal, settings.Logging.Level);
     }
 
     [Fact]

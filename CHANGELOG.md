@@ -7,6 +7,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Changed
 
+- Invoklet logs only fatal errors by default (its own crashes and a start that failed); more can
+  be turned on in Preferences → Logging. A level saved before keeps its value.
 - Inlay hints (the inferred type next to `var` and `foreach` variables) are off by default; turn them
   on in Preferences → Languages → .NET → C#. A setting saved before keeps its value.
 - At startup the window is shown once the scripts folder, the restored tabs and the connections

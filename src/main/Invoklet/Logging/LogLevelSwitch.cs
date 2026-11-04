@@ -7,7 +7,7 @@ namespace Invoklet.Logging;
 /// The one setting every logger of the application asks before it writes, so the level can be changed while Invoklet runs
 /// (Preferences → Logging) without building the loggers again.
 /// </summary>
-public sealed class LogLevelSwitch(LogVerbosity initial = LogVerbosity.Information)
+public sealed class LogLevelSwitch(LogVerbosity initial = LogVerbosity.Fatal)
 {
     private volatile LogVerbosity _verbosity = initial;
 
