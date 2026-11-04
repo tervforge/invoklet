@@ -22,6 +22,13 @@ One part of Invoklet is licensed differently: the Invoklet.Runtime library
 copied next to them, is licensed under the MIT License. Its text is in the
 Invoklet.Runtime.LICENSE.txt file installed next to the application.
 
+A copy of Invoklet obtained from an application store (the Apple App Store,
+the Mac App Store or the Microsoft Store) is licensed under the Mozilla Public
+License, version 2.0, instead of the GPL-3.0, together with its icon and other
+resources; the source code stays under the GPL-3.0. This is an additional
+permission under section 7 of the GPL-3.0, in the APP-STORE-EXCEPTION.txt
+file installed next to the application.
+
 Invoklet includes third-party components that are distributed under their own
 open-source licenses; those licenses apply to the respective components. They
 are listed, with their license texts, in the THIRD-PARTY-NOTICES.txt file

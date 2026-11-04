@@ -5,6 +5,12 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ## [Unreleased]
 
+### Changed
+
+- Copies of Invoklet distributed through an application store (Apple App Store, Mac App Store,
+  Microsoft Store) are licensed under the MPL-2.0, with their icon and other resources
+  (`APP-STORE-EXCEPTION.txt`); the source code and every other download stay GPL-3.0.
+
 ### Added
 
 - Double-clicking a gRPC service, method or generated file in the Connections window opens its

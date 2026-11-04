@@ -115,6 +115,11 @@ Invoklet assembly your scripts are compiled against and shipped with — is lice
 under any license. The installers show an [end-user agreement](installer/EULA.txt) that summarizes
 these terms; it adds no restrictions to the GPL-3.0.
 
+Invoklet as distributed by the maintainer through an application store (the Apple App Store, the Mac App
+Store, the Microsoft Store) — the application with its icon and other resources — is licensed under the
+[Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/) instead, an additional permission under section 7
+of the GPL-3.0 ([`APP-STORE-EXCEPTION.txt`](APP-STORE-EXCEPTION.txt)). The source code stays GPL-3.0.
+
 Third-party code keeps its own license: the [AvaloniaEdit fork](#avaloniaedit-fork) (MIT), the
 [MarkView.Avalonia fork](#markviewavalonia-fork) (MIT) and the HTML renderer in [`src/controls/Invoklet.Avalonia.HtmlRenderer`](src/controls/Invoklet.Avalonia.HtmlRenderer)
 (BSD-3-Clause and MIT), with license files next to the code. Every third-party component Invoklet ships,
