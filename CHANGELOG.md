@@ -7,6 +7,9 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Changed
 
+- At startup the window is shown once the scripts folder, the restored tabs and the connections
+  are loaded, and the splash says which of them it is waiting for; if the workspace can't open
+  after the setup wizard, an error window says so instead of the wizard seeming to do nothing.
 - Copies of Invoklet distributed through an application store (Apple App Store, Mac App Store,
   Microsoft Store) are licensed under the MPL-2.0, with their icon and other resources
   (`APP-STORE-EXCEPTION.txt`); the source code and every other download stay GPL-3.0.
