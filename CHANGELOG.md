@@ -29,6 +29,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- A run that failed right after a stopped one could name the stopped run's stage in its status
+  (such as "Package restore failed" for a compile error).
 - The editor's errors and highlighting could stay missing for the last edit until the next keystroke
   when it came just as the script's packages or connections were updated.
 - A divider between panels no longer stays highlighted after it was dragged with the mouse; it is
