@@ -3,7 +3,7 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
-## [Unreleased]
+## [0.11.4] — 2026-11-05
 
 ### Changed
 
@@ -42,6 +42,8 @@ Notable changes in each Invoklet release. Downloads are on the
   declaration, not on the line below it.
 - Refresh on a gRPC connection reads the server's contract again; it used to reuse the files
   it had read earlier when the address and metadata were the same.
+- Invoklet now finds .NET SDKs installed in the standard locations on Windows, macOS and Linux,
+  even when the `dotnet` command is not on `PATH`.
 
 ## [0.11.3] — 2026-11-03
 
@@ -1102,5 +1104,6 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.0]: https://github.com/tervforge/invoklet/releases/tag/v0.11.0
 [0.11.1]: https://github.com/tervforge/invoklet/releases/tag/v0.11.1
 [0.11.2]: https://github.com/tervforge/invoklet/releases/tag/v0.11.2
+[0.11.4]: https://github.com/tervforge/invoklet/releases/tag/v0.11.4
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5
