@@ -122,7 +122,14 @@ public class EditorTabItemControlCodeFixSettingsTests
         editor.Text = "line1\n";
         editor.TextArea.Caret.Offset = 1;
 
-        await ctrl.RefactoringsTask;
+        // The latest request, not the one running now: the caret may be checked again on a later layout pass, which asks again and
+        // leaves the first request's answer unwanted (seen on a loaded Windows CI runner).
+        for (var request = ctrl.RefactoringsTask; ; request = ctrl.RefactoringsTask)
+        {
+            await request;
+            Dispatcher.UIThread.RunJobs();
+            if (ReferenceEquals(request, ctrl.RefactoringsTask)) break;
+        }
 
         Assert.Contains(margin.Fixes, f => f.Key == "refactor-key");
     }
