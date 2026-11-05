@@ -1,6 +1,7 @@
 using System.Reactive.Linq;
 using System.Reflection;
 using System.Windows.Input;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -315,6 +316,13 @@ public class ConnectionsWindowTests
         var signIn = window.FindControl<ItemsControl>("FieldList")!.GetVisualDescendants().OfType<ComboBox>()
             .Single(c => AutomationProperties.GetName(c) == "Sign in with" && c.IsEffectivelyVisible);
         Assert.Equal("Password", ((ConnectionAuthMode)signIn.SelectedItem!).Label);
+
+        // The way of signing in, every field and the whole text line up: the same left edge and width, the password's too, though only it
+        // has a button to insert a secret beside it.
+        var column = new Control[] { signIn }.Concat(new[] { "Host", "Port", "Database", "Username", "Password", "Connection string" }.Select(Box))
+            .Select(c => (Left: c.TranslatePoint(new Point(0, 0), window)!.Value.X, c.Bounds.Width)).ToList();
+        Assert.All(column, c => Assert.Equal(column[0].Left, c.Left, 1));
+        Assert.All(column, c => Assert.Equal(column[0].Width, c.Width, 1));
         Box("Database").Text = "shop";
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Server=db.local;SSL Mode=Require;Database=shop", Box("Connection string").Text);

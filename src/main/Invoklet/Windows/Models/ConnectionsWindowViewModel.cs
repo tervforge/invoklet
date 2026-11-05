@@ -137,8 +137,11 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     public string? Description => Param.Description;
     public bool HasDescription => Param.Description is not null;
     public string? Example => Param.Example ?? Param.Default;
-    public bool IsTextBox => Param.Type is ConnectionParamType.Text or ConnectionParamType.Number or ConnectionParamType.File or ConnectionParamType.ConnectionString;
+    public bool IsTextBox => Param.Type is ConnectionParamType.Text or ConnectionParamType.Number or ConnectionParamType.File;
     public bool IsConnectionString => Param.Type is ConnectionParamType.ConnectionString;
+
+    // A connection string has its label in its own grid, beside the text, as its fields do.
+    public bool ShowsLabelAbove => !IsBoolean && !IsConnectionString;
 
     /// <summary>For a connection string: the settings the driver shows as fields, above the whole text.</summary>
     public IReadOnlyList<ConnectionStringPartViewModel> Parts { get; }
