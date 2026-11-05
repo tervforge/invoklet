@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using Invoklet.Contracts;
 using Invoklet.Services.Preferences;
 
@@ -19,6 +20,13 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
 
     // One question at a time: a script asking for three secrets, or two scripts at once, is asked once per script.
     private readonly SemaphoreSlim _asking = new(1, 1);
+
+    /// <summary>
+    /// <see cref="MayAccessAsync"/> on the UI thread, from the thread a script's request arrives on: the question is a dialog, and saving
+    /// the settings tells the windows, which update themselves on the thread that owns them.
+    /// </summary>
+    public Task<bool> MayAccessOnUiThreadAsync(SecretAccess access, CancellationToken cancellationToken)
+        => Dispatcher.UIThread.InvokeAsync(() => MayAccessAsync(access, cancellationToken));
 
     public async Task<bool> MayAccessAsync(SecretAccess access, CancellationToken cancellationToken)
     {

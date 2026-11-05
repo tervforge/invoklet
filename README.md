@@ -1,4 +1,10 @@
-# Invoklet
+# <img src="src/main/Invoklet/Assets/icon.svg" width="40" height="40" alt=""> Invoklet
+
+[![Latest release](https://img.shields.io/github/v/release/tervforge/invoklet?label=release)](https://github.com/tervforge/invoklet/releases/latest)
+[![CI](https://github.com/tervforge/invoklet/actions/workflows/dotnet-desktop.yml/badge.svg?branch=main)](https://github.com/tervforge/invoklet/actions/workflows/dotnet-desktop.yml?query=branch%3Amain)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](global.json)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-475569)](https://github.com/tervforge/invoklet/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 **A native, fast, cross-platform C# scratchpad for .NET** — free and open source.
 
@@ -14,7 +20,7 @@ block — so your notes live right next to the code.
 
 ![Invoklet main window](https://tervforge.github.io/invoklet-docs/assets/screenshots/overview.png)
 
-## Features
+## ✨ Features
 
 - **Three script kinds** — top-level statements, a `Main` program or a single expression.
 - **C# IntelliSense** — completion with automatic imports, signature help, quick info, semantic
@@ -29,7 +35,7 @@ block — so your notes live right next to the code.
 - **Command-line runner** for scripts and a **`.linq` query importer**.
 - **Visual Basic** scripts compile, run and debug too (editor intelligence is C#-only for now).
 
-## Download
+## 📦 Download
 
 Installers and portable builds are on the [releases page](https://github.com/tervforge/invoklet/releases/latest):
 
@@ -43,7 +49,7 @@ Invoklet needs the [.NET SDK](https://dotnet.microsoft.com/download) to compile 
 is not notarized yet — see the [installation guide](https://tervforge.github.io/invoklet-docs/install/)
 for the first-launch steps on each OS.
 
-## Documentation
+## 📚 Documentation
 
 - [User guide](https://tervforge.github.io/invoklet-docs/) — installation, quick start, editor,
   debugging, results, packages, command line.
@@ -51,7 +57,7 @@ for the first-launch steps on each OS.
 - [Changelog](CHANGELOG.md) — what changed in each release.
 - [Roadmap](ROADMAP.md) — what is planned next.
 
-## Building from source
+## 🛠️ Building from source
 
 You need the .NET 10 SDK (`global.json` pins the version).
 
@@ -63,7 +69,7 @@ dotnet test                                          # all tests
 
 How to send changes, and the rules the code follows, are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Contributing
+## 🤝 Contributing
 
 Bug reports, ideas and pull requests are welcome — please read [`CONTRIBUTING.md`](CONTRIBUTING.md)
 first. Report problems as [GitHub issues](https://github.com/tervforge/invoklet/issues). Opening a
@@ -89,7 +95,7 @@ for the planned Markdown preview of scripts. It keeps its upstream MIT license (
 folder); its origin and changes are described in
 [`src/controls/MarkView.Avalonia/README.md`](src/controls/MarkView.Avalonia/README.md).
 
-## Acknowledgements
+## 🙌 Acknowledgements
 
 - [netcoredbg](https://github.com/Samsung/netcoredbg) — the debugger, driven over the Debug Adapter
   Protocol.
@@ -104,7 +110,7 @@ folder); its origin and changes are described in
 - [LINQPad](https://www.linqpad.net/), [NetPad](https://github.com/tareqimbasher/NetPad) and
   [RoslynPad](https://github.com/roslynpad/roslynpad) — inspiration.
 
-## License
+## 📄 License
 
 Copyright (C) 2026 Vadim S ([svncore](https://github.com/svncore), <svnpub@proton.me>). Invoklet is licensed under the
 [GNU General Public License v3.0](LICENSE).

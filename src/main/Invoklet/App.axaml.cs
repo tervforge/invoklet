@@ -256,10 +256,9 @@ public class App : Application
         services.AddSingleton<IPackageSearchService, NuGetPackageSearchService>();
         services.AddSingleton<ILocalPackageCacheService, LocalPackageCacheService>();
         services.AddSingleton<IWindowService, WindowService>();
-        // The first time a script asks for a secret, the user is asked whether it may (on the UI thread).
+        // The first time a script asks for a secret, the user is asked whether it may.
         services.AddSingleton(sp => new SecretAccessGate(sp.GetRequiredService<IPreferencesService>(),
-            (script, secret, isSave, stopped) => Dispatcher.UIThread.InvokeAsync(
-                () => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave, stopped))));
+            (script, secret, isSave, stopped) => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave, stopped)));
         services.AddSingleton<IBuildCacheService, BuildCacheService>();
         services.AddSingleton<IResidencyPolicy, RecentTabsResidencyPolicy>();
         // Released tab content waits in the session folder of the recovery store, which owns it.
@@ -285,7 +284,7 @@ public class App : Application
             LanguageHostRegistry registry = new()
             {
                 SecretSaver = secrets.Put,
-                SecretAccessApprover = sp.GetRequiredService<SecretAccessGate>().MayAccessAsync,
+                SecretAccessApprover = sp.GetRequiredService<SecretAccessGate>().MayAccessOnUiThreadAsync,
                 SecretReader = name =>
                 {
                     (secrets as FileSecretStore)?.EncryptIfPlain();
