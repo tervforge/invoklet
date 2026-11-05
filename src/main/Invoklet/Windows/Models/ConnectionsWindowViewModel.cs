@@ -89,6 +89,13 @@ public sealed class ConnectionStringPartViewModel : ReactiveObject
     public IReadOnlyList<string> SecretNames => _field.SecretNames;
     public bool CanInsertSecret => Part.IsSecret && SecretNames.Count > 0;
 
+    /// <summary>Whether the chosen way of signing in uses this field.</summary>
+    public bool IsVisible
+    {
+        get;
+        internal set => this.RaiseAndSetIfChanged(ref field, value);
+    } = true;
+
     public string Value
     {
         get;
@@ -135,6 +142,41 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
 
     /// <summary>For a connection string: the settings the driver shows as fields, above the whole text.</summary>
     public IReadOnlyList<ConnectionStringPartViewModel> Parts { get; }
+
+    /// <summary>For a connection string: the ways of signing in to choose from, read back from the text.</summary>
+    public IReadOnlyList<ConnectionAuthMode> AuthModes => Param.AuthModes ?? [];
+    public bool HasAuthModes => IsConnectionString && AuthModes.Count > 0;
+
+    public ConnectionAuthMode? SelectedAuthMode
+    {
+        get;
+        set
+        {
+            if (value is null || value == field) return;
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(AuthHint));
+            this.RaisePropertyChanged(nameof(HasAuthHint));
+            ShowModeFields();
+            if (_composing) return;
+            // Choosing a way writes its settings and takes out the fields and settings of the others. The choice stands: a text that
+            // would read as another way (a pgpass file without a file named) doesn't take it back.
+            _composing = true;
+            try
+            {
+                Text = ConnectionStringText.WithMode(Text, value, AuthModes, Param.Parts ?? []);
+                foreach (var part in Parts) part.Value = ConnectionStringText.Read(Text, part.Part) ?? "";
+            }
+            finally { _composing = false; }
+        }
+    }
+
+    public string? AuthHint => SelectedAuthMode?.Hint;
+    public bool HasAuthHint => AuthHint is not null;
+
+    private void ShowModeFields()
+    {
+        foreach (var part in Parts) part.IsVisible = SelectedAuthMode?.Shows(part.Part) ?? true;
+    }
     public bool IsEndpoint => Param.Type is ConnectionParamType.Endpoint;
     public bool CanBrowse => Param.Type is ConnectionParamType.File;
     public bool CanInsertSecret => Param.Type is ConnectionParamType.Text or ConnectionParamType.ConnectionString && SecretNames.Count > 0;
@@ -197,6 +239,7 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
         try
         {
             foreach (var part in Parts) part.Value = ConnectionStringText.Read(text, part.Part) ?? "";
+            if (HasAuthModes) SelectedAuthMode = ConnectionStringText.Mode(text, AuthModes, Param.Parts ?? []);
         }
         finally { _composing = false; }
     }
@@ -266,6 +309,10 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
                 break;
             case ConnectionParamType.List:
                 Text = string.Join("\n", (value?.Items ?? []).Select(i => i.Text ?? ""));
+                break;
+            case ConnectionParamType.ConnectionString:
+                // A new connection starts with the server's defaults, already in the text, instead of an empty field.
+                Text = value?.Text ?? param.Default ?? "";
                 break;
             default:
                 Text = value?.Text ?? "";

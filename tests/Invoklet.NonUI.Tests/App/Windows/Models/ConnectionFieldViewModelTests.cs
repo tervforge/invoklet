@@ -108,4 +108,43 @@ public sealed class ConnectionFieldViewModelTests
 
         Assert.Equal("Host=a;Password=${secret:shop}", sut.Text);
     }
+
+    // PostgreSQL's form: the way of signing in is read from the text, hides the fields it doesn't use, and choosing another rewrites the text.
+    [Fact]
+    public void ThePostgresForm_Should_OfferTheWaysOfSigningIn()
+    {
+        var param = new Invoklet.Connectors.Postgres.PostgresConnectionDriver().Params.Single(p => p.Type == ConnectionParamType.ConnectionString);
+        var sut = new ConnectionFieldViewModel(param, MdRunValue.Of("Host=db;Username=app;Password=${secret:shop}"), []);
+        bool Shown(string key) => sut.Parts.Single(p => p.Part.Key == key).IsVisible;
+        Assert.Equal("Password", sut.SelectedAuthMode!.Label);
+        Assert.True(Shown("Password"));
+        Assert.False(Shown("Passfile"));
+
+        sut.SelectedAuthMode = sut.AuthModes.Single(m => m.Label == "pgpass file");
+
+        Assert.Equal("Host=db;Username=app", sut.Text);
+        Assert.False(Shown("Password"));
+        Assert.True(Shown("Passfile"));
+        Assert.True(sut.HasAuthHint);
+
+        sut.Text = "Host=db;Integrated Security=true";
+        Assert.Equal("Kerberos (GSSAPI)", sut.SelectedAuthMode!.Label);
+        Assert.False(Shown("Password"));
+    }
+
+    // A new connection starts with the server's own defaults written in, not with examples to copy; other parameters stay empty.
+    [Fact]
+    public void ANewDatabaseConnection_Should_StartWithTheServersDefaults()
+    {
+        var postgres = new Invoklet.Connectors.Postgres.PostgresConnectionDriver().Params.Single(p => p.Type == ConnectionParamType.ConnectionString);
+        var sqlServer = new Invoklet.Connectors.SqlServer.SqlServerConnectionDriver().Params.Single(p => p.Type == ConnectionParamType.ConnectionString);
+
+        var sut = new ConnectionFieldViewModel(postgres, null, []);
+
+        Assert.Equal("Host=localhost;Port=5432;Database=postgres;Username=postgres", sut.Text);
+        Assert.Equal(["localhost", "5432", "postgres", "postgres", "", ""], sut.Parts.Select(p => p.Value));
+        Assert.Equal("Password", sut.SelectedAuthMode!.Label);
+        Assert.Equal("Server=localhost;Database=master;User Id=sa;TrustServerCertificate=true", new ConnectionFieldViewModel(sqlServer, null, []).Text);
+        Assert.Equal("", new ConnectionFieldViewModel(new ConnectionParam("timeout", "Timeout", ConnectionParamType.Number, Default: "100"), null, []).Text);
+    }
 }

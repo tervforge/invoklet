@@ -25,16 +25,28 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
 
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.NpgsqlDbContextOptionsBuilderExtensions.UseNpgsql";
 
-    protected override string ConnectionStringExample => "Host=localhost;Database=shop;Username=app;Password=${secret:shop-password}";
+    protected override string DefaultConnectionString => "Host=localhost;Port=5432;Database=postgres;Username=postgres";
 
     // Npgsql's keys and the synonyms it takes for them.
     protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
     [
         new("Host", "Host", ["Server"], "localhost"),
         new("Port", "Port", Example: "5432"),
-        new("Database", "Database", ["DB"], "shop"),
-        new("Username", "Username", ["User ID", "UserID", "User Name", "UID", "User"], "app"),
-        new("Password", "Password", ["PWD", "PSW"], "${secret:shop-password}", IsSecret: true),
+        new("Database", "Database", ["DB"], "postgres"),
+        new("Username", "Username", ["User ID", "UserID", "User Name", "UID", "User"], "postgres"),
+        new("Password", "Password", ["PWD", "PSW"], "${secret:name}", IsSecret: true),
+        new("Passfile", "pgpass file", Example: "~/.pgpass, or PGPASSFILE"),
+    ];
+
+    private static readonly ConnectionStringPart IntegratedSecurity = new("Integrated Security", "Integrated Security");
+
+    protected override IReadOnlyList<ConnectionAuthMode> AuthModes { get; } =
+    [
+        new("Password", ["Host", "Port", "Database", "Username", "Password"]),
+        new("pgpass file", ["Host", "Port", "Database", "Username", "Passfile"],
+            Hint: "The password is read from the pgpass file: the one named here, else PGPASSFILE, else ~/.pgpass (%APPDATA%\\postgresql\\pgpass.conf on Windows)."),
+        new("Kerberos (GSSAPI)", ["Host", "Port", "Database", "Username"], [new(IntegratedSecurity, "true")],
+            Hint: "Signs in with your Kerberos ticket (kinit) or, on Windows, your Windows account; the username is optional."),
     ];
 
     protected override string AuthenticationHint =>

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Invoklet.TemplatedControls"
         xmlns:conv="clr-namespace:Invoklet.Converters"
+        xmlns:connections="clr-namespace:Invoklet.Contracts.Connections;assembly=Invoklet.Contracts"
         xmlns:viewModels="clr-namespace:Invoklet.Windows.Models"
         x:Class="Invoklet.Windows.ConnectionsWindow" x:DataType="viewModels:ConnectionsWindowViewModel"
         Title="Connections" Icon="/Assets/icon.ico"
@@ -99,11 +100,23 @@
                             <DataTemplate DataType="viewModels:ConnectionFieldViewModel">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="{Binding Label}" FontSize="12" IsVisible="{Binding !IsBoolean}"/>
+                                    <Grid ColumnDefinitions="110,*" ColumnSpacing="6" IsVisible="{Binding HasAuthModes}">
+                                        <TextBlock Text="Sign in with" FontSize="12" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Column="1" Classes="form-field" HorizontalAlignment="Stretch" ItemsSource="{Binding AuthModes}" SelectedItem="{Binding SelectedAuthMode}"
+                                                  AutomationProperties.Name="Sign in with">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="connections:ConnectionAuthMode">
+                                                    <TextBlock Text="{Binding Label}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </Grid>
+                                    <TextBlock Classes="hint" Text="{Binding AuthHint}" IsVisible="{Binding HasAuthHint}" Margin="116,0,0,0"/>
                                     <ItemsControl ItemsSource="{Binding Parts}" IsVisible="{Binding IsConnectionString}">
                                         <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="viewModels:ConnectionStringPartViewModel">
-                                                <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="6">
+                                                <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="6" IsVisible="{Binding IsVisible}">
                                                     <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"/>
                                                     <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Value}" PlaceholderText="{Binding Example}"
                                                              AutomationProperties.Name="{Binding Label}"/>

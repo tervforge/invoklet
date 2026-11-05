@@ -312,6 +312,9 @@ public class ConnectionsWindowTests
         TextBox Box(string name) => boxes.Single(b => AutomationProperties.GetName(b) == name && b.IsEffectivelyVisible);
 
         Assert.Equal("db.local", Box("Host").Text);
+        var signIn = window.FindControl<ItemsControl>("FieldList")!.GetVisualDescendants().OfType<ComboBox>()
+            .Single(c => AutomationProperties.GetName(c) == "Sign in with" && c.IsEffectivelyVisible);
+        Assert.Equal("Password", ((ConnectionAuthMode)signIn.SelectedItem!).Label);
         Box("Database").Text = "shop";
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Server=db.local;SSL Mode=Require;Database=shop", Box("Connection string").Text);

@@ -16,7 +16,7 @@ internal sealed class SqliteEfDriver : EfCoreConnectionDriver
 
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions.UseSqlite";
 
-    protected override string ConnectionStringExample => "Data Source=shop.db";
+    protected override string DefaultConnectionString => "Data Source=shop.db";
 
     protected override string AuthenticationHint => "";
 

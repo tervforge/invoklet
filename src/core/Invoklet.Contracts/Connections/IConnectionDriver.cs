@@ -54,6 +54,7 @@ public enum ConnectionParamType
 /// <param name="Description">A line of help under the field.</param>
 /// <param name="Advanced">Shown after the others, for settings most connections leave alone.</param>
 /// <param name="Parts">For a <see cref="ConnectionParamType.ConnectionString"/>: the settings the form shows as fields.</param>
+/// <param name="AuthModes">For a <see cref="ConnectionParamType.ConnectionString"/>: the ways of signing in the form offers to choose from.</param>
 public sealed record ConnectionParam(
     string Key,
     string Label,
@@ -63,7 +64,8 @@ public sealed record ConnectionParam(
     string? Example = null,
     string? Description = null,
     bool Advanced = false,
-    IReadOnlyList<ConnectionStringPart>? Parts = null);
+    IReadOnlyList<ConnectionStringPart>? Parts = null,
+    IReadOnlyList<ConnectionAuthMode>? AuthModes = null);
 
 /// <summary>The outcome of <see cref="IConnectionDriver.TestAsync"/>, in words for the user.</summary>
 public sealed record ConnectionTestResult(bool Succeeded, string Message);

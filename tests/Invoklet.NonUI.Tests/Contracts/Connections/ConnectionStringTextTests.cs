@@ -55,4 +55,35 @@ public sealed class ConnectionStringTextTests
         Assert.Null(ConnectionStringText.Read(text, Port));
         Assert.Equal("Options=\"Port=9;x\";Host=db;Port=5432", ConnectionStringText.Write(text, Port, "5432"));
     }
+
+    // The ways of signing in, as PostgreSQL offers them.
+    private static readonly ConnectionStringPart User = new("Username", "Username", ["User ID"]);
+    private static readonly ConnectionStringPart Passfile = new("Passfile", "pgpass file");
+    private static readonly ConnectionStringPart Integrated = new("Integrated Security", "Integrated Security");
+    private static readonly ConnectionStringPart[] Parts = [Host, User, Password, Passfile];
+    private static readonly ConnectionAuthMode WithPassword = new("Password", ["Host", "Username", "Password"]);
+    private static readonly ConnectionAuthMode WithPgpass = new("pgpass file", ["Host", "Username", "Passfile"]);
+    private static readonly ConnectionAuthMode WithKerberos = new("Kerberos", ["Host", "Username"], [new(Integrated, "true")]);
+    private static readonly ConnectionAuthMode[] Modes = [WithPassword, WithPgpass, WithKerberos];
+
+    // The way is read back from the text, as nothing else is kept: a switched-on setting names its way, a pgpass file named in the text
+    // its way; anything else (a password, or none, which the server looks up in pgpass anyway) the first way.
+    [Theory]
+    [InlineData("", "Password")]
+    [InlineData("Host=a;Username=u;Password=${secret:x}", "Password")]
+    [InlineData("Host=a;Username=u", "Password")]
+    [InlineData("Host=a;Passfile=/home/u/.pgpass", "pgpass file")]
+    [InlineData("Host=a;Integrated Security=true", "Kerberos")]
+    [InlineData("Host=a;Integrated Security=SSPI", "Kerberos")]
+    [InlineData("Host=a;Integrated Security=false;Password=x", "Password")]
+    public void Mode_Should_BeReadBackFromTheText(string text, string expected)
+        => Assert.Equal(expected, ConnectionStringText.Mode(text, Modes, Parts)!.Label);
+
+    // Choosing a way takes out the fields and settings of the others and writes its own; everything else stays.
+    [Theory]
+    [InlineData("Host=a;Username=u;Password=x;SSL Mode=Require", "pgpass file", "Host=a;Username=u;SSL Mode=Require")]
+    [InlineData("Host=a;Username=u;Password=x", "Kerberos", "Host=a;Username=u;Integrated Security=true")]
+    [InlineData("Host=a;Integrated Security=true;Passfile=/p", "Password", "Host=a")]
+    public void WithMode_Should_WriteThatWayOfSigningIn(string text, string mode, string expected)
+        => Assert.Equal(expected, ConnectionStringText.WithMode(text, Modes.Single(m => m.Label == mode), Modes, Parts));
 }

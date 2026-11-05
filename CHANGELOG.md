@@ -26,7 +26,9 @@ Notable changes in each Invoklet release. Downloads are on the
   `Console.Write`, and offers to remove just that `.Dump()` call or the output line.
 - The Connections window edits a PostgreSQL or SQL Server connection string through a field per setting
   (host, port, database, user, password with a secret), above the whole string, which keeps every
-  other setting as written.
+  other setting as written. **Sign in with** chooses the way of signing in (PostgreSQL: password, pgpass
+  file, Kerberos; SQL Server: login, Windows, Microsoft Entra ID) and shows only its fields. A new
+  connection starts with the server's defaults (`postgres` on localhost:5432, `master` as `sa`).
 
 ### Fixed
 

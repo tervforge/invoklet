@@ -16,6 +16,19 @@ public sealed record ConnectionStringPart(string Key, string Label, IReadOnlyLis
         || (Synonyms ?? []).Any(synonym => string.Equals(key.Trim(), synonym, StringComparison.OrdinalIgnoreCase));
 }
 
+/// <summary>A setting a way of signing in writes into the connection string, such as <c>Integrated Security=true</c>.</summary>
+public sealed record ConnectionStringSetting(ConnectionStringPart Part, string Value);
+
+/// <summary>
+/// A way of signing in to the server (a password, a pgpass file, Windows): the fields it shows, by <see cref="ConnectionStringPart.Key"/>,
+/// and the settings it writes. The connection string is all that is kept, so the way is read back from it.
+/// </summary>
+public sealed record ConnectionAuthMode(string Label, IReadOnlyList<string> Parts, IReadOnlyList<ConnectionStringSetting>? Settings = null, string? Hint = null)
+{
+    /// <summary>Whether signing in this way uses the field.</summary>
+    public bool Shows(ConnectionStringPart part) => Parts.Any(key => string.Equals(key, part.Key, StringComparison.OrdinalIgnoreCase));
+}
+
 /// <summary>
 /// Reads and writes one setting of a <c>key=value;key=value</c> connection string, leaving the rest of the text as it was written: the keys
 /// keep their letter case, and settings the form has no field for stay where they are. Values with <c>;</c> are quoted, as ADO.NET does.
@@ -47,6 +60,34 @@ public static class ConnectionStringText
         }
         return string.Join(";", segments.Select(s => s.Key is null ? s.Value : s.Key + "=" + s.Value));
     }
+
+    /// <summary>
+    /// The way of signing in the text uses: the first whose settings it has (switched on); else the first of the others that shows every
+    /// field the text fills (a pgpass file named in the text); else the first. A text without a password reads as the first way, with the
+    /// password left empty, which the server then looks up as it would anyway.
+    /// </summary>
+    public static ConnectionAuthMode? Mode(string text, IReadOnlyList<ConnectionAuthMode> modes, IReadOnlyList<ConnectionStringPart> parts)
+    {
+        if (modes.Count == 0) return null;
+        if (modes.FirstOrDefault(m => m.Settings is { Count: > 0 } settings && settings.All(s => IsOn(Read(text, s.Part)))) is { } withSettings)
+            return withSettings;
+        var filled = parts.Where(p => !string.IsNullOrEmpty(Read(text, p))).ToList();
+        return modes.FirstOrDefault(m => m.Settings is not { Count: > 0 } && filled.All(m.Shows)) ?? modes[0];
+    }
+
+    /// <summary>The text signing in the way of <paramref name="mode"/>: the fields and settings of the other ways taken out, its settings written.</summary>
+    public static string WithMode(string text, ConnectionAuthMode mode, IReadOnlyList<ConnectionAuthMode> modes, IReadOnlyList<ConnectionStringPart> parts)
+    {
+        var shownByAny = parts.Where(p => modes.Any(m => m.Shows(p))).ToList();
+        foreach (var part in shownByAny.Where(p => !mode.Shows(p))) text = Write(text, part, null);
+        foreach (var setting in modes.Where(m => m != mode).SelectMany(m => m.Settings ?? [])) text = Write(text, setting.Part, null);
+        foreach (var setting in mode.Settings ?? []) text = Write(text, setting.Part, setting.Value);
+        return text;
+    }
+
+    // A switch written as true, yes or sspi; an empty or false one is off.
+    private static bool IsOn(string? value) =>
+        value is { Length: > 0 } && !value.Equals("false", StringComparison.OrdinalIgnoreCase) && !value.Equals("no", StringComparison.OrdinalIgnoreCase);
 
     // A piece between semicolons: its key as written (null for a piece without '=', kept as it is) and its value as written.
     private sealed record Segment(string? Key, string Value);

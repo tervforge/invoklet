@@ -25,15 +25,28 @@ public sealed class SqlServerConnectionDriver : EfCoreConnectionDriver
 
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions.UseSqlServer";
 
-    protected override string ConnectionStringExample => "Server=localhost;Database=Shop;User Id=app;Password=${secret:shop-password};TrustServerCertificate=true";
+    // TrustServerCertificate: a local server's certificate is its own, which SqlClient would refuse.
+    protected override string DefaultConnectionString => "Server=localhost;Database=master;User Id=sa;TrustServerCertificate=true";
 
     // Microsoft.Data.SqlClient's keys and the synonyms it takes for them.
     protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
     [
         new("Server", "Server", ["Data Source", "Address", "Addr", "Network Address"], "localhost"),
-        new("Database", "Database", ["Initial Catalog"], "Shop"),
-        new("User Id", "User", ["User ID", "UID", "User", "Username", "User Name"], "app"),
-        new("Password", "Password", ["PWD"], "${secret:shop-password}", IsSecret: true),
+        new("Database", "Database", ["Initial Catalog"], "master"),
+        new("User Id", "User", ["User ID", "UID", "User", "Username", "User Name"], "sa"),
+        new("Password", "Password", ["PWD"], "${secret:name}", IsSecret: true),
+    ];
+
+    private static readonly ConnectionStringPart IntegratedSecurity = new("Integrated Security", "Integrated Security", ["Trusted_Connection"]);
+    private static readonly ConnectionStringPart Authentication = new("Authentication", "Authentication");
+
+    protected override IReadOnlyList<ConnectionAuthMode> AuthModes { get; } =
+    [
+        new("SQL Server login", ["Server", "Database", "User Id", "Password"]),
+        new("Windows (Integrated Security)", ["Server", "Database"], [new(IntegratedSecurity, "true")],
+            Hint: "Signs in with your Windows account; on macOS and Linux it needs a Kerberos ticket (kinit)."),
+        new("Microsoft Entra ID", ["Server", "Database", "User Id"], [new(Authentication, "Active Directory Default")],
+            Hint: "Signs in with the account Azure tools are signed in with (az login, Visual Studio, an environment's managed identity); the user is optional."),
     ];
 
     protected override string AuthenticationHint =>

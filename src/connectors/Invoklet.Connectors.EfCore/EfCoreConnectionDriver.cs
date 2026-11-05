@@ -38,10 +38,14 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     /// <summary>The EF Core call that opens the database: <c>global::…UseNpgsql</c>, taking the options builder and the connection string.</summary>
     protected abstract string UseCall { get; }
 
-    protected abstract string ConnectionStringExample { get; }
+    /// <summary>What a new connection starts with: the server's own defaults (its local host, port, database and administrator).</summary>
+    protected abstract string DefaultConnectionString { get; }
 
     /// <summary>The settings of the connection string the form shows as fields of their own; the rest are written in the text.</summary>
     protected virtual IReadOnlyList<ConnectionStringPart> ConnectionStringParts => [];
+
+    /// <summary>The ways of signing in the form offers; the first is the one of a new connection.</summary>
+    protected virtual IReadOnlyList<ConnectionAuthMode> AuthModes => [];
 
     /// <summary>What the form says about signing in without a password in the text.</summary>
     protected abstract string AuthenticationHint { get; }
@@ -65,10 +69,10 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
 
     public virtual IReadOnlyList<ConnectionParam> Params =>
     [
-        new(ConnectionStringKey, "Connection string", ConnectionParamType.ConnectionString, Required: true, Example: ConnectionStringExample,
+        new(ConnectionStringKey, "Connection string", ConnectionParamType.ConnectionString, Required: true, Default: DefaultConnectionString,
             Description: "Fill in the fields, or write the whole connection string; settings without a field go in the text. "
                 + "Write the password as ${secret:name} to keep it in the Secret Store. " + AuthenticationHint,
-            Parts: ConnectionStringParts),
+            Parts: ConnectionStringParts, AuthModes: AuthModes),
         new(SchemaKey, "Schema", Description: "Optional. Read only the tables of this schema; without it all schemas are read."),
     ];
 
