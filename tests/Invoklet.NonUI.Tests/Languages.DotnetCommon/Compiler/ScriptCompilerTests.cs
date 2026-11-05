@@ -82,8 +82,8 @@ public sealed class ScriptCompilerTests : IAsyncDisposable
     private static string Errors(ProcessCompilerResult result) => string.Join("\n", result.Errors.Select(e => $"{e.Code} {e.Message}"));
 
     [Theory]
-    [InlineData(false, "#if Invoklet\nConsole.WriteLine(\"Invoklet\");\n#else\nConsole.WriteLine(\"Other\");\n#endif")]
-    [InlineData(true, "#If Invoklet Then\nConsole.WriteLine(\"Invoklet\")\n#Else\nConsole.WriteLine(\"Other\")\n#End If")]
+    [InlineData(false, "#if INVOKLET\nConsole.WriteLine(\"Invoklet\");\n#else\nConsole.WriteLine(\"Other\");\n#endif")]
+    [InlineData(true, "#If INVOKLET Then\nConsole.WriteLine(\"Invoklet\")\n#Else\nConsole.WriteLine(\"Other\")\n#End If")]
     public async Task Compilation_Should_DefineInvokletForCSharpAndVisualBasic(bool vb, string code)
     {
         var output = await RunAsync(Options(), code, vb);

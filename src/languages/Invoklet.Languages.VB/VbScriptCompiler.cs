@@ -101,7 +101,7 @@ public sealed class VbScriptCompiler(CompiledDotnetLanguageHostOptions options, 
             new("CONFIG", "Debug"),
             new("DEBUG", -1),
             new("TRACE", -1),
-            new("Invoklet", -1),
+            new("INVOKLET", -1),
             new("PLATFORM", "AnyCPU"),
             new("_MyType", "Empty"),
         };
