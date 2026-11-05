@@ -6,34 +6,36 @@
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-475569)](https://github.com/tervforge/invoklet/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-**A native, fast, cross-platform C# scratchpad for .NET** — free and open source.
+**A desktop scratchpad for C# and .NET.** Try a LINQ query, call an API, or check what's in a database.
+Write a few lines, hit Run, and use `.Dump()` to see what came back. If the experiment turns into
+something you'll use again, save it as a `.inv` file with your notes right alongside the code.
 
-- **Native** — a real desktop app built on [Avalonia UI](https://avaloniaui.net/), with no embedded
-  browser: even `.Dump()` results are drawn by Invoklet's own renderer.
-- **Fast** — scripts compile in-process with Roslyn, without MSBuild, and an unchanged script skips the
-  build entirely.
-- **Cross-platform** — the same app on Windows, Linux and macOS (Apple Silicon and Intel).
-
-Write C# against the .NET SDK you already have, run it in a keystroke and explore the results with
-`.Dump()`. Every script is a `.inv` file — Markdown with a short YAML header and one runnable code
-block — so your notes live right next to the code.
+Invoklet is free and open source and runs on Windows, Linux, and macOS.
 
 ![Invoklet main window](https://tervforge.github.io/invoklet-docs/assets/screenshots/overview.png)
 
 ## ✨ Features
 
-- **Three script kinds** — top-level statements, a `Main` program or a single expression.
-- **C# IntelliSense** — completion with automatic imports, signature help, quick info, semantic
-  highlighting, rename, Find References, Go to Definition, formatting.
-- **Live diagnostics** — compiler errors, Roslyn analyzers, Invoklet's own analyzers and lightbulb
-  quick fixes as you type.
-- **Debugger** — breakpoints with conditions and hit counts, stepping, locals, watches, call stack,
-  threads and exception breaks (via [netcoredbg](https://github.com/Samsung/netcoredbg)).
-- **Rich results** — `.Dump()` tables, live-updating `DumpContainer`, progress bars, interactive input.
-- **NuGet packages and references** from a Dependencies window; **Assembly Explorer** with decompiled
-  C#, IL, resources and usage analysis.
-- **Command-line runner** for scripts and a **`.linq` query importer**.
-- **Visual Basic** scripts compile, run and debug too (editor intelligence is C#-only for now).
+- 📝 **Start small.** Run one expression, a few statements, or a full `Main` in C# or Visual Basic.
+  Keep notes in the `.inv` file and preview them beside the code.
+- 🔎 **Find that script from last week.** Quick Open searches your scripts and bundled samples.
+  Unsaved tabs can come back when you restart.
+- 💡 **Let the editor lend a hand.** C# IntelliSense suggests code and imports, and the lightbulb
+  offers quick fixes and refactorings.
+- 🐛 **See where it went sideways.** Set a breakpoint, step through the script, and inspect locals
+  and watches.
+- 🧰 **Bring your own libraries.** Add NuGet packages or DLL references, then peek at decompiled C#
+  and IL in Assembly Explorer.
+- 🔌 **Call an API.** Use plain HTTP or generated OpenAPI/Swagger and gRPC clients. Browse the
+  contract before you call it.
+- 🗃️ **Poke around a database.** Browse SQLite, PostgreSQL, and SQL Server schemas and query them
+  through typed EF Core contexts.
+- 🔐 **Keep secrets out of scripts.** Store credentials by name and reuse them in scripts and
+  connection settings.
+- 📊 **Give it a `.Dump()`.** Inspect objects and tables, show live progress, or prompt for input.
+  Export a table to CSV or save the whole result as HTML.
+- ▶️ **Run it again with different inputs.** Save sets of typed `Arguments` and pick one in the
+  toolbar or via `--args-set` in the CLI. Bring your old LINQPad queries along with the `.linq` importer.
 
 ## 📦 Download
 
@@ -51,11 +53,10 @@ for the first-launch steps on each OS.
 
 ## 📚 Documentation
 
-- [User guide](https://tervforge.github.io/invoklet-docs/) — installation, quick start, editor,
-  debugging, results, packages, command line.
-- [Scripts and `.inv` files](https://tervforge.github.io/invoklet-docs/scripts/) — the script format.
-- [Changelog](CHANGELOG.md) — what changed in each release.
-- [Roadmap](ROADMAP.md) — what is planned next.
+- [User guide](https://tervforge.github.io/invoklet-docs/) — from your first run to your first breakpoint.
+- [Scripts and `.inv` files](https://tervforge.github.io/invoklet-docs/scripts/) — how code, notes, and settings fit in one file.
+- [Changelog](CHANGELOG.md) — what's new.
+- [Roadmap](ROADMAP.md) — what's next.
 
 ## 🛠️ Building from source
 
@@ -91,7 +92,7 @@ A **fork of [MarkView.Avalonia](https://github.com/Kryptos-FR/MarkView.Avalonia)
 SyntaxHighlighting extension, taken from the 12.3.0 release, is kept in
 [`src/controls/MarkView.Avalonia`](src/controls/MarkView.Avalonia) and
 [`src/controls/MarkView.Avalonia.SyntaxHighlighting`](src/controls/MarkView.Avalonia.SyntaxHighlighting)
-for the planned Markdown preview of scripts. It keeps its upstream MIT license (`LICENSE.md` in each
+for the Markdown preview of scripts. It keeps its upstream MIT license (`LICENSE.md` in each
 folder); its origin and changes are described in
 [`src/controls/MarkView.Avalonia/README.md`](src/controls/MarkView.Avalonia/README.md).
 
