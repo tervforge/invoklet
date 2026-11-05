@@ -20,7 +20,8 @@
     <ProjectReference Include="..\..\connectors\Invoklet.Connectors.Postgres\Invoklet.Connectors.Postgres.csproj" />
     <ProjectReference Include="..\..\connectors\Invoklet.Connectors.SqlServer\Invoklet.Connectors.SqlServer.csproj" />
     <ProjectReference Include="..\..\core\Invoklet.Format.MdRun\Invoklet.Format.MdRun.csproj" />
-    <ProjectReference Include="..\..\runtime\Invoklet.Runtime\Invoklet.Runtime.csproj" />
+    <!-- Built and copied beside the runner for the scripts to compile against; the runner itself never links it. -->
+    <ProjectReference Include="..\..\runtime\Invoklet.Runtime\Invoklet.Runtime.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.CSharp\Invoklet.Languages.CSharp.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.VB\Invoklet.Languages.VB.csproj" />
   </ItemGroup>
