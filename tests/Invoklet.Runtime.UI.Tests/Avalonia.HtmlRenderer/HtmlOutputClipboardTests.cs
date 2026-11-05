@@ -67,4 +67,49 @@ public class HtmlOutputClipboardTests
         }
         finally { window.Close(); }
     }
+
+    // On macOS the menu bar takes Cmd+A and Cmd+C before the results see them: its Edit commands call these.
+    [AvaloniaFact]
+    public async Task SelectAllAndCopy_Should_DoWhatTheirKeysDo_ForTheEditMenu()
+    {
+        var output = new HtmlPanel { Text = "<div>Menu copied text</div>" };
+        var window = new Window { Width = 600, Height = 300, Content = output };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            output.SelectAll();
+            Assert.Contains("Menu copied text", output.SelectedText);
+            output.Copy();
+            string? text = null;
+            for (var i = 0; i < 100 && text?.Contains("Menu copied text") != true; i++)
+            {
+                var data = await window.Clipboard!.TryGetDataAsync();
+                text = data is null ? null : await data.TryGetTextAsync();
+                await Task.Delay(10);
+            }
+            Assert.Contains("Menu copied text", text);
+        }
+        finally { window.Close(); }
+    }
+
+    // A right click (Control-click on macOS) opens the context menu to copy the selection: it must not clear it, even off the text.
+    [AvaloniaFact]
+    public void RightClick_Should_KeepTheSelection_EvenOffTheText()
+    {
+        var output = new HtmlPanel { Text = "<div>Kept text</div>" };
+        var window = new Window { Width = 600, Height = 300, Content = output };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            output.SelectAll();
+
+            window.MouseDown(new Point(500, 250), MouseButton.Right);
+            window.MouseUp(new Point(500, 250), MouseButton.Right);
+
+            Assert.Contains("Kept text", output.SelectedText);
+        }
+        finally { window.Close(); }
+    }
 }

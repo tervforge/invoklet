@@ -170,7 +170,8 @@ internal sealed class SelectionHandler : IDisposable
     /// <param name="isMouseInContainer"> </param>
     public void HandleMouseDown(RControl parent, RPoint loc, bool isMouseInContainer)
     {
-            bool clear = !isMouseInContainer;
+            // A right click keeps the selection: the context menu is opened to copy it, wherever the click lands.
+            bool clear = !isMouseInContainer && !parent.RightMouseButton;
             if (isMouseInContainer)
             {
                 _mouseDownInControl = true;
@@ -198,7 +199,7 @@ internal sealed class SelectionHandler : IDisposable
                     {
                         _contextMenuHandler.ShowContextMenu(parent, rect, link);
                     }
-                    clear = rect == null || !rect.Selected;
+                    clear = false;
                 }
             }
 

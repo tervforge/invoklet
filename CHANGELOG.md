@@ -3,6 +3,15 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- On macOS, Cmd+C and Cmd+A copy and select the results again: the menu bar took the keys and its Edit
+  commands acted only on the editor and text fields.
+- A right click (Control-click on macOS) in the results no longer clears the selection, so its context
+  menu can copy it.
+
 ## [0.11.4] — 2026-11-05
 
 ### Changed

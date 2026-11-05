@@ -455,6 +455,14 @@ public sealed class HtmlContainer : IDisposable
         if (key.Control && (key.AKeyCode || key.CKeyCode)) e.Handled = true;
     }
 
+    /// <summary>Selects all the html, as the Select All key does.</summary>
+    public void SelectAll(Control parent)
+        => _htmlContainerInt.HandleKeyDown(new ControlAdapter(_avaloniaAdapter, parent), new RKeyEvent(true, true, false));
+
+    /// <summary>Copies the selection to the clipboard, as the Copy key does.</summary>
+    public void Copy(Control parent)
+        => _htmlContainerInt.HandleKeyDown(new ControlAdapter(_avaloniaAdapter, parent), new RKeyEvent(true, false, true));
+
     /// <summary>
     /// Adds a font family to be used in html rendering.<br/>
     /// The added font will be used by all rendering function including <see cref="HtmlContainer"/> and all Avalonia controls.

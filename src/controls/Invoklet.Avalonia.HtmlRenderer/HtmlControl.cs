@@ -331,6 +331,12 @@ public class HtmlControl : Control
         get { return _htmlContainer.SelectedText; }
     }
 
+    /// <summary>Selects all the html, as the Select All key does: for a menu command, which on macOS gets the key first.</summary>
+    public void SelectAll() => _htmlContainer.SelectAll(this);
+
+    /// <summary>Copies the selection to the clipboard, as the Copy key does: for a menu command, which on macOS gets the key first.</summary>
+    public void Copy() => _htmlContainer.Copy(this);
+
     /// <summary>
     /// Copy the currently selected html segment with style.
     /// </summary>

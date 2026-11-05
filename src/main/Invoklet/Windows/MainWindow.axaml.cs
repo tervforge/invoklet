@@ -7,6 +7,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
+using Invoklet.Avalonia.HtmlRenderer;
 using Invoklet.Desktop;
 using Invoklet.Format.MdRun;
 using Invoklet.Services.Desktop;
@@ -437,9 +438,9 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
                 new MainMenuCommand("_Redo", EditCommand(e => e.Redo(), t => t.Redo()), Hotkey(h => h.Redo)),
                 new MainMenuSeparator(),
                 new MainMenuCommand("Cu_t", EditCommand(e => e.Cut(), t => t.Cut()), Hotkey(h => h.Cut)),
-                new MainMenuCommand("_Copy", EditCommand(e => e.Copy(), t => t.Copy()), Hotkey(h => h.Copy)),
+                new MainMenuCommand("_Copy", EditCommand(e => e.Copy(), t => t.Copy(), h => h.Copy()), Hotkey(h => h.Copy)),
                 new MainMenuCommand("_Paste", EditCommand(e => e.Paste(), t => t.Paste()), Hotkey(h => h.Paste)),
-                new MainMenuCommand("Select _All", EditCommand(e => e.SelectAll(), t => t.SelectAll()), Hotkey(h => h.SelectAll)),
+                new MainMenuCommand("Select _All", EditCommand(e => e.SelectAll(), t => t.SelectAll(), h => h.SelectAll()), Hotkey(h => h.SelectAll)),
                 new MainMenuSeparator(),
                 Item("_Format Document", KeyCommands.Format),
                 Item("Format Se_lection", KeyCommands.FormatSelection),
@@ -522,9 +523,11 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
             _lastTextTarget = target;
     }
 
+    // The results (HtmlControl) are a target too: on macOS the menu bar takes Cmd+C and Cmd+A before they reach it.
     private static Control? FindTextTarget(Control control)
         => (Control?)control.FindAncestorOfType<TextEditor>(includeSelf: true)
-           ?? control.FindAncestorOfType<TextBox>(includeSelf: true);
+           ?? (Control?)control.FindAncestorOfType<TextBox>(includeSelf: true)
+           ?? control.FindAncestorOfType<HtmlControl>(includeSelf: true);
 
     internal Control? EditTarget
     {
@@ -537,11 +540,15 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
         }
     }
 
-    private ReactiveCommand<Unit, Unit> EditCommand(Action<TextEditor> onEditor, Action<TextBox> onTextBox)
+    private ReactiveCommand<Unit, Unit> EditCommand(Action<TextEditor> onEditor, Action<TextBox> onTextBox, Action<HtmlControl>? onHtml = null)
         => ReactiveCommand.Create(() =>
         {
             switch (EditTarget)
             {
+                case HtmlControl html when onHtml is not null:
+                    onHtml(html);
+                    html.Focus();
+                    break;
                 case TextEditor editor:
                     onEditor(editor);
                     editor.TextArea.Focus();
