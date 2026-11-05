@@ -21,6 +21,8 @@ Notable changes in each Invoklet release. Downloads are on the
   `Util.SetSecret` and the answered secrets in the same Secret Store as the window.
 - The first time a script reads or saves a secret, Invoklet asks whether it may: Don't Allow, Allow
   Once (until Invoklet closes) or Always Allow (remembered for the file).
+- The editor warns when a secret from `Util.GetSecret` is written to the output by `.Dump()` or
+  `Console.Write`, and offers to remove just that `.Dump()` call or the output line.
 
 ### Fixed
 
