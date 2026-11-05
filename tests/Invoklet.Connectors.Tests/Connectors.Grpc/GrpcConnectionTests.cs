@@ -383,6 +383,11 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
         Assert.Equal("2 services: inventory.v1.Audit, inventory.v1.Stock.", schema.Summary);
         Assert.Contains(schema.Files, f => f.Name == "Inventory/V1/Inventory.cs");
         Assert.Contains(schema.Files, f => f.Name == "Inventory/V1/InventoryGrpc.cs");
+        // The shapes the Connections window finds a client, its methods and a message by.
+        var grpc = schema.Files.Single(f => f.Name == "Inventory/V1/InventoryGrpc.cs").Text;
+        Assert.Matches(@"\bnamespace Inventory\.V1\s*[{;]", grpc);
+        Assert.Matches(@"\bclass Stock\b[\s\S]*\bclass StockClient\b[\s\S]*\bGetItem\(", grpc);
+        Assert.Contains(schema.Files, f => f.Text.Contains("class ItemRequest : pb::IMessage<ItemRequest>", StringComparison.Ordinal));
         Assert.DoesNotContain(schema.Files, f => f.Name.Contains("Timestamp", StringComparison.Ordinal)); // Google.Protobuf has it
         Assert.All(schema.Files, f => Assert.Contains("#nullable enable annotations", f.Text, StringComparison.Ordinal));
         // Read once: nothing changes the next time.
@@ -416,6 +421,8 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
             Assert.Null(definition.AssemblyPath);
             Assert.NotNull(definition.GeneratedDocument);
             Assert.Contains("StockClient", definition.GeneratedDocument!.Value.Text, StringComparison.Ordinal);
+            var (text, line) = definition.GeneratedDocument!.Value;
+            Assert.Contains(" Stock ", text.Split('\n')[line - 1], StringComparison.Ordinal); // the line of its declaration
         }
 
         var secretsFile = Path.Combine(_folder, "secrets.json");

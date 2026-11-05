@@ -60,7 +60,7 @@ public class PreferencesWindowViewModelLoggingTests
         var sut = fixture.CreateSut();
 
         // Act
-        sut.SelectedLogVerbosity = LogVerbosityChoice.All.Single(c => c.Value == LogVerbosity.Information);
+        sut.SelectedLogVerbosity = LogVerbosityChoice.All.Single(c => c.Value == fixture.Logging.Level);
 
         // Assert
         fixture.Prefs.Verify(p => p.Save(), Times.Never);

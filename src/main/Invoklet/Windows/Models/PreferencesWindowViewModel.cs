@@ -101,6 +101,11 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
 
         themeService.ThemeChanged += OnThemeChanged;
 
+        // The settings the pages list from data, with their descriptions and current keys; the window adds what is written
+        // on its pages (AddSearchKeys).
+        AddSearchKeys("keyboard", () => KeyBindings.SelectMany(row => new[] { row.Category, row.Title, row.Key, row.DefaultKey }));
+        AddSearchKeys(SystemNode.Id, () => SystemSettings.SelectMany(setting => new[] { setting.Title, setting.Description }));
+
         RebuildNodes();
         _selectedNode = _interfaceNode;
     }
@@ -115,8 +120,53 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
             if (_filterText == value) return;
             this.RaiseAndSetIfChanged(ref _filterText, value);
             RebuildNodes();
+            SelectAfterFilter();
         }
     }
+
+    // What each node's page shows, by node ID — the settings' names, their descriptions and their values — read again on
+    // every search, as values change: the search finds a node by them as well as by its own name.
+    private readonly Dictionary<string, List<Func<IEnumerable<string?>>>> _searchKeys = new(StringComparer.Ordinal);
+
+    /// <summary>Adds text shown on a node's page, which the search then finds the node by.</summary>
+    internal void AddSearchKeys(string nodeId, IEnumerable<string> keys)
+    {
+        var fixedKeys = keys.ToList();
+        AddSearchKeys(nodeId, () => fixedKeys);
+    }
+
+    /// <summary>Adds text shown on a node's page that can change, such as a setting's value; read again on every search.</summary>
+    internal void AddSearchKeys(string nodeId, Func<IEnumerable<string?>> keys)
+    {
+        if (!_searchKeys.TryGetValue(nodeId, out var list)) _searchKeys[nodeId] = list = [];
+        list.Add(keys);
+        if (!string.IsNullOrWhiteSpace(_filterText)) RebuildNodes();
+    }
+
+    private bool Matches(string? text) => text?.Contains(_filterText.Trim(), StringComparison.OrdinalIgnoreCase) == true;
+
+    // The node itself matches: its name, or something on its page.
+    private bool MatchesItself(SettingsNode node) =>
+        Matches(node.Name) || _searchKeys.TryGetValue(node.Id, out var keys) && keys.Any(key => key().Any(Matches));
+
+    // While searching, the page shown is one that matches, so its highlighted settings are in sight; once the search is
+    // cleared, the same page stays selected in the whole tree again.
+    private void SelectAfterFilter()
+    {
+        var selectedId = _selectedNode?.Id;
+        if (string.IsNullOrWhiteSpace(_filterText))
+        {
+            SelectedNode = Flatten(Nodes).FirstOrDefault(n => n.Id == selectedId) ?? _interfaceNode;
+            return;
+        }
+        var visible = Flatten(Nodes).ToList();
+        SelectedNode = visible.FirstOrDefault(n => n.Id == selectedId && MatchesItself(n))
+            ?? visible.FirstOrDefault(MatchesItself)
+            ?? visible.FirstOrDefault(n => n.Id == selectedId);
+    }
+
+    private static IEnumerable<SettingsNode> Flatten(IEnumerable<SettingsNode> nodes) =>
+        nodes.SelectMany(n => new[] { n }.Concat(Flatten(n.Children)));
 
     public SettingsNode? SelectedNode
     {
@@ -176,17 +226,20 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         IsGenericLanguagePlaceholderVisible ? $"No {_selectedNode!.Name}-specific settings yet." : null;
 
     // Rebuilds the displayed (possibly filtered) tree from the fixed full tree. A node survives the
-    // filter if its own name matches or any descendant's does, so e.g. typing "key" still surfaces
+    // filter if its own name or a setting on its page matches, or a descendant does, so e.g. typing "key" still surfaces
     // "Keyboard", and typing "c#" surfaces "Languages" (for its matching child) even though the
     // parent's own name doesn't match.
     private void RebuildNodes()
     {
+        // The rebuilt tree holds new node objects, which the tree view's selection doesn't know: the selected page is kept by its ID.
+        var selectedId = _selectedNode?.Id;
         Nodes.Clear();
         foreach (var node in _fullTree)
         {
             var filtered = FilterNode(node);
             if (filtered is not null) Nodes.Add(filtered);
         }
+        if (Flatten(Nodes).FirstOrDefault(n => n.Id == selectedId) is { } same) SelectedNode = same;
     }
 
     private SettingsNode? FilterNode(SettingsNode node)
@@ -199,7 +252,7 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
             .Select(c => c!)
             .ToList();
 
-        var selfMatches = node.Name.Contains(_filterText, StringComparison.OrdinalIgnoreCase);
+        var selfMatches = MatchesItself(node);
         if (!selfMatches && matchingChildren.Count == 0) return null;
 
         // Comparing counts alone (the original check here) wrongly treated "every child slot still

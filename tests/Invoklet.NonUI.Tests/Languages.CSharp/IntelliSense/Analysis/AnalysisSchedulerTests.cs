@@ -123,6 +123,43 @@ public sealed class AnalysisSchedulerTests
         Assert.Equal(["old", "new"], analysed);
     }
 
+    // The race the test above can't show: a stale pass has checked that nothing cancelled it and goes to analyse its text again,
+    // and right then a newer notification comes. The repeat arrives after it, and must not take its place: it used to cancel the
+    // newer pass and become the last one, so the newer text was never analysed and no diagnostics came for it.
+    [Fact]
+    public async Task Repeat_ANewerNotificationCameBeforeIt_IsDropped_AndTheNewerTextIsAnalysed()
+    {
+        // Arrange
+        var fixture = new AnalysisSchedulerFixture();
+        var sut = fixture.CreateSut();
+        var analysed = new List<string>();
+        Task<bool> Analyse(string code, CancellationToken _)
+        {
+            lock (analysed) analysed.Add(code);
+            return Task.FromResult(true);
+        }
+        sut.Notify(() => "old", Analyse);
+        await AnalysisSchedulerFixture.SettleAsync(sut);
+        var oldGeneration = sut.Generation;
+        var newer = new TaskCompletionSource();
+        sut.Notify(() => "new", async (code, ct) =>
+        {
+            await newer.Task.WaitAsync(ct);
+            return await Analyse(code, ct);
+        });
+        var newerPass = sut.Pass!;
+
+        // Act
+        sut.Repeat(oldGeneration, () => "old", Analyse);
+        newer.SetResult();
+        await newerPass.WaitAsync(Limit, TestContext.Current.CancellationToken);
+        await AnalysisSchedulerFixture.SettleAsync(sut);
+
+        // Assert
+        Assert.Equal(["old", "new"], analysed);
+        Assert.Same(newerPass, sut.Pass);
+    }
+
     [Fact]
     public async Task Notify_AnalysisThrows_ReportsItAndGoesOnWithTheNextNotification()
     {

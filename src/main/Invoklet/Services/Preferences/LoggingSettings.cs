@@ -9,7 +9,7 @@ public enum LogVerbosity
     /// <summary>Nothing is logged and no log file is made.</summary>
     Off,
 
-    /// <summary>Only the failures Invoklet cannot go on after: an unhandled exception, or a start that failed.</summary>
+    /// <summary>Only the failures Invoklet cannot go on after: an unhandled exception, or a start that failed. The default.</summary>
     Fatal,
 
     /// <summary>Failures of what Invoklet was doing (an operation that threw), and the fatal ones.</summary>
@@ -18,7 +18,7 @@ public enum LogVerbosity
     /// <summary>Also what went wrong without stopping anything.</summary>
     Warning,
 
-    /// <summary>Also the ordinary events: the default.</summary>
+    /// <summary>Also the ordinary events.</summary>
     Information,
 
     /// <summary>Also the details, including debugger traffic and snippets of the user's script code.</summary>
@@ -44,5 +44,5 @@ public sealed class LoggingSettings
 {
     /// <summary>Stored by name in settings.json, so the file stays readable and a value added later does not shift the others.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter<LogVerbosity>))]
-    public LogVerbosity Level { get; set; } = LogVerbosity.Information;
+    public LogVerbosity Level { get; set; } = LogVerbosity.Fatal;
 }

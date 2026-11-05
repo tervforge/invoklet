@@ -27,6 +27,15 @@ internal sealed class AnalysisScheduler(
         }
     }
 
+    /// <summary>The number of the notification made last; for tests.</summary>
+    internal long Generation
+    {
+        get
+        {
+            lock (_gate) return _generation;
+        }
+    }
+
     /// <summary>The pass last started; for tests to await.</summary>
     internal Task? Pass
     {
@@ -41,7 +50,17 @@ internal sealed class AnalysisScheduler(
     /// Analyses the text and says whether its result is still valid. False (the project context changed during the pass) makes
     /// the scheduler analyse the same text again, unless a newer notification has taken over.
     /// </param>
-    public void Notify(Func<string> getCode, Func<string, CancellationToken, Task<bool>> analyze)
+    public void Notify(Func<string> getCode, Func<string, CancellationToken, Task<bool>> analyze) => Start(getCode, analyze, repeatOf: null);
+
+    /// <summary>
+    /// Analyses again the text of the pass of <paramref name="generation"/>, whose result was stale — unless a newer notification
+    /// has come since. That is checked under the lock a notification takes: the pass's own look at its token comes earlier, and a
+    /// notification made in between would otherwise be cancelled by this repeat, its text never analysed.
+    /// </summary>
+    internal void Repeat(long generation, Func<string> getCode, Func<string, CancellationToken, Task<bool>> analyze) =>
+        Start(getCode, analyze, generation);
+
+    private void Start(Func<string> getCode, Func<string, CancellationToken, Task<bool>> analyze, long? repeatOf)
     {
         CancellationToken token;
         long generation;
@@ -49,6 +68,7 @@ internal sealed class AnalysisScheduler(
         {
             // After Stop nothing starts again, not even the repeat of a pass that was still running: its owner is gone.
             if (_stopped) return;
+            if (repeatOf is { } repeated && repeated != _generation) return;
             // Not disposed: a superseded pass can still be past its checks of the token (inside a code fix provider that does not
             // poll it), and reading a disposed source throws. A source whose wait handle is never touched holds no unmanaged
             // resources, so the superseded one is left to the collector; Stop disposes the last one.
@@ -66,7 +86,7 @@ internal sealed class AnalysisScheduler(
             {
                 await Task.Delay(debounce(), token);
                 var code = getCode();
-                if (!await analyze(code, token) && !token.IsCancellationRequested) Notify(() => code, analyze);
+                if (!await analyze(code, token) && !token.IsCancellationRequested) Repeat(generation, () => code, analyze);
             }
             catch (OperationCanceledException)
             {

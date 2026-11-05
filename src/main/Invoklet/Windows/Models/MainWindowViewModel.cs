@@ -521,13 +521,23 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
     }
 
     // Reading happens off the UI thread; an unexpected failure is logged, the tree keeps what it showed.
-    private void RefreshConnectionNavigation()
+    private void RefreshConnectionNavigation() => _ = RefreshConnectionNavigationAsync();
+
+    // Never faults: the startup splash waits on the first one.
+    private Task RefreshConnectionNavigationAsync()
     {
-        if (ConnectionNavigation is not { } navigation) return;
-        _ = navigation.RefreshAsync().ContinueWith(
-            t => _logger.LogError(t.Exception, "Refreshing the connections tree failed"),
-            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        if (ConnectionNavigation is not { } navigation) return Task.CompletedTask;
+        return navigation.RefreshAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted) _logger.LogError(t.Exception, "Refreshing the connections tree failed");
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
+
+    /// <summary>The first read of the scripts folder, which the window waits for before it is shown; never faults.</summary>
+    internal Task ScriptsFolderLoaded { get; }
+
+    /// <summary>The first read of the connection list, which the window waits for before it is shown; never faults.</summary>
+    internal Task ConnectionsLoaded { get; } = Task.CompletedTask;
 
     // ── Sidebar: sections and the Samples tree ──────────────────────────────────
 
@@ -1184,7 +1194,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
                 _prefs.Save();
             });
 
-        RefreshNodes();
+        ScriptsFolderLoaded = RefreshNodesAsync();
 
         ConnectionNavigation = connectionNavigation;
         if (ConnectionNavigation is { } navigation)
@@ -1208,7 +1218,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
                 .Switch()
                 .Where(state => state == RunState.Idle)
                 .Subscribe(state => { _ = navigation.RefreshStatusesAsync(); });
-            RefreshConnectionNavigation();
+            ConnectionsLoaded = RefreshConnectionNavigationAsync();
         }
 
         _fileSystemService.WatcherEvent += OnWatcherEvent;

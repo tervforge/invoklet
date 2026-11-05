@@ -147,6 +147,48 @@ public class PrimaryActionAndSplitterTests
         window.Close();
     }
 
+    // A seam is highlighted while the pointer is over it, while it is dragged, and while the keyboard focus is on it. Dragging
+    // it with the mouse gives it the focus too, which stays after the drag: that focus must not keep it lit once released.
+    [AvaloniaTheory]
+    [InlineData(GridResizeDirection.Columns)]
+    [InlineData(GridResizeDirection.Rows)]
+    public void ASeam_Should_LoseItsHighlight_AfterADrag_WhenThePointerLeaves(GridResizeDirection direction)
+    {
+        var columns = direction == GridResizeDirection.Columns;
+        var splitter = SplitterIn(new GridSplitter { Classes = { "seam" }, ResizeDirection = direction }, columns, out var window);
+        var line = splitter.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_Line");
+        var rest = line.Background;
+
+        var start = splitter.TranslatePoint(new Point(columns ? 2 : 300, columns ? 250 : 2), window)!.Value;
+        var delta = columns ? new Vector(40, 0) : new Vector(0, 40);
+        window.MouseDown(start, MouseButton.Left);
+        // While it is held, it stays lit even where the pointer has run ahead of the line: it used to flicker as the
+        // pointer left and re-entered the narrow drag area.
+        foreach (var step in new[] { 0.5, 1.0 })
+        {
+            window.MouseMove(start + delta * step + (columns ? new Vector(6, 0) : new Vector(0, 6)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotSame(rest, line.Background);
+            Assert.Contains(":pressed", splitter.Classes); // what keeps it lit wherever the pointer is
+        }
+        window.MouseUp(start + delta, MouseButton.Left);
+        window.MouseMove(new Point(columns ? 500 : 300, columns ? 250 : 450)); // away from the seam
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(rest, line.Background);
+        Assert.DoesNotContain(":pressed", splitter.Classes);
+        window.Close();
+
+        // Reached with the keyboard, a seam is highlighted, so it can be seen which one the arrow keys move.
+        var keyboard = SplitterIn(new GridSplitter { Classes = { "seam" }, ResizeDirection = direction }, columns, out var keyboardWindow);
+        var keyboardLine = keyboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_Line");
+        keyboard.Focus(NavigationMethod.Tab);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(":focus-visible", keyboard.Classes);
+        Assert.NotSame(rest, keyboardLine.Background);
+        keyboardWindow.Close();
+    }
+
     private static void HoverOver(GridSplitter splitter, Window window, bool columns)
     {
         window.MouseMove(splitter.TranslatePoint(new Point(columns ? 0.5 : 300, columns ? 250 : 0.5), window)!.Value);

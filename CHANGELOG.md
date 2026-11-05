@@ -3,6 +3,48 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.4] — 2026-11-05
+
+### Changed
+
+- The search in Preferences also looks inside each page: the settings' names and descriptions, their
+  tooltips, the choices of their lists, the values in their fields and the keys of the key bindings.
+  It opens the first page that has a match and highlights the words it matched there and in the list
+  of pages.
+- Invoklet logs only fatal errors by default (its own crashes and a start that failed); more can
+  be turned on in Preferences → Logging. A level saved before keeps its value.
+- Inlay hints (the inferred type next to `var` and `foreach` variables) are off by default; turn them
+  on in Preferences → Languages → .NET → C#. A setting saved before keeps its value.
+- At startup the window is shown once the scripts folder, the restored tabs and the connections
+  are loaded, and the splash says which of them it is waiting for; if the workspace can't open
+  after the setup wizard, an error window says so instead of the wizard seeming to do nothing.
+- Copies of Invoklet distributed through an application store (Apple App Store, Mac App Store,
+  Microsoft Store) are licensed under the MPL-2.0, with their icon and other resources
+  (`APP-STORE-EXCEPTION.txt`); the source code and every other download stay GPL-3.0.
+
+### Added
+
+- Double-clicking a gRPC service, method or generated file in the Connections window opens its
+  generated code in Assembly Explorer.
+
+### Fixed
+
+- A run that failed right after a stopped one could name the stopped run's stage in its status
+  (such as "Package restore failed" for a compile error).
+- The editor's errors and highlighting could stay missing for the last edit until the next keystroke
+  when it came just as the script's packages or connections were updated.
+- A divider between panels no longer stays highlighted after it was dragged with the mouse; it is
+  highlighted while the pointer is over it, for as long as it is dragged, and when it is reached
+  with the keyboard.
+- The application icon on Windows (title bar, taskbar, Start menu) is no longer cut at its edges.
+- Go to Definition into Assembly Explorer scrolls to the symbol; a long page used to open at its top
+  with only the caret on the right line. In a connection's generated code the caret is on the
+  declaration, not on the line below it.
+- Refresh on a gRPC connection reads the server's contract again; it used to reuse the files
+  it had read earlier when the address and metadata were the same.
+- Invoklet now finds .NET SDKs installed in the standard locations on Windows, macOS and Linux,
+  even when the `dotnet` command is not on `PATH`.
+
 ## [0.11.3] — 2026-11-03
 
 ### Fixed
@@ -1062,5 +1104,6 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.0]: https://github.com/tervforge/invoklet/releases/tag/v0.11.0
 [0.11.1]: https://github.com/tervforge/invoklet/releases/tag/v0.11.1
 [0.11.2]: https://github.com/tervforge/invoklet/releases/tag/v0.11.2
+[0.11.4]: https://github.com/tervforge/invoklet/releases/tag/v0.11.4
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5

@@ -109,12 +109,17 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private bool _disposed;
     private readonly DebugHoverController _debugHover = new();
 
-    // The stage the current (or last) run reached, -1 before the first: names the stage that failed.
-    // Written as the host reports it, on whichever thread that is, so it is already current when the
-    // run ends even if the status update posted for it has not been processed yet.
-    private int _runStageValue = -1;
+    // The stage the current run reached, which names the stage that failed: written as the host reports it, on whichever thread
+    // that is, so it is already current when the run ends even if the status update posted for it has not been processed yet.
+    // The stage goes with the generation of the run that reported it, in one value written at once, and counts only while that
+    // run is the current one: a late report of a stopped run (between a check of its generation and a separate write, the user
+    // could stop it and start the next) can't name its stage for the next run. -1 before any.
+    private long _runStage = -1;
 
-    private RunStage? RunStageReached => _runStageValue < 0 ? null : (RunStage)Volatile.Read(ref _runStageValue);
+    private RunStage? RunStageReached =>
+        Volatile.Read(ref _runStage) is var value && value >= 0 && (int)(value >> 32) == _run.RunGeneration ? (RunStage)(int)value : null;
+
+    private void ReachStage(int generation, RunStage stage) => Volatile.Write(ref _runStage, ((long)generation << 32) | (uint)stage);
     // Which run may start, the restart protocol and the generations that make late callbacks of an earlier run
     // harmless; the host, its cancellation and the clean-up of a run stay here.
     private readonly RunLifecycle _run = new();
@@ -593,7 +598,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         s.DumpContainerBlocks.Clear();
         s.HadRunError = false;
         s.UnhandledDebugException = null;
-        Volatile.Write(ref _runStageValue, -1);
         _vm.DebugPanel.ClearStop();
         s.ElapsedText = "";
         // The IL of the last build stays until a new one replaces it (Compiled): a run that fails to
@@ -631,14 +635,13 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             });
         }
 
-        // The events a host reports, on its own thread: the stage is kept synchronously, while this host still owns
-        // the generation (a late callback must not mutate the next run's diagnostic context), the rest is posted.
+        // The events a host reports, on its own thread: the stage is kept synchronously, with this run's generation (a late
+        // callback must not name its stage for the next run, see ReachStage), the rest is posted.
         void HandleHostEvent(ILanguageHost host, HostExecutionEvent @event)
         {
             if (@event is HostExecutionEvent.Stage stage)
             {
-                if (_run.IsCurrent(generation) && ReferenceEquals(s.RunningHost, host))
-                    Volatile.Write(ref _runStageValue, (int)stage.Value);
+                ReachStage(generation, stage.Value);
                 PostRun(() => ShowRunStage(stage.Value, stage.Detail), host);
                 return;
             }
@@ -675,7 +678,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 List<MdRunConnection> list = [.. connections];
                 var scriptDirectory = ScriptDirectory;
                 var token = runCts.Token;
-                Volatile.Write(ref _runStageValue, (int)RunStage.ReadingConnectionSchemas);
+                ReachStage(generation, RunStage.ReadingConnectionSchemas);
                 ShowRunStage(RunStage.ReadingConnectionSchemas, null);
                 await Task.Run(() => schemas.EnsureAsync(list, scriptDirectory, ConnectionSchemaRefresh.Failed, token), token);
             }

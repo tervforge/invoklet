@@ -329,6 +329,40 @@ public class EditorTabRunResultTests
         }
     }
 
+    // The stage a failed run names is the one its own host reported: an earlier run's host reporting late (on its own thread, after
+    // the user started the next run) must not make the next run's compile failure read as a failed package restore.
+    [AvaloniaFact]
+    public async Task AStageReportedLateByAnEarlierRun_Should_NotNameTheNextRunsFailure()
+    {
+        StageChangedHandler? firstRunsStage = null;
+        var runs = 0;
+        var ctrl = CreateControl(RunResult.Exited(0), configureHost: host =>
+        {
+            host.SetupAdd(h => h.StageChanged += It.IsAny<StageChangedHandler>())
+                .Callback<StageChangedHandler>(handler => firstRunsStage ??= handler);
+            host.Setup(h => h.RunAsync(It.IsAny<string>(), It.IsAny<OutputReceivedHandler>(), It.IsAny<CancellationToken>()))
+                .Returns((string _, OutputReceivedHandler _, CancellationToken _) =>
+                {
+                    if (++runs == 1) return Task.FromResult(RunResult.Exited(0));
+                    firstRunsStage!(RunStage.RestoringPackages, null); // the first run's host, late
+                    return Task.FromResult(RunResult.CompilationFailed);
+                });
+        });
+
+        try
+        {
+            await RunAsync(ctrl);
+            await RunAsync(ctrl);
+
+            Assert.Equal("Compilation failed", ctrl.State.ExecStatusText);
+        }
+        finally
+        {
+            ctrl.Dispose();
+            ((Window)TopLevel.GetTopLevel(ctrl)!).Close();
+        }
+    }
+
     private static async Task RunAsync(EditorsTabItemControl ctrl)
     {
         await ctrl.RunAsync(debug: false, Sdk);

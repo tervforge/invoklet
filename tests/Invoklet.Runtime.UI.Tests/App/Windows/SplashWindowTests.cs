@@ -35,8 +35,8 @@ public class SplashWindowTests
         destination.Close();
     }
 
-    // The workspace opens its restored tabs one by one: the splash stays, saying so, and the window
-    // stays hidden until every header is there, so tabs never visibly appear one after another.
+    // The workspace reads the scripts folder and opens its restored tabs one by one: the splash stays, saying what it waits for,
+    // and the window stays hidden until all of it is done, so the tree and the tabs never visibly fill in.
     [AvaloniaFact]
     public async Task Startup_Should_KeepTheSplash_UntilTheWorkspaceIsReady()
     {
@@ -49,7 +49,17 @@ public class SplashWindowTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.False(splash.HasClosed);
-        Assert.Equal("Opening scripts…", splash.FindControl<TextBlock>("StatusText")!.Text);
+        Assert.Equal("Reading the scripts folder…", splash.FindControl<TextBlock>("StatusText")!.Text);
+        Assert.Equal(0, destination.Opacity);
+
+        // Each step in turn: the splash says what is being waited for now.
+        destination.Folder.SetResult();
+        await TestWait.WhileAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            return splash.FindControl<TextBlock>("StatusText")!.Text != "Opening scripts…";
+        });
+        Assert.False(splash.HasClosed);
         Assert.Equal(0, destination.Opacity);
 
         destination.Workspace.SetResult();
@@ -80,8 +90,9 @@ public class SplashWindowTests
 
     private sealed class SlowStartupWindow : Window, IStartupWindow
     {
+        public TaskCompletionSource Folder { get; } = new();
         public TaskCompletionSource Workspace { get; } = new();
-        public Task Ready => Workspace.Task;
+        public IReadOnlyList<StartupStep> StartupSteps => [new("Reading the scripts folder…", Folder.Task), new("Opening scripts…", Workspace.Task)];
     }
 
     [AvaloniaTheory]

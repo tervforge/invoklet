@@ -25,7 +25,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     private readonly EditorTabsControl _editorTabs;
     private readonly IDisposable _restoreStateSubscription;
 
-    Task IStartupWindow.Ready => _editorTabs.WorkspaceShown;
+    private readonly IReadOnlyList<StartupStep> _startupSteps;
+    IReadOnlyList<StartupStep> IStartupWindow.StartupSteps => _startupSteps;
 
     // Set right before the confirmed, real Close() below — lets OnClosing tell "the user just
     // clicked the confirmed, second time through" apart from the very first Closing that it itself
@@ -48,6 +49,12 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
         _editorTabs = editorTabsCtrl;
 
         DataContext = viewModel;
+        _startupSteps =
+        [
+            new("Reading the scripts folder…", viewModel.ScriptsFolderLoaded),
+            new("Opening scripts…", editorTabsCtrl.WorkspaceShown),
+            new("Reading connections…", viewModel.ConnectionsLoaded),
+        ];
 
         InitializeComponent();
 

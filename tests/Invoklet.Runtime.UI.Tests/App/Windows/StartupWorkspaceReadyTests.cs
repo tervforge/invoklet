@@ -18,7 +18,7 @@ using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.App.Windows;
 
-// The main window is ready to be revealed (IStartupWindow.Ready) only once every restored tab has its
+// The main window is ready to be revealed (all of IStartupWindow.StartupSteps) only once every restored tab has its
 // header and the active one is selected: tabs are added one by one, each after its language
 // services exist, and the splash covers that.
 public class StartupWorkspaceReadyTests
@@ -59,7 +59,7 @@ public class StartupWorkspaceReadyTests
         var mainVm = new MainWindowViewModel(sdkProviders: [], fileSystemService: fileSystem.Object,
             windowService: new Mock<IWindowService>().Object, prefs: prefs.Object, languageRegistry: new LanguageHostRegistry());
         var window = new MainWindow(prefs.Object, editorTabs, mainVm);
-        var ready = ((IStartupWindow)window).Ready;
+        var ready = Task.WhenAll(((IStartupWindow)window).StartupSteps.Select(step => step.Done));
         try
         {
             window.Show();

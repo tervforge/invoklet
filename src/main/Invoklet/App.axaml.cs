@@ -173,7 +173,16 @@ public class App : Application
         wizard.Continued += () =>
         {
             try { ShowStartupWindow(services.GetRequiredService<Windows_MainWindow>(), desktop); }
-            catch (Exception ex) { logger.LogError(ex, "Opening the workspace after setup failed"); }
+            catch (Exception ex)
+            {
+                // The same error window as a failure before the wizard, instead of a wizard that seems to do nothing.
+                logger.LogCritical(ex, "Opening the workspace after setup failed");
+                var error = new Windows_SplashWindow();
+                desktop.MainWindow = error;
+                error.Show();
+                error.ShowStartupError();
+                wizard.Close();
+            }
         };
         return wizard;
     }
@@ -205,10 +214,16 @@ public class App : Application
     private static async Task RevealStartupWindowAsync(Window window,
         IClassicDesktopStyleApplicationLifetime desktop, Window? previous, double targetOpacity, TimeSpan readyTimeout)
     {
-        if (window is IStartupWindow { Ready: { IsCompleted: false } ready })
+        if (window is IStartupWindow startup)
         {
-            (previous as Windows_SplashWindow)?.SetStartupStatus("Opening scripts…");
-            await Task.WhenAny(ready, Task.Delay(readyTimeout));
+            // One limit for all the steps together.
+            var deadline = Task.Delay(readyTimeout);
+            foreach (var step in startup.StartupSteps)
+            {
+                if (step.Done.IsCompleted) continue;
+                (previous as Windows_SplashWindow)?.SetStartupStatus(step.Status);
+                if (await Task.WhenAny(step.Done, deadline) == deadline) break;
+            }
         }
         // Give the destination two frames: one for the initial layout and one for bindings and
         // deferred control initialization. Only then reveal it and close the previous window.
@@ -321,7 +336,13 @@ public class App : Application
         services.AddSingleton<Func<Windows_DependenciesWindow>>(sp => () => sp.GetRequiredService<Windows_DependenciesWindow>());
         services.AddSingleton<Func<Windows_PreferencesWindow>>(sp => () => sp.GetRequiredService<Windows_PreferencesWindow>());
         services.AddSingleton<Func<Windows_SecretStoreWindow>>(sp => () => sp.GetRequiredService<Windows_SecretStoreWindow>());
-        services.AddSingleton<Func<Windows_ConnectionsWindow>>(sp => () => sp.GetRequiredService<Windows_ConnectionsWindow>());
+        services.AddSingleton<Func<Windows_ConnectionsWindow>>(sp => () =>
+        {
+            var window = sp.GetRequiredService<Windows_ConnectionsWindow>();
+            var windows = sp.GetRequiredService<IWindowService>();
+            window.OpenSource = (text, line, title) => windows.ShowDefinitionInAssemblyExplorerAsync(new DecompiledMemberResult(text, line, title), null);
+            return window;
+        });
 
         var provider = services.BuildServiceProvider();
 

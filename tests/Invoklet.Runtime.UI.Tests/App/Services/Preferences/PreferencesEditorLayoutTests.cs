@@ -69,9 +69,9 @@ public class PreferencesEditorLayoutTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Menlo", settings.Editor.FontFamily);
         Assert.Equal(18, settings.Editor.FontSize);
-        var wrap = page.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Content as string == "Wrap long lines in code editor");
+        var wrap = page.GetVisualDescendants().OfType<CheckBox>().Single(c => LabelOf(c) == "Wrap long lines in code editor");
         // Results wrapping moved to the output settings menu beside the results.
-        Assert.DoesNotContain(page.GetVisualDescendants().OfType<CheckBox>(), c => c.Content as string == "Wrap long lines in results");
+        Assert.DoesNotContain(page.GetVisualDescendants().OfType<CheckBox>(), c => LabelOf(c) == "Wrap long lines in results");
         Assert.True(settings.Editor.ResultsWordWrap);
         Assert.False(settings.Editor.WordWrap);
         wrap.IsChecked = true;
@@ -81,4 +81,7 @@ public class PreferencesEditorLayoutTests
         prefs.Verify(p => p.Save(), Times.AtLeastOnce);
         window.Close();
     }
+
+    // A check box's text: the window shows a page's labels in text blocks that highlight what the search matches.
+    private static string? LabelOf(CheckBox box) => box.Content as string ?? (box.Content is TextBlock block ? Invoklet.UserControls.SearchHighlight.GetText(block) : null);
 }

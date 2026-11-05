@@ -28,6 +28,34 @@ public class MainWindowViewModelDiskFailureTests
         return (vm, windows, disk);
     }
 
+    // The startup splash waits for the first read of the scripts folder: it is pending while the walk runs,
+    // and it completes, not faults, when the folder can't be read, so the window is still shown, with the error.
+    [Fact]
+    public async Task ScriptsFolderLoaded_UnreadableFolder_CompletesAndShowsTheError()
+    {
+        // Arrange
+        var walk = new TaskCompletionSource<IReadOnlyList<FileSystemItem>>();
+        var fileSystem = new Mock<IFileSystemService>();
+        fileSystem.Setup(f => f.Folder).Returns(Root);
+        fileSystem.Setup(f => f.GetFilesTreeAsync(It.IsAny<CancellationToken>())).Returns(walk.Task);
+        var prefs = new Mock<IPreferencesService>();
+        prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
+        prefs.Setup(p => p.Session).Returns(new SessionSettings());
+        prefs.Setup(p => p.Keyboard).Returns(new KeyboardSettings());
+        var windows = new Mock<IWindowService>();
+        windows.Setup(w => w.ShowErrorAsync(It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+        var vm = new MainWindowViewModel([], fileSystem.Object, windows.Object, prefs.Object, new LanguageHostRegistry());
+        Assert.False(vm.ScriptsFolderLoaded.IsCompleted);
+
+        // Act
+        walk.SetException(new IOException("gone"));
+        await vm.ScriptsFolderLoaded;
+
+        // Assert
+        Assert.True(vm.ScriptsFolderLoaded.IsCompletedSuccessfully);
+        windows.Verify(w => w.ShowErrorAsync("Folder Unavailable", It.Is<string>(m => m.Contains("gone"))), Times.Once);
+    }
+
     [Fact]
     public async Task DeleteFile_DiskRefuses_ShowsTheErrorWithTheReason()
     {

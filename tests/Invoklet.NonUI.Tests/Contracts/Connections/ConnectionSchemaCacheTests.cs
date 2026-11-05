@@ -17,6 +17,8 @@ public sealed class ConnectionSchemaCacheTests : IDisposable
     {
         public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Fetches;
+        public string Summary = "1 service";
+        public Exception? Failure;
 
         public string Id => "slow";
         public string DisplayName => "Slow";
@@ -35,7 +37,8 @@ public sealed class ConnectionSchemaCacheTests : IDisposable
         {
             Interlocked.Increment(ref Fetches);
             await Release.Task.WaitAsync(cancellationToken);
-            return new ConnectionSchema("1 service", [], "");
+            if (Failure is not null) throw Failure;
+            return new ConnectionSchema(Summary, [], "");
         }
     }
 
@@ -113,6 +116,27 @@ public sealed class ConnectionSchemaCacheTests : IDisposable
         // Once it is over, Refresh reads again.
         Assert.True(await schemas.EnsureAsync([Connection], null, ConnectionSchemaRefresh.All, ct));
         Assert.Equal(2, driver.Fetches);
+    }
+
+    // A Refresh that fails keeps the schema read before, and says why; the next one that succeeds replaces it and clears that.
+    [Fact]
+    public async Task AFailedRefresh_Should_KeepThePreviousSchema()
+    {
+        var (schemas, driver) = Create();
+        var ct = TestContext.Current.CancellationToken;
+        driver.Release.SetResult();
+        Assert.True(await schemas.EnsureAsync([Connection], null, ConnectionSchemaRefresh.All, ct));
+
+        driver.Failure = new InvalidOperationException("the server is down");
+        Assert.True(await schemas.EnsureAsync([Connection], null, ConnectionSchemaRefresh.All, ct));
+        Assert.Equal("1 service", schemas.Cache.Get(Connection)!.Summary);
+        Assert.Equal("the server is down", schemas.Cache.ErrorFor(Connection));
+
+        driver.Failure = null;
+        driver.Summary = "2 services";
+        Assert.True(await schemas.EnsureAsync([Connection], null, ConnectionSchemaRefresh.All, ct));
+        Assert.Equal("2 services", schemas.Cache.Get(Connection)!.Summary);
+        Assert.Null(schemas.Cache.ErrorFor(Connection));
     }
 
     // A caller that gives up (a cancelled run) stops waiting; the others still get the schema, and no

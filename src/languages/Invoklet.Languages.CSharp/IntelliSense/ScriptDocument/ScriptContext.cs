@@ -246,7 +246,7 @@ internal sealed class ScriptContext
     // message and client class is in until the first successful build produces a cached contract
     // assembly (ConnectionContractAssemblyCache). Neither IsInScript nor a metadata reference
     // matches a symbol there, so without this, TryGetDefinitionAsync falls through and F12 is a
-    // silent no-op (see handoffs/g03-navigation-cold-start-gap.md for how this was found).
+    // silent no-op.
     internal (string Text, int Line)? GeneratedDocumentFor(ISymbol symbol)
     {
         foreach (var location in symbol.Locations)
@@ -256,7 +256,8 @@ internal sealed class ScriptContext
             if (id is null) continue;
             foreach (var (_, (docId, text)) in _connectionFiles)
                 if (docId == id)
-                    return (text, location.GetLineSpan().StartLinePosition.Line + 1);
+                    // 0-based in the document, which has GeneratedHeader's one line above the text: 1-based in the text.
+                    return (text, location.GetLineSpan().StartLinePosition.Line);
         }
         return null;
     }

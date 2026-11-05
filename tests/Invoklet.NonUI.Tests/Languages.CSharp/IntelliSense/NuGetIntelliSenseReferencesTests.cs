@@ -6,7 +6,7 @@ using Invoklet.Languages.CSharp.IntelliSense;
 using Invoklet.Languages.DotnetCommon.Compiler;
 using Invoklet.NonUI.Tests.Infrastructure;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using MetadataReference = Microsoft.CodeAnalysis.MetadataReference;
 
@@ -216,17 +216,37 @@ public sealed class NuGetIntelliSenseReferencesTests : IAsyncDisposable
 
     // ── Through the real C# IntelliSense service ─────────────────────────────
 
-    private static CSharpIntelliSenseService CreateService()
+    // A background pass that throws publishes no diagnostics and only logs the exception: the logger hands it to the test, which
+    // then fails with it at once instead of waiting out the timeout without a word of the reason.
+    private readonly AnalysisFailures _analysisFailures = new();
+
+    private sealed class AnalysisFailures : ILogger<CSharpIntelliSenseService>
+    {
+        private readonly TaskCompletionSource<IReadOnlyList<IDiagnosticInfo>> _failed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<IReadOnlyList<IDiagnosticInfo>> Failed => _failed.Task;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (exception is not null && logLevel >= LogLevel.Warning)
+                _failed.TrySetException(new InvalidOperationException(formatter(state, exception), exception));
+        }
+    }
+
+    private CSharpIntelliSenseService CreateService()
     {
         var referenceService = new CSharpReferenceService();
         var refs = referenceService.GetDefault().Append(referenceService.GetExtensionReference());
-        return new CSharpIntelliSenseService(refs, NullLogger<CSharpIntelliSenseService>.Instance)
+        return new CSharpIntelliSenseService(refs, _analysisFailures)
         {
             BackgroundAnalysisDebounce = TimeSpan.Zero,
         };
     }
 
-    private static async Task<IReadOnlyList<IDiagnosticInfo>> DiagnosticsAsync(CSharpIntelliSenseService service, string code)
+    private async Task<IReadOnlyList<IDiagnosticInfo>> DiagnosticsAsync(CSharpIntelliSenseService service, string code)
     {
         var result = new TaskCompletionSource<IReadOnlyList<IDiagnosticInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnDiagnostics(string analyzed, IReadOnlyList<IDiagnosticInfo> diagnostics)
@@ -237,7 +257,8 @@ public sealed class NuGetIntelliSenseReferencesTests : IAsyncDisposable
         try
         {
             service.NotifyTextChanged(code);
-            return await result.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            return await await Task.WhenAny(result.Task, _analysisFailures.Failed)
+                .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         }
         finally
         {

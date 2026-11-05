@@ -86,7 +86,8 @@ Invoklet, under the project's license and, if the licensing ever changes, under 
 
 - **Language:** C# on .NET 10 only, with Avalonia UI for the interface. No web views or embedded
   browsers — Invoklet is a native app.
-- **License:** contributions are GPL-3.0 ([`LICENSE`](LICENSE)); `src/runtime/Invoklet.Runtime` is MIT
+- **License:** contributions are GPL-3.0 ([`LICENSE`](LICENSE)), and MPL-2.0 in the builds the maintainer
+  distributes through application stores ([`APP-STORE-EXCEPTION.txt`](APP-STORE-EXCEPTION.txt)); `src/runtime/Invoklet.Runtime` is MIT
   ([its `LICENSE`](src/runtime/Invoklet.Runtime/LICENSE)) and must stay free of dependencies and of code
   copied from other Invoklet projects, because it ships inside users' programs.
 - **Clean-room:** do not copy code, icons or other assets from proprietary software.

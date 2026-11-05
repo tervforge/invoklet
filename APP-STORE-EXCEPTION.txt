@@ -1,0 +1,37 @@
+Invoklet - additional permission for application stores
+=======================================================
+
+Copyright (C) 2026 Vadim S (svncore), svnpub@proton.me
+
+Additional permission under section 7 of the GNU General Public License,
+version 3 (GPL-3.0), granted by the copyright holder of Invoklet.
+
+1. The executable form of Invoklet that the copyright holder distributes
+   through an application store - the Apple App Store (including the Mac App
+   Store) or the Microsoft Store - is licensed to its recipients under the
+   Mozilla Public License, version 2.0 (MPL-2.0,
+   <https://mozilla.org/MPL/2.0/>), instead of the GPL-3.0. This covers the
+   whole package as distributed there: the application together with the files
+   distributed with it, such as its icon, images and other resources.
+
+2. The store's own terms of use and its copy protection apply to that copy
+   only as far as the MPL-2.0 permits them; they are not a restriction added
+   by Invoklet's license.
+
+3. The source code of every such release stays available under the GPL-3.0,
+   outside any store, at <https://github.com/tervforge/invoklet>, from the
+   tagged commit of the same version.
+
+4. Everything else about Invoklet is unchanged: the source code, and Invoklet
+   as distributed anywhere else (the releases page, installers, packages), are
+   licensed under the GPL-3.0 (LICENSE). The Invoklet.Runtime library stays
+   under the MIT License, and third-party components keep their own licenses
+   (THIRD-PARTY-NOTICES.txt).
+
+5. Neither the MPL-2.0 nor this permission grants rights to the name
+   "Invoklet" or to the Tervforge name and logo as trademarks (MPL-2.0,
+   section 2.3).
+
+Contributions are covered through the Invoklet Contributor License Agreement
+(CLA.md), which allows the copyright holder to distribute them under other
+license terms.

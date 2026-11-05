@@ -61,12 +61,12 @@ public sealed class LogLevelSwitchTests
     }
 
     [Fact]
-    public void New_WithoutAVerbosity_IsInformation()
+    public void New_WithoutAVerbosity_IsFatal()
     {
         // Arrange / Act
         var sut = new LogLevelSwitch();
 
         // Assert
-        Assert.Equal(LogVerbosity.Information, sut.Verbosity);
+        Assert.Equal(LogVerbosity.Fatal, sut.Verbosity);
     }
 }

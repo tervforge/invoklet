@@ -1349,6 +1349,23 @@ public class AssemblyExplorerWindowViewTests
         Assert.Empty(window.Tree.Items.OfType<TreeViewItem>());
     }
 
+    // A long page opened on a line far down is scrolled to that line, not left at its top with only the caret moved.
+    [AvaloniaFact]
+    public void FromInitialResult_Should_ScrollToTheRequestedLine()
+    {
+        var code = string.Concat(Enumerable.Range(1, 400).Select(i => $"// line {i}\n"));
+        var result = new DecompiledMemberResult(code, Line: 300, Title: "Far");
+        var window = new AssemblyExplorerWindow(CreateThemeService().Object, new Mock<IWindowService>().Object, result, assemblyPath: null);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var view = window.Editor.TextArea.TextView;
+        var first = view.GetDocumentLineByVisualTop(view.ScrollOffset.Y).LineNumber;
+        var last = view.GetDocumentLineByVisualTop(view.ScrollOffset.Y + view.Bounds.Height - 1).LineNumber;
+        Assert.InRange(300, first, last);
+        window.Close();
+    }
+
     // F12 from the user's script: the definition carries names only (DecompiledReference stands in for
     // the IntelliSense result; its tokens aren't used by this entry point).
     private AssemblyExplorerWindow OpenFromScriptF12(string typeName, string? memberName, string display)

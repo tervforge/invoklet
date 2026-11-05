@@ -90,8 +90,9 @@ public interface IWindowService
     /// Go to Definition (F12) from the user's script landing outside it: shows
     /// <paramref name="decompiled"/> in the Assembly Explorer with <paramref name="definition"/>'s row
     /// selected in its tree — in a new tab of the open explorer, or in a new explorer if none is open.
+    /// Without a definition (a generated source with no assembly behind it) only the text is shown.
     /// </summary>
-    Task ShowDefinitionInAssemblyExplorerAsync(DecompiledMemberResult decompiled, IDefinitionResult definition);
+    Task ShowDefinitionInAssemblyExplorerAsync(DecompiledMemberResult decompiled, IDefinitionResult? definition);
 
     /// <summary>
     /// Asks whether to save a tab's unsaved changes before discarding them (closing an untitled tab
