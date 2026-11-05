@@ -3,14 +3,13 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Invoklet.Build.Core.Models;
 using Invoklet.Build.Core.ProcessRunners;
-using Invoklet.Build.Core.Secrets;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.NonUI.Tests.Infrastructure;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
 using Invoklet.Windows.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -333,6 +332,21 @@ public sealed class SecretStoreTests : IDisposable
         Assert.Equal([new Secret("Orders-DB", "new"), new Secret("zeta", "z"), new Secret("api-token", "t0k3n")], store.Load());
     }
 
+    // Util.SetSecret(name, null): the secret of that name in any case goes; a name the store lacks writes nothing.
+    [Fact]
+    public void Put_Null_Should_RemoveTheSecret_AndLeaveAStoreWithoutItAsItIs()
+    {
+        var store = new FileSecretStore(StorePath);
+        var version = store.Save([new Secret("Orders-DB", "old"), new Secret("zeta", "z")], null);
+
+        store.Put("missing", null);
+        var unchanged = store.LoadSnapshot().Version;
+        store.Put("orders-db", null);
+
+        Assert.Equal(version, unchanged);
+        Assert.Equal([new Secret("zeta", "z")], store.Load());
+    }
+
     // ── Encryption with a keychain key (macOS, Linux) ──────────────────────────
 
     // A keychain in memory: tests never touch the real one.
@@ -364,13 +378,14 @@ public sealed class SecretStoreTests : IDisposable
     }
 
     [Fact]
-    public void GetSecret_Should_DecryptWithTheKeyInvokletPasses_AndAskForInvokletWithoutIt()
+    public void GetSecret_NotStartedByInvoklet_Should_DecryptOnlyWithTheKeyInItsEnvironment()
     {
         WithKeyExport(() => WithStore(StorePath, () =>
         {
-            var store = new FileSecretStore(StorePath, new FakeKeychain());
-            store.Save([new Secret("Orders-DB", "p@ss wörd")], null); // keeps the key for the scripts, as Invoklet does
-            Environment.SetEnvironmentVariable(SecretKeys.EnvVar, SecretKeys.ScriptKey); // as the run gives it to its script
+            var keychain = new FakeKeychain();
+            var store = new FileSecretStore(StorePath, keychain);
+            store.Save([new Secret("Orders-DB", "p@ss wörd")], null);
+            Environment.SetEnvironmentVariable(SecretKeys.EnvVar, Convert.ToBase64String(keychain.Key!)); // set by the user themselves
 
             Assert.Equal("p@ss wörd", Util.GetSecret("orders-db"));
 
@@ -397,18 +412,17 @@ public sealed class SecretStoreTests : IDisposable
     }
 
     [Fact]
-    public void APlainStore_Should_BeEncrypted_WhenPreparedForScripts()
+    public void APlainStore_Should_BeEncrypted_BeforeAScriptReadsIt()
     {
         SaveSecrets([new Secret("db", "plain-secret-value")]); // no keychain: as an older Invoklet left it
         WithKeyExport(() =>
         {
             var store = new FileSecretStore(StorePath, new FakeKeychain());
-            store.PrepareForScripts();
+            store.EncryptIfPlain();
 
             Assert.True(SecretKeys.IsEncrypted(StorePath));
             Assert.DoesNotContain("plain-secret-value", File.ReadAllText(StorePath));
-            Assert.Equal([new Secret("db", "plain-secret-value")], store.Load());
-            Assert.NotNull(SecretKeys.ScriptKey);
+            Assert.Equal("plain-secret-value", store.Read("DB"));
             Assert.Null(Environment.GetEnvironmentVariable(SecretKeys.EnvVar));
         });
     }
@@ -417,7 +431,7 @@ public sealed class SecretStoreTests : IDisposable
     public void WithoutAKeychain_Should_SaveUnencrypted_AndSaySo()
     {
         var store = new FileSecretStore(StorePath, new FakeKeychain { Unavailable = true });
-        store.PrepareForScripts();
+        store.EncryptIfPlain();
         Assert.Contains("unencrypted", store.Warning);
 
         store.Save([new Secret("db", "value")], null);

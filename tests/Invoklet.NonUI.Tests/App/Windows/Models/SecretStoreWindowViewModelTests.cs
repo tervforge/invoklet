@@ -1,5 +1,5 @@
 using System.Windows.Input;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
 using Invoklet.Windows.Models;
 using Moq;
 using Xunit;

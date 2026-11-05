@@ -434,8 +434,8 @@ public static partial class Util
     // store), duplicated rather than shared for the same reason as the data folder above.
     internal const string SecretsFileEnvVar = "INVOKLET_SECRETS_FILE";
 
-    // Set to 1 by Invoklet for a run whose input requests it answers (not under the debugger, nor the
-    // command line), mirroring ChildProcess.InputEnvVar.
+    // Set to 1 by Invoklet for a run whose input requests it answers (not the command line's),
+    // mirroring ChildProcess.InputEnvVar.
     internal const string InputEnvVar = "INVOKLET_INPUT";
 
     // Secrets this run asked the user for: the store may have been encrypted by that very answer,
@@ -453,28 +453,72 @@ public static partial class Util
     /// The secret named <paramref name="name"/> (letter case aside) from Invoklet's Secret Store
     /// (Tools → Secret Store), so a password, token or key stays out of the script and its file.
     /// The store belongs to the user on this machine: on Windows it is encrypted for that user, on
-    /// macOS and Linux with a key kept in the system keychain, which Invoklet passes to the script.
-    /// A secret the store doesn't have yet is asked for, masked, as LINQPad's <c>Util.GetPassword</c>
-    /// does, and Invoklet keeps the answer in the store for next time.
+    /// macOS and Linux with a key kept in the system keychain. A script Invoklet runs asks Invoklet for
+    /// the one value it needs, so the key never reaches the script. A secret the store doesn't have yet
+    /// is asked for, masked, as LINQPad's <c>Util.GetPassword</c> does, and the Invoklet window keeps the
+    /// answer in the store for next time.
     /// </summary>
     /// <exception cref="KeyNotFoundException">The store has no such secret, and it couldn't be asked
-    /// for (under the debugger or the command line) or the run was stopped instead.</exception>
-    /// <exception cref="InvalidDataException">The store can't be read here.</exception>
+    /// for or the run was stopped instead.</exception>
+    /// <exception cref="InvalidDataException">The store can't be read.</exception>
     /// <exception cref="InvalidOperationException">The store is encrypted with a keychain key and the
-    /// script wasn't started by Invoklet or its command line, which pass that key.</exception>
+    /// script wasn't started by Invoklet, which reads it.</exception>
+    /// <exception cref="UnauthorizedAccessException">You didn't let this script read secrets.</exception>
     public static string GetSecret(string name)
     {
         if (name is null) throw new ArgumentNullException(nameof(name));
-        var path = Environment.GetEnvironmentVariable(SecretsFileEnvVar) is { Length: > 0 } custom
-            ? custom
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "secrets.json");
+        var path = SecretStorePath();
         var missing = new KeyNotFoundException(
             $"Invoklet's Secret Store has no secret named '{name}'. Add it in Tools → Secret Store ({path}).");
         lock (AskedSecrets)
         {
             if (AskedSecrets.TryGetValue(name, out var asked)) return asked;
         }
-        if (!File.Exists(path)) return AskForSecret(name) ?? throw missing;
+        if (Environment.GetEnvironmentVariable(InputEnvVar) == "1")
+        {
+            if (AskInvokletForSecret(name) is { } kept)
+            {
+                lock (AskedSecrets) AskedSecrets[name] = kept;
+                return kept;
+            }
+            return AskForSecret(name) ?? throw missing;
+        }
+        // Not started by Invoklet: the store is read here, which an encrypted one can't be without its key.
+        return ReadStoredSecret(path, name, Environment.GetEnvironmentVariable(SecretCipher.KeyEnvVar)) ?? throw missing;
+    }
+
+    internal static string SecretStorePath() =>
+        Environment.GetEnvironmentVariable(SecretsFileEnvVar) is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "secrets.json");
+
+    // Invoklet's answer to a read request: 1 and the value (Base64), 0 for no such secret, 2 and why the store can't be read, 3 when the
+    // user didn't let this script read secrets. Null when the run ended before it answered.
+    private static string? AskInvokletForSecret(string name)
+    {
+        var json = "{\"Secret\":" + JsonString(name) + ",\"Read\":true}";
+        Console.WriteLine(InputRequestPrefixChar + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
+        var answer = Console.In.ReadLine();
+        if (answer is null || answer.Length == 0) return null;
+        var payload = answer.Length > 1 ? Encoding.UTF8.GetString(Convert.FromBase64String(answer.Substring(1))) : "";
+        return answer[0] switch
+        {
+            '1' => payload,
+            '2' => throw new InvalidDataException(payload),
+            '3' => throw new UnauthorizedAccessException($"You didn't let this script read the secret '{name}'."),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The value of a secret read from the store's file at <paramref name="path"/> (letter case aside), decrypted with
+    /// <paramref name="key"/> (Base64) for a store encrypted with a keychain key; null when there is no such secret.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The store can't be read here.</exception>
+    /// <exception cref="InvalidOperationException">The store is encrypted with a keychain key, and no key was given.</exception>
+    internal static string? ReadStoredSecret(string path, string name, string? key)
+    {
+        if (!File.Exists(path)) return null;
 
         SecretStoreFile? store;
         try
@@ -490,7 +534,7 @@ public static partial class Util
 
         var entry = store.Secrets?.FirstOrDefault(s => string.Equals(s.Key, name, StringComparison.OrdinalIgnoreCase)) ?? default;
         var value = entry.Value;
-        if (value is null) return AskForSecret(name) ?? throw missing;
+        if (value is null) return null;
         switch (store.Protection)
         {
             case "None":
@@ -507,9 +551,9 @@ public static partial class Util
             case "DPAPI":
                 throw new InvalidDataException($"Invoklet's Secret Store ({path}) is encrypted for a Windows user and can't be read here.");
             case SecretCipher.Protection:
-                if (Environment.GetEnvironmentVariable(SecretCipher.KeyEnvVar) is not { Length: > 0 } key)
+                if (key is not { Length: > 0 })
                     throw new InvalidOperationException(
-                        $"Invoklet's Secret Store ({path}) is encrypted with a key kept in the system keychain: run the script from Invoklet or the invoklet command line, which pass that key.");
+                        $"Invoklet's Secret Store ({path}) is encrypted with a key kept in the system keychain: run the script from Invoklet or the invoklet command line, which read it.");
                 try
                 {
                     // The stored name, not the one asked for: the value is bound to it letter for letter.
@@ -517,7 +561,7 @@ public static partial class Util
                 }
                 catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException)
                 {
-                    throw new InvalidDataException($"Invoklet's Secret Store ({path}) doesn't match the key Invoklet passed, or is damaged.", ex);
+                    throw new InvalidDataException($"Invoklet's Secret Store ({path}) doesn't match the key it was read with, or is damaged.", ex);
                 }
             default:
                 throw new InvalidDataException($"Invoklet's Secret Store ({path}) uses an unknown protection ({store.Protection}).");
@@ -539,24 +583,31 @@ public static partial class Util
     /// <summary>
     /// Saves a secret in Invoklet's Secret Store, or replaces the value of the one of that name
     /// (letter case aside), as LINQPad's <c>Util.SetPassword</c> does. Invoklet writes it, so it
-    /// works only in a script Invoklet runs (not under the debugger or the command line).
+    /// works only in a script the Invoklet window runs or debugs (not on the command line).
+    /// A <see langword="null"/> value removes the secret of that name, if there is one.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Nothing here can save it (debugger, command line).</exception>
+    /// <exception cref="InvalidOperationException">Nothing here can save it (the command line).</exception>
     /// <exception cref="IOException">Invoklet couldn't write its Secret Store.</exception>
-    public static void SetSecret(string name, string value)
+    /// <exception cref="UnauthorizedAccessException">You didn't let this script change secrets.</exception>
+    public static void SetSecret(string name, string? value)
     {
         if (name is null) throw new ArgumentNullException(nameof(name));
-        if (value is null) throw new ArgumentNullException(nameof(value));
         if (name.Trim().Length == 0) throw new ArgumentException("A secret needs a name.", nameof(name));
         if (Environment.GetEnvironmentVariable(InputEnvVar) != "1")
             throw new InvalidOperationException(
-                "Util.SetSecret saves through Invoklet: run the script from Invoklet, not under the debugger or the command line.");
-        // An input request with the value: Invoklet keeps it and answers 1 (kept) or 0, asking nobody.
-        var json = "{\"Secret\":" + JsonString(name) + ",\"Value\":" + JsonString(value) + "}";
+                "Util.SetSecret saves through Invoklet: run the script from the Invoklet window, not the command line.");
+        // An input request with the value (or Remove, as a request without a value asks the user): Invoklet keeps it and
+        // answers 1 (kept) or 0, asking nobody.
+        var json = "{\"Secret\":" + JsonString(name) + (value is null ? ",\"Remove\":true}" : ",\"Value\":" + JsonString(value) + "}");
         Console.WriteLine(InputRequestPrefixChar + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
-        if (Console.In.ReadLine() != "1")
-            throw new IOException($"Invoklet couldn't save the secret '{name}' in its Secret Store.");
-        lock (AskedSecrets) AskedSecrets[name] = value;
+        var answer = Console.In.ReadLine();
+        if (answer == "3") throw new UnauthorizedAccessException($"You didn't let this script change the secret '{name}'.");
+        if (answer != "1") throw new IOException($"Invoklet couldn't save the secret '{name}' in its Secret Store.");
+        lock (AskedSecrets)
+        {
+            if (value is null) AskedSecrets.Remove(name);
+            else AskedSecrets[name] = value;
+        }
     }
 
     // Only where Invoklet answers input; null when it can't be asked, or the run ended instead.
@@ -566,7 +617,8 @@ public static partial class Util
         var value = ReadLineCore(
             $"The Secret Store has no secret named '{name}'. Enter it; Invoklet keeps it there for next time:",
             isPassword: true, secret: name);
-        if (value is null) return null;
+        // An empty answer (or the end of the command line's stdin) is no secret: the script hears it is missing.
+        if (value is null || value.Length == 0) return null;
         lock (AskedSecrets) AskedSecrets[name] = value;
         return value;
     }

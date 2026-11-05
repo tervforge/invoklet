@@ -15,6 +15,7 @@ using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.Languages.VB;
 using Invoklet.Logging;
+using Invoklet.Secrets;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Connections;
@@ -255,6 +256,10 @@ public class App : Application
         services.AddSingleton<IPackageSearchService, NuGetPackageSearchService>();
         services.AddSingleton<ILocalPackageCacheService, LocalPackageCacheService>();
         services.AddSingleton<IWindowService, WindowService>();
+        // The first time a script asks for a secret, the user is asked whether it may (on the UI thread).
+        services.AddSingleton(sp => new SecretAccessGate(sp.GetRequiredService<IPreferencesService>(),
+            (script, secret, isSave) => Dispatcher.UIThread.InvokeAsync(
+                () => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave))));
         services.AddSingleton<IBuildCacheService, BuildCacheService>();
         services.AddSingleton<IResidencyPolicy, RecentTabsResidencyPolicy>();
         // Released tab content waits in the session folder of the recovery store, which owns it.
@@ -275,12 +280,17 @@ public class App : Application
             ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             // A secret a script asked the user for (Util.GetSecret) is kept in the Secret Store.
             var secrets = sp.GetRequiredService<ISecretStore>();
-            // The Secret Store's key goes to a script only when it can ask for a secret (the host decides, from its text), and a store
-            // still in plain text is encrypted then: the keychain, which may ask the user to unlock it, is not opened at start.
+            // A script asks for the value of a secret and gets only that: the store's key stays here. The keychain, which may ask the user
+            // to unlock it, is opened only then, and a store still in plain text is encrypted at that point.
             LanguageHostRegistry registry = new()
             {
                 SecretSaver = secrets.Put,
-                ExportSecretKey = secrets is FileSecretStore store ? store.PrepareForScripts : null,
+                SecretAccessApprover = sp.GetRequiredService<SecretAccessGate>().MayAccessAsync,
+                SecretReader = name =>
+                {
+                    (secrets as FileSecretStore)?.EncryptIfPlain();
+                    return secrets.Read(name);
+                },
             };
             var runtimeReferences = sp.GetRequiredService<IRuntimeReferenceLocator>();
             registry.Register(new CSharpLanguageHostFactory(loggerFactory, runtimeReferences));

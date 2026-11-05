@@ -1,5 +1,5 @@
 using Invoklet.NonUI.Tests.App.Services.Secrets.Fixtures;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
 using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services.Secrets;

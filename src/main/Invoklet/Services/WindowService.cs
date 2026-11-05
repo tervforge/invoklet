@@ -64,6 +64,12 @@ public sealed class WindowService : IWindowService
         return await new ConnectionPackageConfirmationDialog(message).ShowDialog<bool?>(owner) == true;
     }
 
+    public async Task<SecretAccessChoice> ConfirmSecretAccessAsync(string scriptName, string secretName, bool isSave)
+    {
+        if (MainWindow is not { } owner) return SecretAccessChoice.Deny;
+        return await new SecretAccessDialog(scriptName, secretName, isSave).ShowDialog<SecretAccessChoice?>(owner) ?? SecretAccessChoice.Deny;
+    }
+
     public Task ShowPreferencesAsync()
         => ShowDialogAsync(_preferencesWindowFactory());
 

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Invoklet.Build.Core.Models;
-using Invoklet.Build.Core.Secrets;
+using Invoklet.Secrets;
 
 namespace Invoklet.Build.Core.ProcessRunners;
 
@@ -56,6 +56,8 @@ public sealed class ChildProcess : IChildProcess
     public Task WaitForExitAsync(CancellationToken ct) => _process.WaitForExitAsync(ct);
 
     public int ExitCode => _process.ExitCode;
+
+    public int Id => _process.Id;
 
     // Set for a script run (ForExecution): the file whose appearance cancels the script's
     // Util.CancellationToken.
@@ -117,6 +119,8 @@ public sealed class ChildProcess : IChildProcess
     // script inherits. Mirrored by Invoklet.Runtime.Util.InputEnvVar.
     public const string InputEnvVar = "INVOKLET_INPUT";
 
+    private const string StartupHooksEnvVar = "DOTNET_STARTUP_HOOKS";
+
     /// <summary>Creates a process for running a compiled .NET assembly.</summary>
     /// <param name="arguments">The script's own command-line arguments, its <c>args</c>.</param>
     public static ChildProcess ForExecution(
@@ -149,7 +153,11 @@ public sealed class ChildProcess : IChildProcess
         startInfo.Environment[ParentProcessIdEnvVar] = parentPid;
         var cancelFile = Path.Combine(Path.GetTempPath(), $"Invoklet-stop-{Guid.NewGuid():N}");
         startInfo.Environment[CancelFileEnvVar] = cancelFile;
-        SecretKeys.ApplyTo(startInfo, options.SecretKey);
+        SecretKeys.RemoveFrom(startInfo);
+        if (options.StartupHook is { } hook)
+            startInfo.Environment[StartupHooksEnvVar] = startInfo.Environment.TryGetValue(StartupHooksEnvVar, out var others) && !string.IsNullOrEmpty(others)
+                ? others + Path.PathSeparator + hook
+                : hook;
 
         return new ChildProcess(startInfo) { _cancelFilePath = cancelFile };
     }
@@ -170,8 +178,7 @@ public sealed class ChildProcess : IChildProcess
             StandardErrorEncoding = Encoding.UTF8,
             // No StandardOutputEncoding: stdout carries raw DAP binary frames.
         };
-        // The program being debugged is started by the debugger and inherits its environment.
-        SecretKeys.ApplyTo(startInfo, options.SecretKey);
+        SecretKeys.RemoveFrom(startInfo);
         return new ChildProcess(startInfo);
     }
 }

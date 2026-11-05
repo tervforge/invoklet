@@ -6,7 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
 using Invoklet.Windows;
 using Invoklet.Windows.Models;
 using Moq;

@@ -32,6 +32,9 @@ public interface IChildProcess : IAsyncDisposable
     /// <summary>The process's exit code — valid once <see cref="WaitForExitAsync"/> has completed.</summary>
     int ExitCode { get; }
 
+    /// <summary>The process's id, once started; 0 for a process that has none (a fake).</summary>
+    int Id => 0;
+
     /// <summary>Asks a running script to stop on its own (it sees <c>Util.CancellationToken</c> cancelled).
     /// False when the process can't be asked, as for any process Invoklet didn't start for a script.</summary>
     bool RequestStop() => false;

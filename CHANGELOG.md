@@ -5,6 +5,23 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ## [Unreleased]
 
+### Changed
+
+- `Util.SetSecret` takes a `string?` value: `Util.SetSecret(name, null)` removes the secret from the
+  Secret Store instead of throwing.
+- A debug session starts the script itself and attaches the debugger to it, so `Util.ReadLine`,
+  `Util.GetPassword`, `Util.SetSecret` and the question for a missing secret in `Util.GetSecret` work while
+  debugging, as in a normal run. Debug mode is on by default, so before this `Util.SetSecret` failed
+  with an `InvalidOperationException` on an ordinary Run.
+- A script no longer gets the Secret Store's key: `Util.GetSecret` asks Invoklet (the window or the
+  command-line runner) for the one value it names, so the programs a script starts can't read the
+  other secrets. A missing secret answered with nothing is reported missing, not returned empty.
+- The command-line runner answers `Util.ReadLine`, `Util.GetPassword` and the question for a missing
+  secret in the terminal: the prompt on standard error, the answer from standard input. It saves
+  `Util.SetSecret` and the answered secrets in the same Secret Store as the window.
+- The first time a script reads or saves a secret, Invoklet asks whether it may: Don't Allow, Allow
+  Once (until Invoklet closes) or Always Allow (remembered for the file).
+
 ### Fixed
 
 - On macOS, Cmd+C and Cmd+A copy and select the results again: the menu bar took the keys and its Edit

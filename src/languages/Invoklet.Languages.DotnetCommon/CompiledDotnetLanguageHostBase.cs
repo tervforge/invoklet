@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using Invoklet.Build.Core.Models;
 using Invoklet.Build.Core.ProcessRunners;
-using Invoklet.Build.Core.Secrets;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Debugging;
 using Invoklet.Contracts.Models;
@@ -10,6 +9,7 @@ using Invoklet.Debug;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.DotnetCommon.Adapters;
 using Invoklet.Languages.DotnetCommon.Compiler;
+using Invoklet.Secrets;
 using Microsoft.Extensions.Logging;
 
 namespace Invoklet.Languages.DotnetCommon;
@@ -242,9 +242,8 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
         try
         {
-            var executionOptions = await ExecutionOptionsForRunAsync(code);
             await using var process = _executionProcessFactory(
-                executionOptions,
+                _options.ExecutionOptions,
                 binaryPath,
                 Environment.ProcessId.ToString(),
                 _options.CurrentQueryPath,
@@ -279,16 +278,6 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             _runCts = null;
             _currentInputStream = null;
         }
-    }
-
-    // The key of the Secret Store is read from the system keychain, which may ask the user to unlock it, only for a script that can ask for a
-    // secret; off the calling thread, as reading it starts a process.
-    // The options this run starts its process with: they carry the key only for such a script, so no other program gets it.
-    private async Task<ExecutionOptions> ExecutionOptionsForRunAsync(string code)
-    {
-        if (!SecretKeys.ScriptMayUseSecrets(code, _options.ConnectionSource)) return _options.ExecutionOptions.WithSecretKey(null);
-        if (ExportSecretKey is { } export) await Task.Run(export);
-        return _options.ExecutionOptions.WithSecretKey(SecretKeys.ScriptKey);
     }
 
     // Stop: a script that listens for it (Util.CancellationToken) is asked to finish and given
@@ -335,8 +324,25 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
         try
         {
-            var executionOptions = await ExecutionOptionsForRunAsync(code);
-            await using var process = _debuggerProcessFactory(executionOptions);
+            // The script is started here as for a run, with its own stdin and stdout, so it can ask for input and its output reaches the
+            // same handler; the debugger attaches to it. Invoklet.Runtime's startup hook holds it until the breakpoints are set.
+            var hook = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(binaryPath)!, "Invoklet.Runtime.dll"));
+            var scriptOptions = _options.ExecutionOptions.WithStartupHook(File.Exists(hook) ? hook : null);
+            await using var script = _executionProcessFactory(
+                scriptOptions, binaryPath, Environment.ProcessId.ToString(), _options.CurrentQueryPath, _options.Arguments);
+            if (!script.Start()) throw new InvalidOperationException("Failed to start the script.");
+            _currentInputStream = script.InputStream;
+            var output = new OutputDrain(WrapWithSentinelDetection(outputHandler), outputHandler);
+            var drained = Task.WhenAll(
+                output.DrainAsync(script.StandardOutput, OutputKind.StandardOutput, cts.Token),
+                output.DrainAsync(script.StandardError, OutputKind.StandardError, cts.Token));
+
+            // netcoredbg sends nothing when an attached process ends: the session ends with the script.
+            using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            var exited = script.WaitForExitAsync(cts.Token);
+            _ = exited.ContinueWith(_ => sessionCts.Cancel(), TaskScheduler.Default);
+
+            await using var process = _debuggerProcessFactory(_options.ExecutionOptions);
             var sessionOptions = new DapSessionOptions(
                 ProgramPath: binaryPath,
                 WorkingDirectory: _options.OutputDirectory,
@@ -348,30 +354,49 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
                 CurrentQueryPath: _options.CurrentQueryPath,
                 RuntimePath: _options.ExecutionOptions.Runtime.RuntimePath,
                 Arguments: _options.Arguments,
-                ArgumentContractJson: _options.ArgumentContractJson);
+                ArgumentContractJson: _options.ArgumentContractJson,
+                AttachProcessId: script.Id);
             OnStageChanged(RunStage.Running);
             await using var session = new DapSession(
                 process,
                 sessionOptions,
-                WrapWithSentinelDetection(outputHandler),
+                outputHandler,
                 HandleBreakpointHit,
                 _loggerFactory.CreateLogger<DapSession>(),
-                OnBreakpointVerified);
+                OnBreakpointVerified,
+                ReleaseScriptAsync);
 
             _currentSession = session;
             try
             {
-                await session.RunAsync(cts.Token);
+                await session.RunAsync(sessionCts.Token);
+            }
+            catch (OperationCanceledException) when (exited.IsCompleted && !cts.IsCancellationRequested)
+            {
+                // The script ended: the session was ended with it.
             }
             finally
             {
                 session.FlushOutputBuffers();
                 _currentSession = null;
             }
+            // The debugger is gone (it ended or failed before the script did): the debug run ends with it, so a script still waiting
+            // to be let go, or paused, does not keep it open.
+            if (!exited.IsCompleted) script.Kill();
+            await exited;
+            await drained;
+
+            async Task ReleaseScriptAsync(CancellationToken ct)
+            {
+                if (scriptOptions.StartupHook is null) return;
+                await script.InputStream.WriteAsync("\n"u8.ToArray(), ct);
+                await script.InputStream.FlushAsync(ct);
+            }
         }
         finally
         {
             _runCts = null;
+            _currentInputStream = null;
         }
     }
 
@@ -441,13 +466,13 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
     // ── Interactive input ────────────────────────────────────────────────────
 
-    // No-op if nothing is running via RunAsync — RunDebugAsync never sets _currentInputStream
-    // (see WrapWithSentinelDetection), so this can never race a real send with a torn-down process.
+    // No-op if no script is running (RunAsync or RunDebugAsync, which both start it with a stdin of its own).
     public override async Task SendInputAsync(string text, CancellationToken cancellationToken)
     {
         if (_currentInputStream is not { } stream) return;
         // The answer to a missing secret is kept before the script gets it, so it is there next time.
-        if (Interlocked.Exchange(ref _pendingSecret, null) is { } secret && SecretSaver is { } save)
+        // An empty answer is no secret (the script reports it missing), so nothing is kept.
+        if (Interlocked.Exchange(ref _pendingSecret, null) is { } secret && text.Length > 0 && SecretSaver is { } save)
         {
             try
             {
@@ -468,9 +493,7 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
     // Recognizes both sentinel-prefixed lines a running script can emit on stdout: RsPrefix for
     // ObjectExtensions.Dump (DumpHtml, unconditional) and InputRequestPrefix for Util.ReadLine/
-    // GetSecret/SetSecret (only while _currentInputStream is set, i.e. a real RunAsync process — RunDebugAsync
-    // shares this same wrapper but never sets that field, so a script calling Util.ReadLine under the
-    // debugger falls through to the plain-output branch instead of firing an unanswerable request).
+    // GetSecret/SetSecret (only while _currentInputStream is set, i.e. while a script Invoklet started runs).
     //
     // A record is recognized anywhere in a stdout line, not only at its start: a script that wrote
     // text without a line break (Console.Write) before calling Dump/ReadLine leaves the record after
@@ -500,9 +523,14 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
                     break;
                 default:
                     var request = ParseInputRequest(payload);
-                    if (request is { Secret: { } name, Value: { } value })
+                    if (request is { Secret: { } read, Read: true })
                     {
-                        _ = KeepSecretAsync(name, value); // Util.SetSecret: nobody is asked
+                        _ = AnswerSecretAsync(read); // Util.GetSecret: read here, so the store's key stays in this process
+                        break;
+                    }
+                    if (request is { Secret: { } name } && (request.Value is not null || request.Remove))
+                    {
+                        _ = KeepSecretAsync(name, request.Value); // Util.SetSecret: nobody is asked
                         break;
                     }
                     _pendingSecret = request.Secret;
@@ -545,12 +573,58 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
     // The secret the script is asking for (Util.GetSecret found none), to keep with the answer.
     private string? _pendingSecret;
 
-    // Util.SetSecret: kept through SecretSaver, then the script is told 1 (kept) or 0 on its stdin.
-    private async Task KeepSecretAsync(string name, string value)
+    // Util.GetSecret: 1 and the value, 0 for none, 2 and why the store can't be read (Base64 after the digit), or 3 when the user
+    // didn't let the script read it, on the script's stdin.
+    private async Task AnswerSecretAsync(string name)
+    {
+        if (_currentInputStream is not { } stream) return;
+        string answer;
+        try
+        {
+            answer = !await MayAccessAsync(name, isSave: false) ? "3"
+                : await Task.Run(() => SecretReader?.Invoke(name)) is { } value
+                ? "1" + Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
+                : "0";
+        }
+        catch (Exception ex)
+        {
+            _loggerFactory.CreateLogger<CompiledDotnetLanguageHostBase>().LogWarning(ex, "Could not read the secret '{Name}' from the Secret Store", name);
+            answer = "2" + Convert.ToBase64String(Encoding.UTF8.GetBytes($"Invoklet's Secret Store can't be read: {ex.Message}"));
+        }
+        try
+        {
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(answer + "\n"));
+            await stream.FlushAsync();
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // The script ended meanwhile.
+        }
+    }
+
+    // Whether the user lets this script reach the secret; a failing question is a no.
+    private async Task<bool> MayAccessAsync(string name, bool isSave)
+    {
+        if (SecretAccessApprover is not { } approve) return true;
+        try
+        {
+            return await approve(new SecretAccess(_options.CurrentQueryPath, name, isSave), _runCts?.Token ?? CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+                _loggerFactory.CreateLogger<CompiledDotnetLanguageHostBase>().LogWarning(ex, "Could not ask whether the script may use the secret '{Name}'", name);
+            return false;
+        }
+    }
+
+    // Util.SetSecret: kept (removed, for null) through SecretSaver, then the script is told 1 (done), 0 (not kept) or 3 (not allowed) on its stdin.
+    private async Task KeepSecretAsync(string name, string? value)
     {
         if (_currentInputStream is not { } stream) return;
         var kept = false;
-        if (SecretSaver is { } save)
+        var allowed = await MayAccessAsync(name, isSave: true);
+        if (allowed && SecretSaver is { } save)
         {
             try
             {
@@ -564,7 +638,7 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
         }
         try
         {
-            await stream.WriteAsync(Encoding.UTF8.GetBytes(kept ? "1\n" : "0\n"));
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(!allowed ? "3\n" : kept ? "1\n" : "0\n"));
             await stream.FlushAsync();
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException)
@@ -573,7 +647,7 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
         }
     }
 
-    private static (string? Prompt, bool IsPassword, string? Secret, string? Value) ParseInputRequest(string base64)
+    private static (string? Prompt, bool IsPassword, string? Secret, string? Value, bool Remove, bool Read) ParseInputRequest(string base64)
     {
         try
         {
@@ -586,11 +660,13 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             var isPassword = root.TryGetProperty("IsPassword", out var ip) && ip.ValueKind == JsonValueKind.True;
             var secret = root.TryGetProperty("Secret", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
             var value = root.TryGetProperty("Value", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-            return (prompt, isPassword, secret, value);
+            var remove = root.TryGetProperty("Remove", out var r) && r.ValueKind == JsonValueKind.True;
+            var read = root.TryGetProperty("Read", out var rd) && rd.ValueKind == JsonValueKind.True;
+            return (prompt, isPassword, secret, value, remove, read);
         }
         catch (Exception)
         {
-            return (null, false, null, null);
+            return (null, false, null, null, false, false);
         }
     }
 

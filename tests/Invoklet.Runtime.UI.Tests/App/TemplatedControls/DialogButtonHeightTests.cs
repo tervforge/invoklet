@@ -13,7 +13,7 @@ namespace Invoklet.Runtime.UI.Tests.App.TemplatedControls;
 // leaves out, so a row of buttons and the buttons of two dialogs line up.
 public class DialogButtonHeightTests
 {
-    public static TheoryData<string> Dialogs => new("error", "newfile", "goto", "reload", "revert", "exit", "conflict", "unsaved", "rename", "connection", "about");
+    public static TheoryData<string> Dialogs => new("error", "newfile", "goto", "reload", "revert", "exit", "conflict", "unsaved", "rename", "connection", "secret", "about");
 
     private static Window Create(string kind) => kind switch
     {
@@ -27,6 +27,7 @@ public class DialogButtonHeightTests
         "unsaved" => new UnsavedChangesDialog("a.inv"),
         "rename" => new RenameSymbolDialog("Name"),
         "connection" => new ConnectionPackageConfirmationDialog("Add it?"),
+        "secret" => new SecretAccessDialog("report.inv", "billing", isSave: false),
         _ => new AboutWindow(),
     };
 

@@ -52,16 +52,24 @@ public abstract class LanguageHostBase : ILanguageHost
 
     /// <summary>
     /// Keeps a secret the script asked the user for (<c>Util.GetSecret</c> with no such secret yet),
-    /// by name and value, before the answer reaches the script. Null: answers aren't kept.
+    /// by name and value, before the answer reaches the script, and what <c>Util.SetSecret</c> saves; a null value
+    /// (<c>Util.SetSecret(name, null)</c>) removes the secret. Null: answers aren't kept.
     /// </summary>
-    public Action<string, string>? SecretSaver { get; set; }
+    public Action<string, string?>? SecretSaver { get; set; }
 
     /// <summary>
-    /// Called before a run or a debug session of a script that may ask for a secret (it mentions <c>GetSecret</c> or <c>SetSecret</c>), to hand
-    /// the key of the Secret Store to the script's process. A script that does not never calls it, so the system keychain is not opened for it.
-    /// Null: nothing is handed over.
+    /// Reads a secret a running script asks for (<c>Util.GetSecret</c>), by name in any letter case; null when the store has none. It throws
+    /// <see cref="InvalidDataException"/> (or another <see cref="IOException"/>) when the store can't be read. The script gets only that
+    /// value: the store's key stays in this process, and the system keychain is opened only when a script asks. Null: every secret is missing.
     /// </summary>
-    public Action? ExportSecretKey { get; set; }
+    public Func<string, string?>? SecretReader { get; set; }
+
+    /// <summary>
+    /// Asked before a running script reads a secret (<c>Util.GetSecret</c>) or saves one (<c>Util.SetSecret</c>): whether the script may.
+    /// Given the script's file (null for one not saved), the secret's name and whether it is a save. A script that may not gets
+    /// <see cref="UnauthorizedAccessException"/>. Null: every script may.
+    /// </summary>
+    public Func<SecretAccess, CancellationToken, Task<bool>>? SecretAccessApprover { get; set; }
 
     // --- Debug: virtual, throws if capability not declared ---
 

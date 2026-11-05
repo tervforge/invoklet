@@ -58,7 +58,8 @@ public class CompiledDotnetLanguageHostProcessFactoryTests
         ExecutionChildProcessFactory? executionProcessFactory = null,
         DebuggerChildProcessFactory? debuggerProcessFactory = null,
         string? currentQueryPath = null,
-        IReadOnlyList<string>? arguments = null)
+        IReadOnlyList<string>? arguments = null,
+        string binary = "out.dll")
     {
         var outputDir = Path.Combine(Path.GetTempPath(), "Invoklet-tests-" + Guid.NewGuid());
         var options = new CompiledDotnetLanguageHostOptions
@@ -77,7 +78,7 @@ public class CompiledDotnetLanguageHostProcessFactoryTests
             Arguments = arguments ?? [],
         };
 
-        var compiler = new FakeCompiler(new ProcessCompilerResult("out.dll", true, [], []));
+        var compiler = new FakeCompiler(new ProcessCompilerResult(binary, true, [], []));
         var host = new CSharpLanguageHost(
             options, NullLoggerFactory.Instance, (_, _, _) => compiler, executionProcessFactory, debuggerProcessFactory);
         return (host, outputDir);
@@ -251,57 +252,64 @@ public class CompiledDotnetLanguageHostProcessFactoryTests
         throw new TimeoutException($"""Never saw a written request containing "{containing}".""");
     }
 
-    // Live user report ("Util.CurrentQueryPath doesn't work while debugging"): confirms
-    // the full RunDebugAsync path, not just DapSession in isolation (DapSessionCurrentQueryPathTests.cs
-    // already covers that half) — Options.CurrentQueryPath really does reach the real DapSession this
-    // host constructs internally, which really does put it in the actual launch request.
-    [Fact]
-    public async Task RunDebugAsync_Should_ForwardCurrentQueryPath_ToTheRealLaunchRequest()
+    // A script that runs until the test lets it end, with the id the debugger attaches to.
+    private sealed class RunningScript : IChildProcess
     {
-        var process = new PipeFakeChildProcess();
-        DebuggerChildProcessFactory factory = _ => process;
+        public TaskCompletionSource Exit { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public MemoryStream Input { get; } = new();
 
-        var (host, outputDir) = CreateHost(debuggerProcessFactory: factory, currentQueryPath: "/root/a.inv");
-        try
-        {
-            var runTask = host.RunDebugAsync(
-                "int x = 1;", outputHandler: static (_, _) => { }, TestContext.Current.CancellationToken);
+        public StreamReader StandardOutput { get; } = new(new MemoryStream());
+        public StreamReader StandardError { get; } = new(new MemoryStream());
+        public Stream OutputStream => StandardOutput.BaseStream;
+        public Stream InputStream => Input;
+        public int Id => 4242;
 
-            process.Output.Push(Frame(new { seq = 1, type = "response", request_seq = 1, command = "initialize", success = true }));
-            var written = await WaitForWrittenRequestAsync(process.Input, "\"command\":\"launch\"");
-
-            Assert.Contains("INVOKLET_CURRENT_QUERY_PATH", written);
-            Assert.Contains("/root/a.inv", written);
-
-            process.Output.Push(Frame(new { seq = 2, type = "event", @event = "exited" }));
-            await runTask;
-        }
-        finally { Directory.Delete(outputDir, recursive: true); }
+        public bool Start() => true;
+        public void Kill() => Exit.TrySetResult();
+        public Task WaitForExitAsync(CancellationToken ct) => Exit.Task.WaitAsync(ct);
+        public int ExitCode => 0;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    // The debug launch must use the same configured dotnet host
-    // as the non-debug run, not netcoredbg's own PATH lookup of "dotnet".
+    // The script is started by Invoklet, with its own stdin (so it can ask for input), held by Invoklet.Runtime's startup hook; the
+    // debugger attaches to it by id, and once it is configured the script gets the line that lets it go on. The run ends with the script.
     [Fact]
-    public async Task RunDebugAsync_Should_LaunchThroughTheConfiguredRuntimePath()
+    public async Task RunDebugAsync_Should_StartTheScript_AttachTheDebuggerToIt_AndLetItGoOnceConfigured()
     {
-        var process = new PipeFakeChildProcess();
-        DebuggerChildProcessFactory factory = _ => process;
-
-        var (host, outputDir) = CreateHost(debuggerProcessFactory: factory);
+        var debugger = new PipeFakeChildProcess();
+        var script = new RunningScript();
+        ExecutionOptions? scriptOptions = null;
+        ExecutionChildProcessFactory execution = (options, _, _, _, _) =>
+        {
+            scriptOptions = options;
+            return script;
+        };
+        var outputDir = Path.Combine(Path.GetTempPath(), "Invoklet-tests-" + Guid.NewGuid());
+        Directory.CreateDirectory(outputDir);
+        var hook = Path.Combine(outputDir, "Invoklet.Runtime.dll");
+        File.WriteAllText(hook, "");
+        var (host, hostDir) = CreateHost(execution, _ => debugger, binary: Path.Combine(outputDir, "out.dll"));
         try
         {
-            var runTask = host.RunDebugAsync(
-                "int x = 1;", outputHandler: static (_, _) => { }, TestContext.Current.CancellationToken);
+            var runTask = host.RunDebugAsync("int x = 1;", outputHandler: static (_, _) => { }, TestContext.Current.CancellationToken);
 
-            process.Output.Push(Frame(new { seq = 1, type = "response", request_seq = 1, command = "initialize", success = true }));
-            var written = await WaitForWrittenRequestAsync(process.Input, "\"command\":\"launch\"");
+            debugger.Output.Push(Frame(new { seq = 1, type = "response", request_seq = 1, command = "initialize", success = true }));
+            var written = await WaitForWrittenRequestAsync(debugger.Input, "\"command\":\"attach\"");
+            Assert.Contains("\"processId\":4242", written);
+            Assert.Equal(hook, scriptOptions?.StartupHook);
+            Assert.Equal(0, script.Input.Length);
 
-            Assert.Contains("\"program\":\"dotnet\"", written);
-            Assert.Contains("\"args\":[\"out.dll\"]", written);
+            debugger.Output.Push(Frame(new { seq = 2, type = "response", request_seq = 3, command = "configurationDone", success = true }));
+            for (var i = 0; i < 100 && script.Input.Length == 0; i++) await Task.Delay(20, TestContext.Current.CancellationToken);
+            Assert.Equal("\n", System.Text.Encoding.UTF8.GetString(script.Input.ToArray()));
 
-            process.Output.Push(Frame(new { seq = 2, type = "event", @event = "exited" }));
-            await runTask;
+            script.Exit.SetResult();
+            await runTask.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         }
-        finally { Directory.Delete(outputDir, recursive: true); }
+        finally
+        {
+            Directory.Delete(outputDir, recursive: true);
+            Directory.Delete(hostDir, recursive: true);
+        }
     }
 }

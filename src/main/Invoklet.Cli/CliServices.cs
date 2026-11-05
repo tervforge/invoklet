@@ -1,4 +1,3 @@
-using Invoklet.Build.Core.Secrets;
 using Invoklet.Connectors.Grpc;
 using Invoklet.Connectors.Http;
 using Invoklet.Connectors.Postgres;
@@ -10,6 +9,7 @@ using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.Languages.VB;
+using Invoklet.Secrets;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Invoklet.Cli;
@@ -27,7 +27,8 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
     public static CliServices CreateDefault()
     {
         var runtimeReferences = new DotnetRuntimeReferenceLocator();
-        var registry = new LanguageHostRegistry { ExportSecretKey = ExportKey };
+        // The window's Secret Store, read and written the same way: a script asks for one value or saves one (Util.SetSecret).
+        var registry = new LanguageHostRegistry { SecretReader = Secrets.Read, SecretSaver = Secrets.Put };
         registry.Register(new CSharpLanguageHostFactory(NullLoggerFactory.Instance, runtimeReferences));
         registry.Register(new VbLanguageHostFactory(NullLoggerFactory.Instance, runtimeReferences));
         var connectionDrivers = new ConnectionDriverRegistry();
@@ -42,32 +43,8 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
         return new CliServices(registry, new DotnetSdkProvider(), connectionDrivers, schemas);
     }
 
-    private static readonly object KeyLock = new();
-    private static bool _keyExported;
+    private static readonly FileSecretStore Secrets = new();
 
-    // Reads the key of an encrypted Secret Store from the keychain, once, when something needs a secret.
-    private static void ExportKey()
-    {
-        lock (KeyLock)
-        {
-            if (_keyExported) return;
-            _keyExported = true;
-            SecretKeys.ExportForScripts(SecretKeys.DefaultStorePath());
-        }
-    }
-
-    // The Secret Store's value, read as a script reads it; a missing or unreadable one is null, which
-    // the schema reports as missing.
-    private static string? Secret(string name)
-    {
-        try
-        {
-            ExportKey();
-            return Util.GetSecret(name);
-        }
-        catch (Exception ex) when (ex is KeyNotFoundException or InvalidDataException or IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            return null;
-        }
-    }
+    // The Secret Store's value for a connection's schema; a missing or unreadable one is null, which the schema reports as missing.
+    private static string? Secret(string name) => Secrets.Find(name);
 }

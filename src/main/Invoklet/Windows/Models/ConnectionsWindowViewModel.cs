@@ -4,8 +4,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
+using Invoklet.Secrets;
 using Invoklet.Services.Connections;
-using Invoklet.Services.Secrets;
 using Invoklet.Shared;
 using ReactiveUI;
 

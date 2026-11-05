@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
+using Invoklet.Secrets;
 using Invoklet.Services.Connections;
-using Invoklet.Services.Secrets;
 using Invoklet.Windows.Models;
 using ReactiveUI;
 

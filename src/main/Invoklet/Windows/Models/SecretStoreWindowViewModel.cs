@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Reactive;
 using System.Security.Cryptography;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
 using Invoklet.Shared;
 using ReactiveUI;
 
@@ -165,7 +165,7 @@ public sealed class SecretStoreWindowViewModel : ViewModelBase
                 SecretStoreBusyException =>
                     "The secret store is in use by another Invoklet window or a running script. Try again in a moment. Your edits are still here.",
                 // Our own wording and the keychain's error: no secret value in it.
-                Invoklet.Build.Core.Secrets.SecretKeyUnavailableException => ex.Message + " Your edits are still here.",
+                Invoklet.Secrets.SecretKeyUnavailableException => ex.Message + " Your edits are still here.",
                 _ => "Could not save the secret store. Check access and available disk space, then try again. Your edits are still here.",
             };
             return false;

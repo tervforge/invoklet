@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace Invoklet.Build.Core.Secrets;
+namespace Invoklet.Secrets;
 
 /// <summary>The system keychain couldn't give or keep the Secret Store's key: locked, refused, or none installed.</summary>
 public sealed class SecretKeyUnavailableException(string message, Exception? inner = null) : IOException(message, inner);
@@ -24,9 +24,8 @@ public interface ISecretKeySource
 /// <summary>
 /// The Secret Store's key and the encryption of its values on macOS and Linux (Windows uses DPAPI).
 /// The key is 32 random bytes kept in the system keychain — the macOS Keychain, or the Linux Secret
-/// Service through <c>secret-tool</c> — never in the store's file. Invoklet and its command line read
-/// it and pass it to the scripts they start in <see cref="EnvVar"/>, because a script's own process
-/// can't open the keychain without asking the user for every new build.
+/// Service through <c>secret-tool</c> — never in the store's file. Only Invoklet and its command line
+/// read it: a script asks them for the value of one secret over its stdin, and never gets the key.
 /// </summary>
 /// <remarks>
 /// Invoklet.Runtime decrypts values itself for <c>Util.GetSecret</c> (its own copy of the format, as
@@ -52,49 +51,8 @@ public static class SecretKeys
             ? path
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "secrets.json");
 
-    /// <summary>
-    /// Whether a script may ask for a secret, judged by its text: it mentions <c>GetSecret</c> or <c>SetSecret</c>, in its own code or in the
-    /// code its connections add (which reads a <c>${secret:...}</c> of a connection the same way). Only such a script gets the key from the
-    /// keychain; any other never makes the system ask the user to unlock it.
-    /// </summary>
-    public static bool ScriptMayUseSecrets(string? code, string? connectionSource)
-        => Mentions(code) || Mentions(connectionSource);
-
-    private static bool Mentions(string? text)
-        => text is { Length: > 0 }
-            && (text.Contains("GetSecret", StringComparison.Ordinal) || text.Contains("SetSecret", StringComparison.Ordinal));
-
-    /// <summary>
-    /// The key as the scripts get it, once read. It is not put in this process's environment, which every program
-    /// started later would inherit: <see cref="Models.ExecutionOptions.SecretKey"/> hands it to the one script that may use it.
-    /// </summary>
-    public static string? ScriptKey => Volatile.Read(ref _scriptKey);
-
-    private static string? _scriptKey;
-
-    /// <summary>Keeps the key for the scripts that may ask for secrets (<see cref="ScriptKey"/>).</summary>
-    public static void ExportForScripts(byte[] key) => Volatile.Write(ref _scriptKey, Convert.ToBase64String(key));
-
-    /// <summary>Gives a process the key, or takes it away: a program must not get it by inheriting it from whoever started Invoklet.</summary>
-    public static void ApplyTo(ProcessStartInfo startInfo, string? key)
-    {
-        if (key is null) startInfo.Environment.Remove(EnvVar);
-        else startInfo.Environment[EnvVar] = key;
-    }
-
-    /// <summary>
-    /// For the command line: when the store is encrypted, reads its key and exports it. A key that
-    /// can't be read is left for <c>Util.GetSecret</c> to report, only to a script that needs a secret.
-    /// </summary>
-    public static void ExportForScripts(string storePath)
-    {
-        if (Keychain is null || !IsEncrypted(storePath)) return;
-        try
-        {
-            if (Keychain.Find() is { } key) ExportForScripts(key);
-        }
-        catch (SecretKeyUnavailableException) { }
-    }
+    /// <summary>Takes away a key (<see cref="EnvVar"/>) a process would inherit from whoever started Invoklet: no program Invoklet starts gets it.</summary>
+    public static void RemoveFrom(ProcessStartInfo startInfo) => startInfo.Environment.Remove(EnvVar);
 
     /// <summary>Whether the store's values are encrypted with a keychain key. Only the file's
     /// <c>Protection</c> is read, so a store without secrets never opens the keychain.</summary>
