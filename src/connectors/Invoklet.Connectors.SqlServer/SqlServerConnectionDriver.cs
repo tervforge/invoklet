@@ -1,4 +1,5 @@
 using Invoklet.Connectors.EfCore;
+using Invoklet.Contracts.Connections;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.SqlServer.Design.Internal;
@@ -25,6 +26,15 @@ public sealed class SqlServerConnectionDriver : EfCoreConnectionDriver
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions.UseSqlServer";
 
     protected override string ConnectionStringExample => "Server=localhost;Database=Shop;User Id=app;Password=${secret:shop-password};TrustServerCertificate=true";
+
+    // Microsoft.Data.SqlClient's keys and the synonyms it takes for them.
+    protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
+    [
+        new("Server", "Server", ["Data Source", "Address", "Addr", "Network Address"], "localhost"),
+        new("Database", "Database", ["Initial Catalog"], "Shop"),
+        new("User Id", "User", ["User ID", "UID", "User", "Username", "User Name"], "app"),
+        new("Password", "Password", ["PWD"], "${secret:shop-password}", IsSecret: true),
+    ];
 
     protected override string AuthenticationHint =>
         "For your Windows account use Integrated Security=true (on macOS and Linux it needs a Kerberos ticket: kinit).";

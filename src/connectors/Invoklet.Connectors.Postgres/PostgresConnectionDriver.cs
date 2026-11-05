@@ -1,4 +1,5 @@
 using Invoklet.Connectors.EfCore;
+using Invoklet.Contracts.Connections;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -25,6 +26,16 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.NpgsqlDbContextOptionsBuilderExtensions.UseNpgsql";
 
     protected override string ConnectionStringExample => "Host=localhost;Database=shop;Username=app;Password=${secret:shop-password}";
+
+    // Npgsql's keys and the synonyms it takes for them.
+    protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
+    [
+        new("Host", "Host", ["Server"], "localhost"),
+        new("Port", "Port", Example: "5432"),
+        new("Database", "Database", ["DB"], "shop"),
+        new("Username", "Username", ["User ID", "UserID", "User Name", "UID", "User"], "app"),
+        new("Password", "Password", ["PWD", "PSW"], "${secret:shop-password}", IsSecret: true),
+    ];
 
     protected override string AuthenticationHint =>
         "Leave the password out to take it from your pgpass file (~/.pgpass, or the file named by Passfile= or PGPASSFILE).";

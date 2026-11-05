@@ -69,4 +69,43 @@ public sealed class ConnectionFieldViewModelTests
         Assert.Equal("10.0.0.5:8080", sut.EndpointHost);
         Assert.Equal("http://10.0.0.5:8080", sut.ToValue()!.Text);
     }
+
+    private static ConnectionParam ConnectionString() => new("connectionString", "Connection string", ConnectionParamType.ConnectionString,
+        Parts: [new("Host", "Host", ["Server"]), new("Port", "Port"), new("Password", "Password", ["PWD"], IsSecret: true)]);
+
+    // The fields show what the stored text says; editing one rewrites only its setting, and the rest of the text stays as written.
+    [Fact]
+    public void AConnectionString_Should_BeEditedThroughItsFields_KeepingTheRestOfTheText()
+    {
+        var sut = new ConnectionFieldViewModel(ConnectionString(), MdRunValue.Of("Server=db.local;SSL Mode=Require;Password=${secret:shop}"), ["shop", "other"]);
+        Assert.Equal(["db.local", "", "${secret:shop}"], sut.Parts.Select(p => p.Value));
+
+        sut.Parts[1].Value = "5433";
+        sut.Parts[0].Value = "db2.local";
+
+        Assert.Equal("Server=db2.local;SSL Mode=Require;Password=${secret:shop};Port=5433", sut.Text);
+        Assert.Equal(sut.Text, sut.ToValue()!.Text);
+    }
+
+    [Fact]
+    public void EditingTheWholeText_Should_UpdateTheFields()
+    {
+        var sut = new ConnectionFieldViewModel(ConnectionString(), null, []);
+
+        sut.Text = "Host=a;Port=1";
+
+        Assert.Equal(["a", "1", ""], sut.Parts.Select(p => p.Value));
+    }
+
+    // Only the password field offers the secrets, and choosing one writes the placeholder into the text.
+    [Fact]
+    public void ThePasswordField_Should_InsertASecretIntoTheText()
+    {
+        var sut = new ConnectionFieldViewModel(ConnectionString(), MdRunValue.Of("Host=a"), ["shop"]);
+        Assert.Equal([false, false, true], sut.Parts.Select(p => p.CanInsertSecret));
+
+        sut.Parts[2].SecretToInsert = "shop";
+
+        Assert.Equal("Host=a;Password=${secret:shop}", sut.Text);
+    }
 }

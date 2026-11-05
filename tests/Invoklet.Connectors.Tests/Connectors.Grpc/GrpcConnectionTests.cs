@@ -426,7 +426,8 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
         }
 
         var secretsFile = Path.Combine(_folder, "secrets.json");
-        new FileSecretStore(secretsFile).Save([new Secret("inventory-token", "t0k")], null);
+        var secrets = new FileSecretStore(secretsFile);
+        secrets.Save([new Secret("inventory-token", "t0k")], null);
         var previousSecrets = Environment.GetEnvironmentVariable(FileSecretStore.FileEnvVar);
         Environment.SetEnvironmentVariable(FileSecretStore.FileEnvVar, secretsFile);
         try
@@ -440,7 +441,8 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
                 Packages = packages,
                 Connections = generated,
             }, new CSharpReferenceService().GetExtensionReference());
-            await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance);
+            // As the Invoklet window gives it: the script asks for the value, Invoklet reads the store.
+            await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance) { SecretReader = secrets.Read };
             var output = new ConcurrentQueue<string>();
             var errors = new ConcurrentQueue<string>();
             // The caller's own metadata goes too, and is the same after each call.

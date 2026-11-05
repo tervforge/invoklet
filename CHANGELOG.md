@@ -24,6 +24,9 @@ Notable changes in each Invoklet release. Downloads are on the
   lists the scripts always allowed, each with Revoke; stopping the script closes the question.
 - The editor warns when a secret from `Util.GetSecret` is written to the output by `.Dump()` or
   `Console.Write`, and offers to remove just that `.Dump()` call or the output line.
+- The Connections window edits a PostgreSQL or SQL Server connection string through a field per setting
+  (host, port, database, user, password with a secret), above the whole string, which keeps every
+  other setting as written.
 
 ### Fixed
 

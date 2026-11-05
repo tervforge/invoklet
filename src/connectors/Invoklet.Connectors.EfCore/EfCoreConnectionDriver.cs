@@ -40,6 +40,9 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
 
     protected abstract string ConnectionStringExample { get; }
 
+    /// <summary>The settings of the connection string the form shows as fields of their own; the rest are written in the text.</summary>
+    protected virtual IReadOnlyList<ConnectionStringPart> ConnectionStringParts => [];
+
     /// <summary>What the form says about signing in without a password in the text.</summary>
     protected abstract string AuthenticationHint { get; }
 
@@ -62,8 +65,10 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
 
     public virtual IReadOnlyList<ConnectionParam> Params =>
     [
-        new(ConnectionStringKey, "Connection string", Required: true, Example: ConnectionStringExample,
-            Description: "Write the password as ${secret:name} to keep it in the Secret Store. " + AuthenticationHint),
+        new(ConnectionStringKey, "Connection string", ConnectionParamType.ConnectionString, Required: true, Example: ConnectionStringExample,
+            Description: "Fill in the fields, or write the whole connection string; settings without a field go in the text. "
+                + "Write the password as ${secret:name} to keep it in the Secret Store. " + AuthenticationHint,
+            Parts: ConnectionStringParts),
         new(SchemaKey, "Schema", Description: "Optional. Read only the tables of this schema; without it all schemas are read."),
     ];
 

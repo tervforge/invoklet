@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Connectors.Http;
+using Invoklet.Connectors.Postgres;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
@@ -280,6 +281,47 @@ public class ConnectionsWindowTests
         Assert.Equal("https://billing.example/", Assert.Single(saved!).Params["baseAddress"].Text);
         owner.Close();
     }
+    // A database's connection string is edited through a field per setting above the whole text; a field's edit changes only its setting.
+    [AvaloniaFact]
+    public async Task AConnectionString_Should_BeEditedThroughItsFields()
+    {
+        var store = new Mock<IConnectionStore>();
+        store.Setup(s => s.LoadSnapshot()).Returns(new ConnectionStoreSnapshot(
+        [
+            new MdRunConnection
+            {
+                Name = "shop",
+                Driver = "postgres",
+                Params = new(StringComparer.Ordinal) { ["connectionString"] = MdRunValue.Of("Server=db.local;SSL Mode=Require") },
+            },
+        ], null));
+        store.Setup(s => s.FilePath).Returns("/data/Invoklet/connections.json");
+        IReadOnlyList<MdRunConnection>? saved = null;
+        store.Setup(s => s.Save(It.IsAny<IReadOnlyList<MdRunConnection>>(), It.IsAny<string?>()))
+            .Callback<IReadOnlyList<MdRunConnection>, string?>((list, _) => saved = list).Returns("saved");
+        var secrets = new Mock<ISecretStore>();
+        secrets.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
+        var registry = new ConnectionDriverRegistry();
+        registry.Register(new PostgresConnectionDriver());
+        var owner = new Window();
+        owner.Show();
+        var window = new ConnectionsWindow(new ConnectionsWindowViewModel(store.Object, registry, secrets.Object));
+        var result = window.ShowDialog<bool>(owner);
+        Dispatcher.UIThread.RunJobs();
+        var boxes = window.FindControl<ItemsControl>("FieldList")!.GetVisualDescendants().OfType<TextBox>().ToList();
+        TextBox Box(string name) => boxes.Single(b => AutomationProperties.GetName(b) == name && b.IsEffectivelyVisible);
+
+        Assert.Equal("db.local", Box("Host").Text);
+        Box("Database").Text = "shop";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Server=db.local;SSL Mode=Require;Database=shop", Box("Connection string").Text);
+
+        window.FindControl<Button>("OkButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(await result);
+        Assert.Equal("Server=db.local;SSL Mode=Require;Database=shop", Assert.Single(saved!).Params["connectionString"].Text);
+        owner.Close();
+    }
+
     [AvaloniaFact]
     public async Task SaveFailure_Should_KeepDialogOpenWithEdits_AndAllowRetry()
     {

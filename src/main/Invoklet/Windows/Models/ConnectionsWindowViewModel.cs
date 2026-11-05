@@ -78,6 +78,45 @@ public sealed class ConnectionMapRowViewModel : ReactiveObject
     }
 }
 
+// One setting of a connection string shown as a field of its own; editing it rewrites only that setting in the whole text.
+public sealed class ConnectionStringPartViewModel : ReactiveObject
+{
+    private readonly ConnectionFieldViewModel _field;
+
+    public ConnectionStringPart Part { get; }
+    public string Label => Part.Label;
+    public string? Example => Part.Example;
+    public IReadOnlyList<string> SecretNames => _field.SecretNames;
+    public bool CanInsertSecret => Part.IsSecret && SecretNames.Count > 0;
+
+    public string Value
+    {
+        get;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value ?? "");
+            _field.WritePart(Part, field);
+        }
+    } = "";
+
+    public string? SecretToInsert
+    {
+        get => null;
+        set
+        {
+            if (value is null) return;
+            Value += $"${{secret:{value}}}";
+            this.RaisePropertyChanged();
+        }
+    }
+
+    internal ConnectionStringPartViewModel(ConnectionFieldViewModel field, ConnectionStringPart part)
+    {
+        _field = field;
+        Part = part;
+    }
+}
+
 // One parameter of the selected connection, edited the way its ConnectionParamType says.
 public sealed class ConnectionFieldViewModel : ReactiveObject
 {
@@ -91,10 +130,14 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     public string? Description => Param.Description;
     public bool HasDescription => Param.Description is not null;
     public string? Example => Param.Example ?? Param.Default;
-    public bool IsTextBox => Param.Type is ConnectionParamType.Text or ConnectionParamType.Number or ConnectionParamType.File;
+    public bool IsTextBox => Param.Type is ConnectionParamType.Text or ConnectionParamType.Number or ConnectionParamType.File or ConnectionParamType.ConnectionString;
+    public bool IsConnectionString => Param.Type is ConnectionParamType.ConnectionString;
+
+    /// <summary>For a connection string: the settings the driver shows as fields, above the whole text.</summary>
+    public IReadOnlyList<ConnectionStringPartViewModel> Parts { get; }
     public bool IsEndpoint => Param.Type is ConnectionParamType.Endpoint;
     public bool CanBrowse => Param.Type is ConnectionParamType.File;
-    public bool CanInsertSecret => Param.Type is ConnectionParamType.Text && SecretNames.Count > 0;
+    public bool CanInsertSecret => Param.Type is ConnectionParamType.Text or ConnectionParamType.ConnectionString && SecretNames.Count > 0;
     public bool IsBoolean => Param.Type is ConnectionParamType.Boolean;
     public bool IsMap => Param.Type is ConnectionParamType.Map;
     public bool IsList => Param.Type is ConnectionParamType.List;
@@ -107,6 +150,7 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
         {
             this.RaiseAndSetIfChanged(ref field, value ?? "");
             if (IsEndpoint && !_composing) ReadEndpoint(field);
+            if (IsConnectionString && !_composing) ReadParts(field);
             Edited?.Invoke();
         }
     } = "";
@@ -143,6 +187,25 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
         if (_composing || !IsEndpoint) return;
         _composing = true;
         try { Text = EndpointHost.Trim().Length == 0 ? "" : (UseSsl ? "https://" : "http://") + EndpointHost.Trim(); }
+        finally { _composing = false; }
+    }
+
+    // The whole text was edited (or loaded): the fields show what it now says.
+    private void ReadParts(string text)
+    {
+        _composing = true;
+        try
+        {
+            foreach (var part in Parts) part.Value = ConnectionStringText.Read(text, part.Part) ?? "";
+        }
+        finally { _composing = false; }
+    }
+
+    internal void WritePart(ConnectionStringPart part, string value)
+    {
+        if (_composing) return;
+        _composing = true;
+        try { Text = ConnectionStringText.Write(Text, part, value.Trim()); }
         finally { _composing = false; }
     }
 
@@ -184,6 +247,9 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     {
         Param = param;
         SecretNames = secretNames;
+        Parts = param.Type is ConnectionParamType.ConnectionString
+            ? [.. (param.Parts ?? []).Select(part => new ConnectionStringPartViewModel(this, part))]
+            : [];
         AddRowCommand = ReactiveCommand.Create(() => AddRow("", ""));
         RemoveRowCommand = ReactiveCommand.Create<ConnectionMapRowViewModel>(row =>
         {

@@ -36,6 +36,12 @@ public enum ConnectionParamType
 
     /// <summary>The path of a file, as text with placeholders allowed; the form can browse for it.</summary>
     File,
+
+    /// <summary>
+    /// A <c>key=value;…</c> connection string, as one text with placeholders allowed; the form edits the settings of
+    /// <see cref="ConnectionParam.Parts"/> as fields of their own and shows the whole text, which keeps every other setting.
+    /// </summary>
+    ConnectionString,
 }
 
 /// <summary>
@@ -47,6 +53,7 @@ public enum ConnectionParamType
 /// <param name="Example">Shown in an empty field.</param>
 /// <param name="Description">A line of help under the field.</param>
 /// <param name="Advanced">Shown after the others, for settings most connections leave alone.</param>
+/// <param name="Parts">For a <see cref="ConnectionParamType.ConnectionString"/>: the settings the form shows as fields.</param>
 public sealed record ConnectionParam(
     string Key,
     string Label,
@@ -55,7 +62,8 @@ public sealed record ConnectionParam(
     string? Default = null,
     string? Example = null,
     string? Description = null,
-    bool Advanced = false);
+    bool Advanced = false,
+    IReadOnlyList<ConnectionStringPart>? Parts = null);
 
 /// <summary>The outcome of <see cref="IConnectionDriver.TestAsync"/>, in words for the user.</summary>
 public sealed record ConnectionTestResult(bool Succeeded, string Message);

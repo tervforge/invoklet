@@ -99,6 +99,21 @@
                             <DataTemplate DataType="viewModels:ConnectionFieldViewModel">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="{Binding Label}" FontSize="12" IsVisible="{Binding !IsBoolean}"/>
+                                    <ItemsControl ItemsSource="{Binding Parts}" IsVisible="{Binding IsConnectionString}">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="viewModels:ConnectionStringPartViewModel">
+                                                <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="6">
+                                                    <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Value}" PlaceholderText="{Binding Example}"
+                                                             AutomationProperties.Name="{Binding Label}"/>
+                                                    <controls:SecretPicker Grid.Column="2"
+                                                              SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding CanInsertSecret}"
+                                                              AutomationProperties.Name="{Binding Label, StringFormat='Insert secret into {0}'}" ToolTip.Tip="Insert secret"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsTextBox}">
                                         <TextBox Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"/>
                                         <controls:SecretPicker Grid.Column="1"
