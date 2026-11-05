@@ -18,7 +18,7 @@ public sealed class SecretAccessGateTests
 
     public SecretAccessGateTests() => _preferences.SetupGet(p => p.Secrets).Returns(_settings);
 
-    private SecretAccessGate CreateSut(SecretAccessChoice answer) => new(_preferences.Object, (script, secret, isSave) =>
+    private SecretAccessGate CreateSut(SecretAccessChoice answer) => new(_preferences.Object, (script, secret, isSave, _) =>
     {
         _asked.Add((script, secret, isSave));
         return Task.FromResult(answer);
@@ -36,6 +36,36 @@ public sealed class SecretAccessGateTests
         Assert.Equal([("report.inv", "billing", false)], _asked);
         Assert.Equal([Path.GetFullPath(Script)], _settings.AllowedScripts);
         _preferences.Verify(p => p.Save(), Times.Once);
+    }
+
+    // Always is kept only in the settings: taking it away there (the Secret Store window) makes the next request ask again at once.
+    [Fact]
+    public async Task AlwaysAllow_TakenAwayInTheSettings_Should_BeAskedAgain()
+    {
+        var sut = CreateSut(SecretAccessChoice.Always);
+        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+
+        _settings.AllowedScripts.Clear();
+        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+
+        Assert.Equal(2, _asked.Count);
+    }
+
+    // The script was stopped while the question was open: whatever the dialog then says, the script gets no secret and nothing is kept.
+    [Fact]
+    public async Task AQuestionTheRunEndedDuring_Should_Refuse_AndRememberNothing()
+    {
+        using var stopped = new CancellationTokenSource();
+        var sut = new SecretAccessGate(_preferences.Object, (_, _, _, token) =>
+        {
+            stopped.Cancel();
+            return Task.FromResult(token.IsCancellationRequested ? SecretAccessChoice.Deny : SecretAccessChoice.Always);
+        });
+
+        Assert.False(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), stopped.Token));
+
+        Assert.Empty(_settings.AllowedScripts);
+        _preferences.Verify(p => p.Save(), Times.Never);
     }
 
     [Fact]
@@ -82,7 +112,7 @@ public sealed class SecretAccessGateTests
     {
         var answer = new TaskCompletionSource<SecretAccessChoice>();
         var asked = 0;
-        var sut = new SecretAccessGate(_preferences.Object, (_, _, _) =>
+        var sut = new SecretAccessGate(_preferences.Object, (_, _, _, _) =>
         {
             asked++;
             return answer.Task;

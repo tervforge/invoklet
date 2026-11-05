@@ -8,7 +8,7 @@ namespace Invoklet.Services.Secrets;
 /// settings by the script's full path; Allow Once and a script not saved yet (one answer for all of them) last until Invoklet closes.
 /// A no is not remembered: the next run asks again.
 /// </summary>
-public sealed class SecretAccessGate(IPreferencesService preferences, Func<string, string, bool, Task<SecretAccessChoice>> ask)
+public sealed class SecretAccessGate(IPreferencesService preferences, Func<string, string, bool, CancellationToken, Task<SecretAccessChoice>> ask)
 {
     // Paths are compared as the file system does: letter case aside on Windows and macOS.
     private static readonly StringComparer PathComparer = OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
@@ -29,13 +29,17 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
         {
             if (IsAllowed(script)) return true;
             var name = script == Unsaved ? "an unsaved script" : Path.GetFileName(script);
-            var choice = await ask(name, access.Name, access.IsSave);
-            if (choice == SecretAccessChoice.Deny) return false;
-            lock (_allowedThisSession) _allowedThisSession.Add(script);
+            var choice = await ask(name, access.Name, access.IsSave, cancellationToken);
+            if (choice == SecretAccessChoice.Deny || cancellationToken.IsCancellationRequested) return false;
+            // Always is kept only in the settings, so taking it away there (the Secret Store window) works at once.
             if (choice == SecretAccessChoice.Always && script != Unsaved)
             {
                 preferences.Secrets.AllowedScripts.Add(script);
                 preferences.Save();
+            }
+            else
+            {
+                lock (_allowedThisSession) _allowedThisSession.Add(script);
             }
             return true;
         }

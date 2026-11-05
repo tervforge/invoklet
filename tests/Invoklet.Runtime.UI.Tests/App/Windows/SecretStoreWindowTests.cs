@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Secrets;
+using Invoklet.Services.Preferences;
 using Invoklet.Windows;
 using Invoklet.Windows.Models;
 using Moq;
@@ -28,6 +29,36 @@ public class SecretStoreWindowTests
         var result = window.ShowDialog<bool>(owner);
         Dispatcher.UIThread.RunJobs();
         return (window, store, result, owner);
+    }
+
+    // The scripts allowed to use secrets are listed with a Revoke button each, which takes the access away at once.
+    [AvaloniaFact]
+    public void Revoke_Should_RemoveTheScriptFromTheListAndTheSettings()
+    {
+        var store = new Mock<ISecretStore>();
+        store.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
+        store.Setup(s => s.FilePath).Returns("/data/Invoklet/secrets.json");
+        var settings = new SecretsSettings { AllowedScripts = ["/a/report.inv"] };
+        var preferences = new Mock<IPreferencesService>();
+        preferences.SetupGet(p => p.Secrets).Returns(settings);
+        var window = new SecretStoreWindow(new SecretStoreWindowViewModel(store.Object, preferences.Object));
+        window.Show();
+        try
+        {
+            window.FindControl<Expander>("AllowedScriptsExpander")!.IsExpanded = true;
+            Dispatcher.UIThread.RunJobs();
+            var revoke = window.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, "Revoke"));
+
+            // The button's own bindings: the window's command and the row's script.
+            Assert.Equal("/a/report.inv", revoke.CommandParameter);
+            revoke.Command!.Execute(revoke.CommandParameter);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Empty(settings.AllowedScripts);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Revoke"));
+            preferences.Verify(p => p.Save(), Times.Once);
+        }
+        finally { window.Close(); }
     }
 
     // The list shows names only; the value is dots until Show is ticked.

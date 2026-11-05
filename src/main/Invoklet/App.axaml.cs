@@ -258,8 +258,8 @@ public class App : Application
         services.AddSingleton<IWindowService, WindowService>();
         // The first time a script asks for a secret, the user is asked whether it may (on the UI thread).
         services.AddSingleton(sp => new SecretAccessGate(sp.GetRequiredService<IPreferencesService>(),
-            (script, secret, isSave) => Dispatcher.UIThread.InvokeAsync(
-                () => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave))));
+            (script, secret, isSave, stopped) => Dispatcher.UIThread.InvokeAsync(
+                () => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave, stopped))));
         services.AddSingleton<IBuildCacheService, BuildCacheService>();
         services.AddSingleton<IResidencyPolicy, RecentTabsResidencyPolicy>();
         // Released tab content waits in the session folder of the recovery store, which owns it.
