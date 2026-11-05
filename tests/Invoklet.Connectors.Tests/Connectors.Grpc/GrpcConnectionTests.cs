@@ -73,6 +73,16 @@ public sealed class GrpcConnectionTests : IAsyncLifetime
         builder.Services.AddGrpc();
         if (reflection) builder.Services.AddGrpcReflection();
         var app = builder.Build();
+        if (!reflection)
+        {
+            app.Use(async (context, next) =>
+            {
+                // Let reflection requests finish writing before Kestrel rejects the unknown service.
+                if (context.Request.Path.Value?.StartsWith("/grpc.reflection.", StringComparison.Ordinal) == true)
+                    await context.Request.Body.CopyToAsync(Stream.Null, context.RequestAborted);
+                await next(context);
+            });
+        }
         app.MapGrpcService<StockService>();
         app.MapGrpcService<AuditService>();
         if (reflection) app.MapGrpcReflectionService();
