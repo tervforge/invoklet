@@ -40,6 +40,8 @@ Notable changes in each Invoklet release. Downloads are on the
 - On macOS the green window button enters and leaves full screen (with Option it zooms), as on every
   Mac window; it used to zoom only, so a window in full screen was zoomed by it instead of coming back.
   A double click on the title bar zooms and leaves a full-screen window alone.
+- On macOS the ×, − and zoom glyphs of the window buttons are in the middle of their dots; they sat half
+  a pixel to the left and up.
 - A right click (Control-click on macOS) in the results no longer clears the selection, so its context
   menu can copy it.
 
