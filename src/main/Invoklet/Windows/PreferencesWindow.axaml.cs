@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Invoklet.UserControls;
 using Invoklet.Windows.Models;
@@ -18,6 +19,15 @@ public partial class PreferencesWindow : Window
     }
 
     public PreferencesWindow() => InitializeComponent();
+
+    // Escape closes it, as it does every dialog; settings apply as they change, so nothing is lost. A control that takes Escape itself keeps it.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Handled || e.Key != Key.Escape || e.KeyModifiers != KeyModifiers.None) return;
+        e.Handled = true;
+        Close();
+    }
 
     // What each page shows (its Tag is the node ID) becomes what the search finds the node by: the settings' names and
     // descriptions, their tooltips, the choices of their lists and the values in their fields. Text written in the page is

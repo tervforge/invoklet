@@ -28,6 +28,7 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - On macOS, Cmd+C and Cmd+A copy and select the results again: the menu bar took the keys and its Edit
   commands acted only on the editor and text fields.
+- Escape closes the Preferences window, as it does every other dialog.
 - A right click (Control-click on macOS) in the results no longer clears the selection, so its context
   menu can copy it.
 
