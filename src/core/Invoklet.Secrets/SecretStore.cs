@@ -1,20 +1,24 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Invoklet.Build.Core.Secrets;
 
-namespace Invoklet.Services.Secrets;
+namespace Invoklet.Secrets;
 
 /// <summary>A named secret: a password, token or key a script reads with <c>Util.GetSecret</c>.</summary>
 public sealed record Secret(string Name, string Value);
 
 public static class SecretStoreExtensions
 {
+    /// <summary>The value of a secret, by name in any case as <c>Util.GetSecret</c> finds it; null when the store has none.</summary>
+    /// <exception cref="InvalidDataException">The store can't be read here.</exception>
+    public static string? Read(this ISecretStore store, string name)
+        => store.LoadSnapshot().Secrets.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
     /// <summary>The value of a secret, by name in any case as <c>Util.GetSecret</c> finds it; null when the
     /// store has none of that name or can't be read.</summary>
     public static string? Find(this ISecretStore store, string name)
     {
-        try { return store.LoadSnapshot().Secrets.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Value; }
+        try { return store.Read(name); }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException) { return null; }
     }
 
@@ -26,17 +30,22 @@ public static class SecretStoreExtensions
 public static class SecretStorePut
 {
     /// <summary>
-    /// Adds a secret, or replaces the value of one of that name in any case where it stands. Saved
-    /// again on the newer store when another window saved first.
+    /// Adds a secret, or replaces the value of one of that name in any case where it stands; a null
+    /// value removes it. Saved again on the newer store when another window saved first.
     /// </summary>
-    public static void Put(this ISecretStore store, string name, string value)
+    public static void Put(this ISecretStore store, string name, string? value)
     {
         for (var attempt = 1; ; attempt++)
         {
             var snapshot = store.LoadSnapshot();
             var secrets = snapshot.Secrets.ToList();
             var index = secrets.FindIndex(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (index >= 0) secrets[index] = secrets[index] with { Value = value };
+            if (value is null)
+            {
+                if (index < 0) return;
+                secrets.RemoveAt(index);
+            }
+            else if (index >= 0) secrets[index] = secrets[index] with { Value = value };
             else secrets.Add(new Secret(name, value));
             try
             {
@@ -133,16 +142,15 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
     public static string DefaultPath() => SecretKeys.DefaultStorePath();
 
     /// <summary>
-    /// At start: encrypts a store left in plain text (by an Invoklet before encryption, or while the
-    /// keychain was unavailable) and passes the key to the scripts this process starts. A store that
-    /// can't be read is left for the Secret Store window and <c>Util.GetSecret</c> to report.
+    /// Before a script reads a secret: encrypts a store left in plain text (by an Invoklet before encryption, or while the
+    /// keychain was unavailable). A store that can't be read is left for the Secret Store window and the read to report.
     /// </summary>
-    public void PrepareForScripts()
+    public void EncryptIfPlain()
     {
         if (_keys is null) return;
         try
         {
-            var snapshot = LoadSnapshot(); // exports the key of an encrypted store
+            var snapshot = LoadSnapshot();
             if (SecretKeys.IsEncrypted(FilePath)) return;
             if (snapshot.Secrets.Count > 0)
             {
@@ -226,7 +234,7 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
         return file;
     }
 
-    // The key of a store encrypted with one, exported for the scripts this process starts.
+    // How the values of a store encrypted with a keychain key are decrypted.
     private Func<string, string, string> KeychainUnprotect()
     {
         byte[]? key;
@@ -240,7 +248,6 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
         }
         if (key is null)
             throw new InvalidDataException("The secret store is encrypted with a key that isn't in this system keychain.");
-        SecretKeys.ExportForScripts(key);
         return (name, value) => SecretKeys.Decrypt(key, name, value);
     }
 
@@ -287,7 +294,6 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
                 stream.Flush(flushToDisk: true);
             }
             ReplaceStore(temp, fullPath);
-            if (key is not null) SecretKeys.ExportForScripts(key);
             return VersionOf(bytes);
         }
         finally

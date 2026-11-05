@@ -64,6 +64,11 @@ public sealed class DapSession : IDapSession
     private readonly string? _runtimePath;
     private readonly IReadOnlyList<string> _arguments;
     private readonly TimeSpan _exceptionInfoTimeout;
+    private readonly int? _attachProcessId;
+
+    // Called once the debugger has every breakpoint and has been told to run: an attached debuggee
+    // waiting at its start is let go here.
+    private readonly Func<CancellationToken, Task>? _onConfigured;
 
     // The one read of the debugger's output in progress, if any. Every reader takes its message from
     // here; a reader that stops waiting (timeout or its own cancellation) leaves the read running for
@@ -97,7 +102,7 @@ public sealed class DapSession : IDapSession
 
     // Requests whose failure means the debuggee will never start — reported as an exception instead
     // of leaving the session waiting forever for events that can't come.
-    private static readonly HashSet<string> FatalCommands = ["initialize", "launch", "configurationDone"];
+    private static readonly HashSet<string> FatalCommands = ["initialize", "launch", "attach", "configurationDone"];
 
     // Preference order for "break on uncaught exceptions": the standard DAP/vsdbg id, then netcoredbg's.
     private static readonly string[] UncaughtExceptionFilterIds = ["unhandled", "user-unhandled"];
@@ -150,7 +155,8 @@ public sealed class DapSession : IDapSession
         OutputReceivedHandler? outputHandler,
         Action<IBreakpointHitContext> onBreakpointHit,
         ILogger<DapSession> logger,
-        Action<IBreakpoint, bool, string?>? onBreakpointVerified = null)
+        Action<IBreakpoint, bool, string?>? onBreakpointVerified = null,
+        Func<CancellationToken, Task>? onConfigured = null)
     {
         _process = process;
         _programPath = options.ProgramPath;
@@ -170,6 +176,8 @@ public sealed class DapSession : IDapSession
         _arguments = options.Arguments ?? [];
         _argumentContractJson = options.ArgumentContractJson;
         _exceptionInfoTimeout = options.ExceptionInfoTimeout ?? DefaultExceptionInfoTimeout;
+        _attachProcessId = options.AttachProcessId;
+        _onConfigured = onConfigured;
     }
 
     // ─── External control ────────────────────────────────────────────────────
@@ -333,8 +341,15 @@ public sealed class DapSession : IDapSession
                         && exceptionInfo.ValueKind == JsonValueKind.True;
                 }
 
-                await SendAsync(new LaunchRequest { seq = NextSeq(), arguments = BuildLaunchArguments() }, ct);
+                if (_attachProcessId is { } processId)
+                    await SendAsync(new AttachRequest { seq = NextSeq(), arguments = new AttachRequestArguments { processId = processId } }, ct);
+                else
+                    await SendAsync(new LaunchRequest { seq = NextSeq(), arguments = BuildLaunchArguments() }, ct);
                 launchSent = true;
+            }
+            else if (msgType == "response" && GetStr(root, "command") == "configurationDone")
+            {
+                if (_onConfigured is { } configured) await configured(ct);
             }
             // The only "setBreakpoints" response that can organically reach this top-level dispatch
             // is SendBreakpointsWhileRunningAsync's — every OTHER send of that request (the initial
@@ -959,8 +974,8 @@ public sealed class DapSession : IDapSession
         var environment = new Dictionary<string, string>();
         if (_currentQueryPath is not null) environment[CurrentQueryPathEnvVar] = _currentQueryPath;
         if (_argumentContractJson is not null) environment["INVOKLET_ARGUMENT_CONTRACT"] = _argumentContractJson;
-        // Nothing answers input under the debugger: Util.GetSecret reports a missing secret instead
-        // of waiting for an answer.
+        // Nothing answers the input of a debuggee netcoredbg starts itself (an attached one has its own stdin):
+        // Util.GetSecret reports a missing secret instead of waiting for an answer.
         environment[ChildProcess.InputEnvVar] = "0";
         return environment;
     }

@@ -2,7 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Reactive;
 using System.Security.Cryptography;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
+using Invoklet.Services.Preferences;
 using Invoklet.Shared;
 using ReactiveUI;
 
@@ -118,9 +119,23 @@ public sealed class SecretStoreWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> AddCommand { get; }
     public ReactiveCommand<Unit, Unit> RemoveCommand { get; }
 
-    public SecretStoreWindowViewModel(ISecretStore store)
+    private readonly IPreferencesService? _preferences;
+
+    /// <summary>The script files allowed to use the secrets without being asked (Always Allow).</summary>
+    public ObservableCollection<string> AllowedScripts { get; } = [];
+
+    public bool HasAllowedScripts => AllowedScripts.Count > 0;
+
+    /// <summary>Takes a script's Always Allow away at once, apart from Save: the next time it asks for a secret, the user is asked again.</summary>
+    public ReactiveCommand<string, Unit> RevokeCommand { get; }
+
+    public SecretStoreWindowViewModel(ISecretStore store, IPreferencesService? preferences = null)
     {
         _store = store;
+        _preferences = preferences;
+        foreach (var script in preferences?.Secrets?.AllowedScripts ?? []) AllowedScripts.Add(script);
+        AllowedScripts.CollectionChanged += (_, _) => this.RaisePropertyChanged(nameof(HasAllowedScripts));
+        RevokeCommand = ReactiveCommand.Create<string>(Revoke);
         Secrets.CollectionChanged += (_, _) => this.RaisePropertyChanged(nameof(IsEmpty));
         try
         {
@@ -165,7 +180,7 @@ public sealed class SecretStoreWindowViewModel : ViewModelBase
                 SecretStoreBusyException =>
                     "The secret store is in use by another Invoklet window or a running script. Try again in a moment. Your edits are still here.",
                 // Our own wording and the keychain's error: no secret value in it.
-                Invoklet.Build.Core.Secrets.SecretKeyUnavailableException => ex.Message + " Your edits are still here.",
+                Invoklet.Secrets.SecretKeyUnavailableException => ex.Message + " Your edits are still here.",
                 _ => "Could not save the secret store. Check access and available disk space, then try again. Your edits are still here.",
             };
             return false;
@@ -189,6 +204,13 @@ public sealed class SecretStoreWindowViewModel : ViewModelBase
         Add(item);
         SelectedSecret = item;
         Validate();
+    }
+
+    private void Revoke(string script)
+    {
+        AllowedScripts.Remove(script);
+        if (_preferences?.Secrets is not { } settings || !settings.AllowedScripts.Remove(script)) return;
+        _preferences.Save();
     }
 
     private void RemoveSelected()

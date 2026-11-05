@@ -104,7 +104,7 @@ public sealed record GeneratedConnections(string Source, IReadOnlyList<string> E
     /// <param name="scriptDirectory">The script's folder, which a schema may depend on; null for a script never saved.</param>
     /// <param name="readSchemaFromDisk">Whether a missing in-memory schema may be loaded from disk.</param>
     public static GeneratedConnections? For(IReadOnlyList<MdRunConnection> connections, MdRunLanguage language,
-        IEnumerable<string> scriptPackages, ConnectionDriverRegistry drivers, ConnectionSchemaCache? schemas = null,
+        IEnumerable<string> scriptPackages, ConnectionDriverRegistry drivers, IConnectionSchemaSource? schemas = null,
         string? scriptDirectory = null, bool readSchemaFromDisk = true)
     {
         if (connections.Count == 0) return null;

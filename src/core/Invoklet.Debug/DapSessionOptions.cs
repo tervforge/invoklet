@@ -30,6 +30,8 @@ namespace Invoklet.Debug;
 /// <see langword="null"/> uses the session's default.</param>
 /// <param name="Arguments">The script's command-line arguments (its <c>args</c>), passed after the
 /// assembly in the launch request's <c>args</c>.</param>
+/// <param name="AttachProcessId">The id of a debuggee already started by Invoklet, which the debugger attaches to instead of
+/// launching one; the launch settings above (program, arguments, environment) are then the process's own business.</param>
 public sealed record DapSessionOptions(
     string ProgramPath,
     string WorkingDirectory,
@@ -43,4 +45,5 @@ public sealed record DapSessionOptions(
     string? RuntimePath = null,
     TimeSpan? ExceptionInfoTimeout = null,
     IReadOnlyList<string>? Arguments = null,
-    string? ArgumentContractJson = null);
+    string? ArgumentContractJson = null,
+    int? AttachProcessId = null);

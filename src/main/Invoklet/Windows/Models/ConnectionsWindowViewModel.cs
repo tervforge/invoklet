@@ -4,8 +4,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
+using Invoklet.Secrets;
 using Invoklet.Services.Connections;
-using Invoklet.Services.Secrets;
 using Invoklet.Shared;
 using ReactiveUI;
 
@@ -78,6 +78,52 @@ public sealed class ConnectionMapRowViewModel : ReactiveObject
     }
 }
 
+// One setting of a connection string shown as a field of its own; editing it rewrites only that setting in the whole text.
+public sealed class ConnectionStringPartViewModel : ReactiveObject
+{
+    private readonly ConnectionFieldViewModel _field;
+
+    public ConnectionStringPart Part { get; }
+    public string Label => Part.Label;
+    public string? Example => Part.Example;
+    public IReadOnlyList<string> SecretNames => _field.SecretNames;
+    public bool CanInsertSecret => Part.IsSecret && SecretNames.Count > 0;
+
+    /// <summary>Whether the chosen way of signing in uses this field.</summary>
+    public bool IsVisible
+    {
+        get;
+        internal set => this.RaiseAndSetIfChanged(ref field, value);
+    } = true;
+
+    public string Value
+    {
+        get;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref field, value ?? "");
+            _field.WritePart(Part, field);
+        }
+    } = "";
+
+    public string? SecretToInsert
+    {
+        get => null;
+        set
+        {
+            if (value is null) return;
+            Value += $"${{secret:{value}}}";
+            this.RaisePropertyChanged();
+        }
+    }
+
+    internal ConnectionStringPartViewModel(ConnectionFieldViewModel field, ConnectionStringPart part)
+    {
+        _field = field;
+        Part = part;
+    }
+}
+
 // One parameter of the selected connection, edited the way its ConnectionParamType says.
 public sealed class ConnectionFieldViewModel : ReactiveObject
 {
@@ -92,9 +138,51 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     public bool HasDescription => Param.Description is not null;
     public string? Example => Param.Example ?? Param.Default;
     public bool IsTextBox => Param.Type is ConnectionParamType.Text or ConnectionParamType.Number or ConnectionParamType.File;
+    public bool IsConnectionString => Param.Type is ConnectionParamType.ConnectionString;
+
+    // A connection string has its label in its own grid, beside the text, as its fields do.
+    public bool ShowsLabelAbove => !IsBoolean && !IsConnectionString;
+
+    /// <summary>For a connection string: the settings the driver shows as fields, above the whole text.</summary>
+    public IReadOnlyList<ConnectionStringPartViewModel> Parts { get; }
+
+    /// <summary>For a connection string: the ways of signing in to choose from, read back from the text.</summary>
+    public IReadOnlyList<ConnectionAuthMode> AuthModes => Param.AuthModes ?? [];
+    public bool HasAuthModes => IsConnectionString && AuthModes.Count > 0;
+
+    public ConnectionAuthMode? SelectedAuthMode
+    {
+        get;
+        set
+        {
+            if (value is null || value == field) return;
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(AuthHint));
+            this.RaisePropertyChanged(nameof(HasAuthHint));
+            ShowModeFields();
+            if (_composing) return;
+            // Choosing a way writes its settings and takes out the fields and settings of the others. The choice stands: a text that
+            // would read as another way (a pgpass file without a file named) doesn't take it back.
+            _composing = true;
+            try
+            {
+                Text = ConnectionStringText.WithMode(Text, value, AuthModes, Param.Parts ?? []);
+                foreach (var part in Parts) part.Value = ConnectionStringText.Read(Text, part.Part) ?? "";
+            }
+            finally { _composing = false; }
+        }
+    }
+
+    public string? AuthHint => SelectedAuthMode?.Hint;
+    public bool HasAuthHint => AuthHint is not null;
+
+    private void ShowModeFields()
+    {
+        foreach (var part in Parts) part.IsVisible = SelectedAuthMode?.Shows(part.Part) ?? true;
+    }
     public bool IsEndpoint => Param.Type is ConnectionParamType.Endpoint;
     public bool CanBrowse => Param.Type is ConnectionParamType.File;
-    public bool CanInsertSecret => Param.Type is ConnectionParamType.Text && SecretNames.Count > 0;
+    public bool CanInsertSecret => Param.Type is ConnectionParamType.Text or ConnectionParamType.ConnectionString && SecretNames.Count > 0;
     public bool IsBoolean => Param.Type is ConnectionParamType.Boolean;
     public bool IsMap => Param.Type is ConnectionParamType.Map;
     public bool IsList => Param.Type is ConnectionParamType.List;
@@ -107,6 +195,7 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
         {
             this.RaiseAndSetIfChanged(ref field, value ?? "");
             if (IsEndpoint && !_composing) ReadEndpoint(field);
+            if (IsConnectionString && !_composing) ReadParts(field);
             Edited?.Invoke();
         }
     } = "";
@@ -143,6 +232,26 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
         if (_composing || !IsEndpoint) return;
         _composing = true;
         try { Text = EndpointHost.Trim().Length == 0 ? "" : (UseSsl ? "https://" : "http://") + EndpointHost.Trim(); }
+        finally { _composing = false; }
+    }
+
+    // The whole text was edited (or loaded): the fields show what it now says.
+    private void ReadParts(string text)
+    {
+        _composing = true;
+        try
+        {
+            foreach (var part in Parts) part.Value = ConnectionStringText.Read(text, part.Part) ?? "";
+            if (HasAuthModes) SelectedAuthMode = ConnectionStringText.Mode(text, AuthModes, Param.Parts ?? []);
+        }
+        finally { _composing = false; }
+    }
+
+    internal void WritePart(ConnectionStringPart part, string value)
+    {
+        if (_composing) return;
+        _composing = true;
+        try { Text = ConnectionStringText.Write(Text, part, value.Trim()); }
         finally { _composing = false; }
     }
 
@@ -184,6 +293,9 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     {
         Param = param;
         SecretNames = secretNames;
+        Parts = param.Type is ConnectionParamType.ConnectionString
+            ? [.. (param.Parts ?? []).Select(part => new ConnectionStringPartViewModel(this, part))]
+            : [];
         AddRowCommand = ReactiveCommand.Create(() => AddRow("", ""));
         RemoveRowCommand = ReactiveCommand.Create<ConnectionMapRowViewModel>(row =>
         {
@@ -200,6 +312,10 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
                 break;
             case ConnectionParamType.List:
                 Text = string.Join("\n", (value?.Items ?? []).Select(i => i.Text ?? ""));
+                break;
+            case ConnectionParamType.ConnectionString:
+                // A new connection starts with the server's defaults, already in the text, instead of an empty field.
+                Text = value?.Text ?? param.Default ?? "";
                 break;
             default:
                 Text = value?.Text ?? "";

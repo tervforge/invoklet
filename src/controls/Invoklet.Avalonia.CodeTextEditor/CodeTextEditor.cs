@@ -785,7 +785,7 @@ public class CodeTextEditor : TextEditor, IDisposable
     private void ScheduleMemberTemplateOffer()
     {
         if (MemberTemplatePositionProvider is null || string.IsNullOrEmpty(MemberTemplateSnippet)) return;
-        Dispatcher.UIThread.Post(() => MemberTemplateOfferTask = OfferMemberTemplateAsync(), DispatcherPriority.Background);
+        Dispatcher.Post(() => MemberTemplateOfferTask = OfferMemberTemplateAsync(), DispatcherPriority.Background);
     }
 
     private async Task OfferMemberTemplateAsync()

@@ -142,6 +142,14 @@ public static class CliRunner
 
             RunResult result;
             await using var host = registry.Create(languageId, request);
+            // Util.ReadLine and a missing secret's question are asked in the terminal: the prompt on stderr, the answer from stdin.
+            host.InputRequested += (prompt, isPassword) => _ = Task.Run(async () =>
+            {
+                if (!string.IsNullOrEmpty(prompt)) stderr.Write(prompt + " ");
+                // The end of stdin answers with an empty line: nothing else would let the script go on.
+                var answer = (isPassword && !Console.IsInputRedirected ? ReadMasked() : Console.In.ReadLine()) ?? "";
+                await host.SendInputAsync(answer, cancellationToken);
+            }, cancellationToken);
             if (cli.CompileOnly)
             {
                 var compilation = await host.CompileAsync(document.RunCode, cancellationToken);
@@ -194,6 +202,29 @@ public static class CliRunner
         {
             try { Directory.Delete(outputDirectory, recursive: true); }
             catch (IOException) { /* best-effort cleanup — a locked file here isn't worth failing the run over */ }
+        }
+    }
+
+    // A password typed in the terminal, not echoed.
+    private static string ReadMasked()
+    {
+        var typed = new StringBuilder();
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.Error.WriteLine();
+                return typed.ToString();
+            }
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (typed.Length > 0) typed.Length--;
+            }
+            else if (!char.IsControl(key.KeyChar))
+            {
+                typed.Append(key.KeyChar);
+            }
         }
     }
 

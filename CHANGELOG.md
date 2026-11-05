@@ -3,6 +3,51 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.5] — 2026-11-05
+
+This release improves how scripts access secrets, adds dedicated database sign-in fields, and
+fixes macOS window controls and Results shortcuts.
+
+**Script compatibility:** Update any `#if Invoklet` checks to `#if INVOKLET`.
+
+### Changed
+
+- `Util.SetSecret` takes a `string?` value: `Util.SetSecret(name, null)` removes the secret from the
+  Secret Store instead of throwing.
+- A debug session starts the script itself and attaches the debugger to it, so `Util.ReadLine`,
+  `Util.GetPassword`, `Util.SetSecret` and the question for a missing secret in `Util.GetSecret` work while
+  debugging, as in a normal run. Debug mode is on by default, so before this `Util.SetSecret` failed
+  with an `InvalidOperationException` on an ordinary Run.
+- `Util.GetSecret` asks Invoklet or the command-line runner for the named value without passing
+  the Secret Store's key to the script. If no value is supplied for a missing secret, the script
+  gets a missing-secret error.
+- The command-line runner answers `Util.ReadLine`, `Util.GetPassword` and the question for a missing
+  secret in the terminal: the prompt on standard error, the answer from standard input. It saves
+  `Util.SetSecret` and the answered secrets in the same Secret Store as the window.
+- The first time a script reads or saves a secret, Invoklet asks whether it may: Don't Allow, Allow
+  Once (until Invoklet closes) or Always Allow (remembered for the file). The Secret Store window
+  lists the scripts always allowed, each with Revoke; stopping the script closes the question.
+- The editor warns when a secret from `Util.GetSecret` is written to the output by `.Dump()` or
+  `Console.Write`, and offers to remove just that `.Dump()` call or the output line.
+- The Connections window edits a PostgreSQL or SQL Server connection string through a field per setting
+  (host, port, database, user, password with a secret), above the whole string, which keeps every
+  other setting as written. **Sign in with** chooses the way of signing in (PostgreSQL: password, pgpass
+  file, Kerberos; SQL Server: login, Windows, Microsoft Entra ID) and shows only its fields. A new
+  connection starts with the server's defaults (`postgres` on localhost:5432, `master` as `sa`).
+
+### Fixed
+
+- On macOS, Cmd+C and Cmd+A copy and select the results again: the menu bar took the keys and its Edit
+  commands acted only on the editor and text fields.
+- Escape closes the Preferences window, as it does every other dialog.
+- On macOS the green window button enters and leaves full screen (with Option it zooms), as on every
+  Mac window; it used to zoom only, so a window in full screen was zoomed by it instead of coming back.
+  A double click on the title bar zooms and leaves a full-screen window alone.
+- On macOS the ×, − and zoom glyphs of the window buttons are in the middle of their dots; they sat half
+  a pixel to the left and up.
+- A right click (Control-click on macOS) in the results no longer clears the selection, so its context
+  menu can copy it.
+
 ## [0.11.4] — 2026-11-05
 
 ### Changed
@@ -1105,5 +1150,6 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.1]: https://github.com/tervforge/invoklet/releases/tag/v0.11.1
 [0.11.2]: https://github.com/tervforge/invoklet/releases/tag/v0.11.2
 [0.11.4]: https://github.com/tervforge/invoklet/releases/tag/v0.11.4
+[0.11.5]: https://github.com/tervforge/invoklet/releases/tag/v0.11.5
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5

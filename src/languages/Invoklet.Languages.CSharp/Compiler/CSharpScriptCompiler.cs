@@ -109,7 +109,7 @@ public sealed class CSharpScriptCompiler(CompiledDotnetLanguageHostOptions optio
 
     internal static CSharpParseOptions ParseOptions(int major, int minor) => new(
         LanguageVersionFor(major),
-        preprocessorSymbols: ["TRACE", "DEBUG", "Invoklet", .. FrameworkSymbols(major, minor)]);
+        preprocessorSymbols: ["TRACE", "DEBUG", "INVOKLET", .. FrameworkSymbols(major, minor)]);
 
     // The C# version `dotnet build` picks by default for the target framework.
     internal static LanguageVersion LanguageVersionFor(int major) => major switch

@@ -1,4 +1,5 @@
 using Invoklet.Connectors.SqlServer;
+using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Xunit;
 
@@ -19,7 +20,9 @@ public class SqlServerConnectionDriverTests
         var sut = new SqlServerConnectionDriver();
 
         Assert.Equal(["connectionString", "schema"], sut.Params.Select(p => p.Key));
-        Assert.Contains("Integrated Security=true", sut.Params[0].Description);
+        var windows = sut.Params[0].AuthModes!.Single(m => m.Label == "Windows (Integrated Security)");
+        Assert.Equal("Server=db;Integrated Security=true",
+            ConnectionStringText.WithMode("Server=db;User Id=app;Password=x", windows, sut.Params[0].AuthModes!, sut.Params[0].Parts!));
     }
 
     [Fact]

@@ -125,4 +125,22 @@ public interface IWindowService
     /// closing the dialog or no window to show it on is false.
     /// </summary>
     Task<bool> ShowRevertFileDialogAsync(string fileName);
+
+    /// <summary>
+    /// Asks whether a running script may read (or, <paramref name="isSave"/>, change) the secrets of the Secret Store. Closing the dialog,
+    /// no window to show it on, or the run ending (<paramref name="cancellationToken"/>, which closes the dialog) is <see cref="SecretAccessChoice.Deny"/>.
+    /// </summary>
+    Task<SecretAccessChoice> ConfirmSecretAccessAsync(string scriptName, string secretName, bool isSave, CancellationToken cancellationToken = default);
+}
+
+/// <summary>What the user let a script do with the secrets.</summary>
+public enum SecretAccessChoice
+{
+    Deny,
+
+    /// <summary>Until Invoklet is closed.</summary>
+    Once,
+
+    /// <summary>From now on, for this script's file.</summary>
+    Always,
 }

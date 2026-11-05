@@ -13,6 +13,7 @@ public sealed class AppSettings
     public SessionSettings Session { get; set; } = new();
     public ExperimentalSettings Experimental { get; set; } = new();
     public LoggingSettings Logging { get; set; } = new();
+    public SecretsSettings Secrets { get; set; } = new();
 
     /// <summary>
     /// Settings the OS's desktop integration offers, by id ("linux.nativeWayland"); a missing one has

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Invoklet.Contracts.IntelliSense;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.DotnetCommon;
@@ -62,6 +63,16 @@ public sealed class WindowService : IWindowService
     {
         if (MainWindow is not { } owner) return false;
         return await new ConnectionPackageConfirmationDialog(message).ShowDialog<bool?>(owner) == true;
+    }
+
+    public async Task<SecretAccessChoice> ConfirmSecretAccessAsync(string scriptName, string secretName, bool isSave, CancellationToken cancellationToken = default)
+    {
+        if (MainWindow is not { } owner || cancellationToken.IsCancellationRequested) return SecretAccessChoice.Deny;
+        var dialog = new SecretAccessDialog(scriptName, secretName, isSave);
+        // The script was stopped while the question was open: nobody waits for the answer any more. The dialog's own dispatcher, as
+        // the stop comes on another thread.
+        await using var stopped = cancellationToken.Register(() => dialog.Dispatcher.Post(() => dialog.Close()));
+        return await dialog.ShowDialog<SecretAccessChoice?>(owner) ?? SecretAccessChoice.Deny;
     }
 
     public Task ShowPreferencesAsync()

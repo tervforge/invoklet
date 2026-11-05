@@ -44,9 +44,14 @@ internal sealed class RoslynAnalyzerEngine
         try { ownTypes = typeof(RoslynAnalyzerEngine).Assembly.GetTypes(); }
         catch (ReflectionTypeLoadException ex) { ownTypes = ex.Types.Where(t => t != null).ToArray()!; }
 
-        _ideAnalyzers = Construct(types);
-        _InvokletAnalyzers = Construct(ownTypes);
+        // Invoklet's own warnings that guard the user's data run always, not only with the experimental analyzers.
+        _ideAnalyzers = Construct(types).AddRange(AlwaysOn());
+        _InvokletAnalyzers = Construct(ownTypes.Where(type => !AlwaysOnTypes.Contains(type)));
     }
+
+    private static readonly HashSet<Type> AlwaysOnTypes = [typeof(SecretOutputAnalyzer)];
+
+    private static IEnumerable<DiagnosticAnalyzer> AlwaysOn() => [new SecretOutputAnalyzer()];
 
     private ImmutableArray<DiagnosticAnalyzer> Construct(IEnumerable<Type> types)
     {

@@ -35,9 +35,8 @@ public sealed class SqliteConnectionDriver : EfCoreConnectionDriver
 
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions.UseSqlite";
 
-    protected override string ConnectionStringExample => "Data Source=data/shop.db";
+    protected override string DefaultConnectionString => "Data Source=database.db";
 
-    protected override string AuthenticationHint => "";
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { [Package] = EntityFrameworkVersion };
 
@@ -51,7 +50,7 @@ public sealed class SqliteConnectionDriver : EfCoreConnectionDriver
 
     public override IReadOnlyList<ConnectionParam> Params { get; } =
     [
-        new(File, "Database file", ConnectionParamType.File, Required: true, Example: "data/shop.db",
+        new(File, "Database file", ConnectionParamType.File, Required: true, Example: "database.db",
             Description: "A relative path is read from the script's folder. The file must exist."),
         new(ReadOnly, "Read only", ConnectionParamType.Boolean, Default: "false",
             Description: "Opens the file for reading only, so the script can't change it."),

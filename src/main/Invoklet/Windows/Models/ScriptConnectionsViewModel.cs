@@ -3,8 +3,8 @@ using System.Reactive;
 using System.Text.Json;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
+using Invoklet.Secrets;
 using Invoklet.Services.Connections;
-using Invoklet.Services.Secrets;
 using ReactiveUI;
 
 namespace Invoklet.Windows.Models;

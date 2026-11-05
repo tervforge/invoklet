@@ -6,7 +6,7 @@
     <ApplicationIcon>Assets/icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Product>Invoklet</Product>
-    <Version>0.11.4</Version>
+    <Version>0.11.5</Version>
     <Authors>svncore</Authors>
     <Company>svncore</Company>
     <Copyright>© 2026 Vadim S (svncore)</Copyright>
@@ -75,7 +75,6 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console"/>
     <PackageReference Include="System.Composition.AttributedModel"/>
     <PackageReference Include="System.Configuration.ConfigurationManager"/>
-    <PackageReference Include="System.Security.Cryptography.ProtectedData"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -99,6 +98,9 @@
     <ProjectReference Include="..\..\languages\Invoklet.Languages.CSharp\Invoklet.Languages.CSharp.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.VB\Invoklet.Languages.VB.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.DotnetCommon\Invoklet.Languages.DotnetCommon.csproj" />
+    <!-- Scripts compile against Invoklet.Runtime.dll beside the app (DotnetRuntimeReferenceLocator). Copied by this project itself, not only
+         as the content of a referenced one: an incremental build could clean a file another project's output put here. -->
+    <ProjectReference Include="..\..\runtime\Invoklet.Runtime\Invoklet.Runtime.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

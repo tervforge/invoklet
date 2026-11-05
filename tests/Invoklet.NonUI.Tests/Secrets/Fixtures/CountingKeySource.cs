@@ -1,4 +1,4 @@
-using Invoklet.Build.Core.Secrets;
+using Invoklet.Secrets;
 
 namespace Invoklet.NonUI.Tests.App.Services.Secrets.Fixtures;
 

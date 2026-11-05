@@ -47,7 +47,7 @@ public class UtilTests
         }
     }
 
-    // A secret the store doesn't have is asked for, masked and named, where Invoklet answers input.
+    // A secret Invoklet's store doesn't have (it answers 0 to the read) is asked for, masked and named.
     [Fact]
     public void GetSecret_AsksForAMissingSecret_Masked_AndNamed()
     {
@@ -62,13 +62,15 @@ public class UtilTests
             var sw = new StringWriter();
             Console.SetOut(sw);
             var name = "test-" + Guid.NewGuid().ToString("N"); // nothing remembered from another test
-            Console.SetIn(new StringReader("hunter2\n"));
+            Console.SetIn(new StringReader("0\nhunter2\n"));
 
             var result = Util.GetSecret(name);
 
             Assert.Equal("hunter2", result);
-            var json = DecodeRequest(sw.ToString());
-            using var doc = JsonDocument.Parse(json);
+            var lines = sw.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            using var read = JsonDocument.Parse(DecodeRequest(lines[0]));
+            Assert.True(read.RootElement.GetProperty("Read").GetBoolean());
+            using var doc = JsonDocument.Parse(DecodeRequest(lines[1]));
             Assert.True(doc.RootElement.GetProperty("IsPassword").GetBoolean());
             Assert.Equal(name, doc.RootElement.GetProperty("Secret").GetString());
         }
@@ -77,6 +79,87 @@ public class UtilTests
             Console.SetOut(originalOut);
             Console.SetIn(originalIn);
             Environment.SetEnvironmentVariable(Util.SecretsFileEnvVar, originalFile);
+            Environment.SetEnvironmentVariable(Util.InputEnvVar, originalInput);
+        }
+    }
+
+    // A script Invoklet runs asks it for the one value, by name; the store's key never reaches the script. An unreadable store says why.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GetSecret_Should_AskInvokletForTheValue_AndReportAStoreItCantRead(bool readable)
+    {
+        var originalOut = Console.Out;
+        var originalIn = Console.In;
+        var originalInput = Environment.GetEnvironmentVariable(Util.InputEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(Util.InputEnvVar, "1");
+            var sw = new StringWriter();
+            Console.SetOut(sw);
+            var name = "test-" + Guid.NewGuid().ToString("N");
+            var answer = readable ? "1" + Convert.ToBase64String(Encoding.UTF8.GetBytes("p@ss\nwörd")) : "2" + Convert.ToBase64String(Encoding.UTF8.GetBytes("damaged"));
+            Console.SetIn(new StringReader(answer + "\n"));
+
+            if (readable) Assert.Equal("p@ss\nwörd", Util.GetSecret(name));
+            else Assert.Equal("damaged", Assert.Throws<InvalidDataException>(() => Util.GetSecret(name)).Message);
+
+            using var doc = JsonDocument.Parse(DecodeRequest(sw.ToString()));
+            Assert.Equal(name, doc.RootElement.GetProperty("Secret").GetString());
+            Assert.True(doc.RootElement.GetProperty("Read").GetBoolean());
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetIn(originalIn);
+            Environment.SetEnvironmentVariable(Util.InputEnvVar, originalInput);
+        }
+    }
+
+    // Invoklet answers 3 when the user didn't let the script use the Secret Store: reading and saving both fail as not allowed.
+    [Fact]
+    public void GetSecretAndSetSecret_TheUserDidntAllowIt_Should_FailAsNotAllowed()
+    {
+        var originalOut = Console.Out;
+        var originalIn = Console.In;
+        var originalInput = Environment.GetEnvironmentVariable(Util.InputEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(Util.InputEnvVar, "1");
+            Console.SetOut(new StringWriter());
+            Console.SetIn(new StringReader("3\n3\n"));
+            var name = "test-" + Guid.NewGuid().ToString("N");
+
+            Assert.Throws<UnauthorizedAccessException>(() => Util.GetSecret(name));
+            Assert.Throws<UnauthorizedAccessException>(() => Util.SetSecret(name, "x"));
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetIn(originalIn);
+            Environment.SetEnvironmentVariable(Util.InputEnvVar, originalInput);
+        }
+    }
+
+    // An empty answer to the question for a missing secret (the command line's stdin ended, say) is no secret.
+    [Fact]
+    public void GetSecret_AnEmptyAnswerForAMissingSecret_Should_ReportItMissing()
+    {
+        var originalOut = Console.Out;
+        var originalIn = Console.In;
+        var originalInput = Environment.GetEnvironmentVariable(Util.InputEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(Util.InputEnvVar, "1");
+            Console.SetOut(new StringWriter());
+            Console.SetIn(new StringReader("0\n\n"));
+
+            Assert.Throws<KeyNotFoundException>(() => Util.GetSecret("test-" + Guid.NewGuid().ToString("N")));
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetIn(originalIn);
             Environment.SetEnvironmentVariable(Util.InputEnvVar, originalInput);
         }
     }

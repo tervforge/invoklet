@@ -9,7 +9,7 @@ using Invoklet.Languages.CSharp.IntelliSense;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.NonUI.Tests.Infrastructure;
-using Invoklet.Services.Secrets;
+using Invoklet.Secrets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -172,7 +172,8 @@ public sealed class ConnectionClientTests : IDisposable
     {
         if (!new DotnetSdkProvider().Get().Any()) return;
         var secretsFile = Path.Combine(_folder, "secrets.json");
-        new FileSecretStore(secretsFile).Save([new Secret("billing-token", "t0k")], null);
+        var secrets = new FileSecretStore(secretsFile);
+        secrets.Save([new Secret("billing-token", "t0k")], null);
         var previousSecrets = Environment.GetEnvironmentVariable(FileSecretStore.FileEnvVar);
         Environment.SetEnvironmentVariable(FileSecretStore.FileEnvVar, secretsFile);
         Environment.SetEnvironmentVariable("INVOKLET_TEST_TENANT", "acme");
@@ -186,7 +187,8 @@ public sealed class ConnectionClientTests : IDisposable
                 OutputDirectory = outputDir,
                 Connections = GeneratedConnections.For([Billing()], MdRunLanguage.CSharp, [], Drivers()),
             }, new CSharpReferenceService().GetExtensionReference());
-            await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance);
+            // As the Invoklet window gives it: the script asks for the value, Invoklet reads the store.
+            await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance) { SecretReader = secrets.Read };
             var output = new ConcurrentQueue<string>();
             var errors = new ConcurrentQueue<string>();
             const string script = """

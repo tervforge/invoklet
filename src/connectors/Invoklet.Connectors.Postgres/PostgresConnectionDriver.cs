@@ -1,4 +1,5 @@
 using Invoklet.Connectors.EfCore;
+using Invoklet.Contracts.Connections;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -24,10 +25,29 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
 
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.NpgsqlDbContextOptionsBuilderExtensions.UseNpgsql";
 
-    protected override string ConnectionStringExample => "Host=localhost;Database=shop;Username=app;Password=${secret:shop-password}";
+    protected override string DefaultConnectionString => "Host=localhost;Port=5432;Database=postgres;Username=postgres";
 
-    protected override string AuthenticationHint =>
-        "Leave the password out to take it from your pgpass file (~/.pgpass, or the file named by Passfile= or PGPASSFILE).";
+    // Npgsql's keys and the synonyms it takes for them.
+    protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
+    [
+        new("Host", "Host", ["Server"], "localhost"),
+        new("Port", "Port", Example: "5432"),
+        new("Database", "Database", ["DB"], "postgres"),
+        new("Username", "Username", ["User ID", "UserID", "User Name", "UID", "User"], "postgres"),
+        new("Password", "Password", ["PWD", "PSW"], "${secret:name}", IsSecret: true),
+        new("Passfile", "pgpass file", Example: "~/.pgpass"),
+    ];
+
+    private static readonly ConnectionStringPart IntegratedSecurity = new("Integrated Security", "Integrated Security");
+
+    protected override IReadOnlyList<ConnectionAuthMode> AuthModes { get; } =
+    [
+        new("Password", ["Host", "Port", "Database", "Username", "Password"]),
+        new("pgpass file", ["Host", "Port", "Database", "Username", "Passfile"],
+            Hint: "Password from ~/.pgpass or PGPASSFILE."),
+        new("Kerberos (GSSAPI)", ["Host", "Port", "Database", "Username"], [new(IntegratedSecurity, "true")],
+            Hint: "Your Kerberos ticket (kinit)."),
+    ];
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { [Package] = EntityFrameworkVersion };
 

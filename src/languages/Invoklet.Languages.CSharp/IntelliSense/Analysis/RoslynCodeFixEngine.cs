@@ -91,6 +91,8 @@ internal sealed class RoslynCodeFixEngine
             if (languages != null && languages.Contains(LanguageNames.CSharp))
                 providers.Add(provider);
         }
+        // Invoklet's own fixes, which are not MEF parts.
+        providers.Add(new SecretOutputCodeFixProvider());
         _providers = providers;
 
         // Same MEF composition (InvokletRoslynHost already pulls in Microsoft.CodeAnalysis(.CSharp).

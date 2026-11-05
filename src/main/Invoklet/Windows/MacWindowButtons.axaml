@@ -4,7 +4,9 @@
              VerticalAlignment="Center">
     <!-- Invoklet's own macOS window buttons, drawn like AppKit's traffic lights so every window's title
          bar is Invoklet's (AppKit's own are not used): grey while the window is inactive, glyphs while
-         the pointer is over them. Used by MainWindow's title row and WindowTitleBar. -->
+         the pointer is over them. Used by MainWindow's title row and WindowTitleBar. The glyphs are drawn
+         in a box the size of their dot, centred on 7,7: a box a pixel smaller sat half a pixel off once
+         laid out on whole pixels. -->
     <UserControl.Styles>
         <Style Selector="Button.mac-window-btn">
             <Setter Property="Width" Value="20"/>
@@ -36,22 +38,22 @@
         <Button Classes="mac-window-btn" Click="Close_Click" PointerEntered="Button_PointerEntered" AutomationProperties.Name="Close">
             <Grid>
                 <Ellipse x:Name="CloseDot" Width="14" Height="14" Fill="#FF5F57"/>
-                <Path Classes="mac-close-glyph" IsVisible="False" Width="13" Height="13" Stretch="None"
-                      Data="M 3.5,3.5 L 9.5,9.5 M 9.5,3.5 L 3.5,9.5" Stroke="#7A0000" StrokeThickness="2" StrokeLineCap="Round"/>
+                <Path Classes="mac-close-glyph" IsVisible="False" Width="14" Height="14" Stretch="None"
+                      Data="M 4,4 L 10,10 M 10,4 L 4,10" Stroke="#7A0000" StrokeThickness="2" StrokeLineCap="Round"/>
             </Grid>
         </Button>
         <Button x:Name="MinimizeButton" Classes="mac-window-btn" Click="Minimize_Click" PointerEntered="Button_PointerEntered" AutomationProperties.Name="Minimize">
             <Grid>
                 <Ellipse x:Name="MinimizeDot" Width="14" Height="14" Fill="#FEBC2E"/>
-                <Path IsVisible="False" Width="13" Height="13" Stretch="None"
-                      Data="M 3.5,6.5 H 9.5" Stroke="#7A5700" StrokeThickness="2" StrokeLineCap="Round"/>
+                <Path IsVisible="False" Width="14" Height="14" Stretch="None"
+                      Data="M 4,7 H 10" Stroke="#7A5700" StrokeThickness="2" StrokeLineCap="Round"/>
             </Grid>
         </Button>
         <Button x:Name="ZoomButton" Classes="mac-window-btn" Click="Zoom_Click" PointerEntered="Button_PointerEntered" AutomationProperties.Name="Zoom">
             <Grid>
                 <Ellipse x:Name="ZoomDot" Width="14" Height="14" Fill="#28C840"/>
-                <Path IsVisible="False" Width="13" Height="13" Stretch="None"
-                      Data="M 3.5,6 V 3.5 H 6 M 9.5,7 V 9.5 H 7" Stroke="#006A1B" StrokeThickness="2" StrokeLineCap="Round"/>
+                <Path IsVisible="False" Width="14" Height="14" Stretch="None"
+                      Data="M 4,6.5 V 4 H 6.5 M 10,7.5 V 10 H 7.5" Stroke="#006A1B" StrokeThickness="2" StrokeLineCap="Round"/>
             </Grid>
         </Button>
     </StackPanel>

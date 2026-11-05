@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Invoklet.Runtime;
 
-// Mirrors Invoklet.Build.Core.Secrets.SecretKeys (the key Invoklet passes in INVOKLET_SECRETS_KEY and
+// Mirrors Invoklet.Secrets.SecretKeys (the key Invoklet passes in INVOKLET_SECRETS_KEY and
 // the value layout), duplicated rather than shared: this assembly is netstandard2.0 and references
 // none of Invoklet's own. Decryption only — Invoklet writes the store.
 internal static class SecretCipher

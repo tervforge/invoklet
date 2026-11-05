@@ -1,4 +1,5 @@
 using Invoklet.Connectors.EfCore;
+using Invoklet.Contracts.Connections;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.SqlServer.Design.Internal;
@@ -24,10 +25,29 @@ public sealed class SqlServerConnectionDriver : EfCoreConnectionDriver
 
     protected override string UseCall => "global::Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions.UseSqlServer";
 
-    protected override string ConnectionStringExample => "Server=localhost;Database=Shop;User Id=app;Password=${secret:shop-password};TrustServerCertificate=true";
+    // TrustServerCertificate: a local server's certificate is its own, which SqlClient would refuse.
+    protected override string DefaultConnectionString => "Server=localhost;Database=master;User Id=sa;TrustServerCertificate=true";
 
-    protected override string AuthenticationHint =>
-        "For your Windows account use Integrated Security=true (on macOS and Linux it needs a Kerberos ticket: kinit).";
+    // Microsoft.Data.SqlClient's keys and the synonyms it takes for them.
+    protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
+    [
+        new("Server", "Server", ["Data Source", "Address", "Addr", "Network Address"], "localhost"),
+        new("Database", "Database", ["Initial Catalog"], "master"),
+        new("User Id", "User", ["User ID", "UID", "User", "Username", "User Name"], "sa"),
+        new("Password", "Password", ["PWD"], "${secret:name}", IsSecret: true),
+    ];
+
+    private static readonly ConnectionStringPart IntegratedSecurity = new("Integrated Security", "Integrated Security", ["Trusted_Connection"]);
+    private static readonly ConnectionStringPart Authentication = new("Authentication", "Authentication");
+
+    protected override IReadOnlyList<ConnectionAuthMode> AuthModes { get; } =
+    [
+        new("SQL Server login", ["Server", "Database", "User Id", "Password"]),
+        new("Windows (Integrated Security)", ["Server", "Database"], [new(IntegratedSecurity, "true")],
+            Hint: "Your Windows account (kinit on macOS and Linux)."),
+        new("Microsoft Entra ID", ["Server", "Database", "User Id"], [new(Authentication, "Active Directory Default")],
+            Hint: "Your az login account."),
+    ];
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { [Package] = EntityFrameworkVersion };
 

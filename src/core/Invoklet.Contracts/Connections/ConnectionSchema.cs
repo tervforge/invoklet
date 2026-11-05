@@ -71,7 +71,20 @@ public enum ConnectionSchemaRefresh
 /// the window, the editor and the command-line runner.
 /// </summary>
 /// <param name="drivers">Tells which connections depend on the script's folder; none do without it.</param>
-public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistry? drivers = null)
+/// <summary>The schemas the generated code of the connections is written from (<see cref="GeneratedConnections.For"/>).</summary>
+public interface IConnectionSchemaSource
+{
+    /// <summary>The schema, read from wherever it is kept; null when there is none.</summary>
+    ConnectionSchema? Get(MdRunConnection connection, string? scriptDirectory = null);
+
+    /// <summary>The schema already at hand, without reading anything; null when there is none.</summary>
+    ConnectionSchema? TryGetLoaded(MdRunConnection connection, string? scriptDirectory = null);
+
+    /// <summary>Why the schema couldn't be read the last time, or null.</summary>
+    string? ErrorFor(MdRunConnection connection, string? scriptDirectory = null);
+}
+
+public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistry? drivers = null) : IConnectionSchemaSource
 {
     private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
     // The reads under way, by key: the editor, a run and the Connections window often ask for the

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Invoklet.TemplatedControls"
         xmlns:conv="clr-namespace:Invoklet.Converters"
+        xmlns:connections="clr-namespace:Invoklet.Contracts.Connections;assembly=Invoklet.Contracts"
         xmlns:viewModels="clr-namespace:Invoklet.Windows.Models"
         x:Class="Invoklet.Windows.ConnectionsWindow" x:DataType="viewModels:ConnectionsWindowViewModel"
         Title="Connections" Icon="/Assets/icon.ico"
@@ -98,7 +99,50 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="viewModels:ConnectionFieldViewModel">
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding Label}" FontSize="12" IsVisible="{Binding !IsBoolean}"/>
+                                    <TextBlock Text="{Binding Label}" FontSize="12" IsVisible="{Binding ShowsLabelAbove}"/>
+                                    <!-- A connection string: the way of signing in, a field per setting and the whole text, on one grid of shared columns. -->
+                                    <StackPanel Spacing="6" Grid.IsSharedSizeScope="True" IsVisible="{Binding IsConnectionString}">
+                                        <Grid ColumnSpacing="8" IsVisible="{Binding HasAuthModes}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="PartLabel"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" SharedSizeGroup="PartSide"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Sign in with" FontSize="12" VerticalAlignment="Center"/>
+                                            <ComboBox Grid.Column="1" Classes="form-field" HorizontalAlignment="Stretch" ItemsSource="{Binding AuthModes}" SelectedItem="{Binding SelectedAuthMode}"
+                                                      AutomationProperties.Name="Sign in with">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="connections:ConnectionAuthMode">
+                                                        <TextBlock Text="{Binding Label}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                        <Grid ColumnSpacing="8" IsVisible="{Binding HasAuthHint}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="PartLabel"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" SharedSizeGroup="PartSide"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding AuthHint}"/>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Parts}">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="viewModels:ConnectionStringPartViewModel">
+                                                    <Grid ColumnSpacing="8" IsVisible="{Binding IsVisible}">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="PartLabel"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" SharedSizeGroup="PartSide"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"/>
+                                                        <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Value}" PlaceholderText="{Binding Example}"
+                                                                 AutomationProperties.Name="{Binding Label}"/>
+                                                        <controls:SecretPicker Grid.Column="2"
+                                                                  SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding CanInsertSecret}"
+                                                                  AutomationProperties.Name="{Binding Label, StringFormat='Insert secret into {0}'}" ToolTip.Tip="Insert secret"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="PartLabel"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" SharedSizeGroup="PartSide"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"/>
+                                            <controls:SecretPicker Grid.Column="2"
+                                                      SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding CanInsertSecret}"
+                                                      AutomationProperties.Name="{Binding Param.Label, StringFormat='Insert secret into {0}'}" ToolTip.Tip="Insert secret"/>
+                                        </Grid>
+                                    </StackPanel>
                                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsTextBox}">
                                         <TextBox Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"/>
                                         <controls:SecretPicker Grid.Column="1"
