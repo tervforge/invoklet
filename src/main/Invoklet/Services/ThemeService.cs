@@ -137,11 +137,13 @@ public sealed class ThemeService : IThemeService, IDisposable
     private void OnColorValuesChanged(object? sender, PlatformColorValues e)
     {
         if (_prefs.Appearance.Mode == ThemeMode.System)
-            Dispatcher.UIThread.Post(ApplyCore, DispatcherPriority.Background);
+            _app.Dispatcher.Post(ApplyCore, DispatcherPriority.Background);
     }
 
+    // The application's own dispatcher, not the static Dispatcher.UIThread: a change can come from another thread, where reading that
+    // static while it is unset (between isolated tests) would make that thread the UI thread.
     private void ScheduleApply()
-        => Dispatcher.UIThread.Post(ApplyCore, DispatcherPriority.Background);
+        => _app.Dispatcher.Post(ApplyCore, DispatcherPriority.Background);
 
     private void ApplyCore()
     {

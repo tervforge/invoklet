@@ -278,7 +278,7 @@ public partial class MarkdownViewer : ContentControl
     private void ScrollToAnchorAfterRender(string fragment)
     {
         if (string.IsNullOrEmpty(fragment)) return;
-        Dispatcher.UIThread.Post(() => ScrollToAnchor(fragment), DispatcherPriority.Loaded);
+        Dispatcher.Post(() => ScrollToAnchor(fragment), DispatcherPriority.Loaded);
     }
 
     private static Uri? InferBaseUri(Uri? source)

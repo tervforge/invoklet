@@ -242,7 +242,7 @@ public partial class EditorsTabItemControl
         // The editor may have no size yet, and a line can only be scrolled to once it has one. It stays
         // invisible until then, so the text is never seen at the top and then jumping.
         editor.Opacity = 0;
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.Post(() =>
         {
             if (_disposed) return;
             editor.UpdateLayout();

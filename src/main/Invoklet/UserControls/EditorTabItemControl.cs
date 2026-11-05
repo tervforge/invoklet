@@ -2592,7 +2592,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 token.ThrowIfCancellationRequested();
                 intelliSense.ApplyExecutionContext(baseRequest with { Connections = generated }, token);
                 if (shouldReanalyze)
-                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    await Dispatcher.InvokeAsync(() =>
                     {
                         // The classes the script's code refers to are new: analyse it again now rather than at the next keystroke.
                         if (!_disposed && !token.IsCancellationRequested) _intelliSense?.NotifyTextChanged(State.Editor.Text);

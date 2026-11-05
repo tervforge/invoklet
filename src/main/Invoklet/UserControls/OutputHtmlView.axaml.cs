@@ -98,7 +98,7 @@ public partial class OutputHtmlView : UserControl
     {
         if (_applyScheduled) return;
         _applyScheduled = true;
-        Dispatcher.UIThread.Post(ApplyPendingContent, DispatcherPriority.Background);
+        Dispatcher.Post(ApplyPendingContent, DispatcherPriority.Background);
     }
 
     private void ApplyPendingContent()

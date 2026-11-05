@@ -343,7 +343,7 @@ public partial class FileTreeView : UserControl
         node.EditingName = node.DisplayName;
         node.IsRenaming = true;
 
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.Post(() =>
         {
             if (_fileTree.ContainerFromItem(node) is not TreeViewItem tvi) return;
             var box = tvi.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(b => b.IsVisible);

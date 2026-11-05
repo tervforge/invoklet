@@ -65,7 +65,7 @@ public class BreakPointMargin : AbstractMargin, IDisposable
         if (Math.Abs(desiredWidth - Bounds.Width) > 0.5 && !_measureInvalidationPending)
         {
             _measureInvalidationPending = true;
-            Dispatcher.UIThread.Post(() => { _measureInvalidationPending = false; InvalidateMeasure(); });
+            Dispatcher.Post(() => { _measureInvalidationPending = false; InvalidateMeasure(); });
         }
 
         context.FillRectangle(_editor?.Background ?? Brushes.Honeydew, Bounds);

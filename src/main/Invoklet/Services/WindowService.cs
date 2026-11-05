@@ -69,8 +69,9 @@ public sealed class WindowService : IWindowService
     {
         if (MainWindow is not { } owner || cancellationToken.IsCancellationRequested) return SecretAccessChoice.Deny;
         var dialog = new SecretAccessDialog(scriptName, secretName, isSave);
-        // The script was stopped while the question was open: nobody waits for the answer any more.
-        await using var stopped = cancellationToken.Register(() => Dispatcher.UIThread.Post(() => dialog.Close()));
+        // The script was stopped while the question was open: nobody waits for the answer any more. The dialog's own dispatcher, as
+        // the stop comes on another thread.
+        await using var stopped = cancellationToken.Register(() => dialog.Dispatcher.Post(() => dialog.Close()));
         return await dialog.ShowDialog<SecretAccessChoice?>(owner) ?? SecretAccessChoice.Deny;
     }
 

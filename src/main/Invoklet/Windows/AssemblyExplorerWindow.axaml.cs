@@ -1572,7 +1572,7 @@ public partial class AssemblyExplorerWindow : Window
         // The new text's height (and, in a window just opened, the viewport) is only known after layout, so the
         // scroll above can be clamped to the old extent and leave the page at its top: scroll again once laid out.
         var applied = ++_appliedResults;
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.Post(() =>
         {
             if (applied == _appliedResults && Editor.TextArea.Caret.Line == caretLine) Editor.ScrollToLine(caretLine);
         }, DispatcherPriority.Loaded);

@@ -381,7 +381,7 @@ public partial class ConnectionNavigationView : UserControl
     {
         Selected = node;
         if (node is null) { _tree.Focus(); return; }
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.Post(() =>
         {
             if (_tree.TreeContainerFromItem(node) is TreeViewItem item) item.Focus();
         }, DispatcherPriority.Loaded);
@@ -392,7 +392,7 @@ public partial class ConnectionNavigationView : UserControl
         if (!node.IsGroup || ViewModel is not { CanEditGroups: true }) return;
         node.EditingName = node.Name;
         node.IsRenaming = true;
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.Post(() =>
         {
             if (_tree.TreeContainerFromItem(node) is not TreeViewItem item) return;
             var box = item.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(b => b.IsVisible && b.DataContext == node);

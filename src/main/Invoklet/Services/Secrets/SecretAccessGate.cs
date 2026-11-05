@@ -18,6 +18,10 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
 
     private readonly HashSet<string> _allowedThisSession = new(PathComparer);
 
+    // The UI thread's dispatcher, taken where the gate is made (on the UI thread): requests come on other threads, where reading the
+    // static Dispatcher.UIThread while it is unset would make that thread the UI thread.
+    private readonly Dispatcher _dispatcher = Dispatcher.UIThread;
+
     // One question at a time: a script asking for three secrets, or two scripts at once, is asked once per script.
     private readonly SemaphoreSlim _asking = new(1, 1);
 
@@ -26,7 +30,7 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     /// the settings tells the windows, which update themselves on the thread that owns them.
     /// </summary>
     public Task<bool> MayAccessOnUiThreadAsync(SecretAccess access, CancellationToken cancellationToken)
-        => Dispatcher.UIThread.InvokeAsync(() => MayAccessAsync(access, cancellationToken));
+        => _dispatcher.InvokeAsync(() => MayAccessAsync(access, cancellationToken));
 
     public async Task<bool> MayAccessAsync(SecretAccess access, CancellationToken cancellationToken)
     {

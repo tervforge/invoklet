@@ -407,7 +407,7 @@ public class CodeFixMargin : AbstractMargin
         base.OnTextViewVisualLinesChanged();
         if (TextView is null || _measureInvalidationPending || Math.Abs(ColumnWidth() - Bounds.Width) <= 0.5) return;
         _measureInvalidationPending = true;
-        Dispatcher.UIThread.Post(() =>
+        Dispatcher.Post(() =>
         {
             _measureInvalidationPending = false;
             InvalidateMeasure();
