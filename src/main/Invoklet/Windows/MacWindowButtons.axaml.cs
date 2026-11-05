@@ -22,6 +22,9 @@ public partial class MacWindowButtons : UserControl
     public MacWindowButtons()
     {
         AvaloniaXamlLoader.Load(this);
+        // Option held as the green button is pressed; a tunnel handler, as the button takes the press itself.
+        this.FindControl<Button>("ZoomButton")!.AddHandler(PointerPressedEvent,
+            (_, e) => _optionHeld = e.KeyModifiers.HasFlag(KeyModifiers.Alt), RoutingStrategies.Tunnel);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -92,7 +95,28 @@ public partial class MacWindowButtons : UserControl
 
     private void Zoom_Click(object? sender, RoutedEventArgs e)
     {
-        if (_window is { } window)
-            window.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        if (_window is { } window) window.WindowState = GreenButtonState(window.WindowState, _optionHeld);
+        _optionHeld = false;
     }
+
+    private bool _optionHeld;
+
+    /// <summary>
+    /// What the green button does, as on every Mac window: it enters full screen, and leaves it; with Option it zooms the window to fill
+    /// the screen beside the Dock and the menu bar, or gives it back its size.
+    /// </summary>
+    internal static WindowState GreenButtonState(WindowState current, bool option) => current switch
+    {
+        WindowState.FullScreen => WindowState.Normal,
+        _ when option => current == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized,
+        _ => WindowState.FullScreen,
+    };
+
+    /// <summary>A double click on the title bar zooms, as macOS does by default; a full-screen window keeps its state.</summary>
+    internal static WindowState TitleDoubleClickState(WindowState current) => current switch
+    {
+        WindowState.FullScreen => WindowState.FullScreen,
+        WindowState.Maximized => WindowState.Normal,
+        _ => WindowState.Maximized,
+    };
 }

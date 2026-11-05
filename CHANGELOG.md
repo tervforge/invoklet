@@ -37,6 +37,9 @@ Notable changes in each Invoklet release. Downloads are on the
 - The preprocessor symbol Invoklet defines for scripts is `INVOKLET` (as LINQPad's is `LINQPAD`),
   not `Invoklet`: write `#if INVOKLET`.
 - Escape closes the Preferences window, as it does every other dialog.
+- On macOS the green window button enters and leaves full screen (with Option it zooms), as on every
+  Mac window; it used to zoom only, so a window in full screen was zoomed by it instead of coming back.
+  A double click on the title bar zooms and leaves a full-screen window alone.
 - A right click (Control-click on macOS) in the results no longer clears the selection, so its context
   menu can copy it.
 

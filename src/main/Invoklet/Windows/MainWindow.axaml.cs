@@ -568,7 +568,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
             return;
         if (source.GetSelfAndVisualAncestors().TakeWhile(v => v != sender)
             .OfType<Control>().Any(control => control.Focusable)) return;
-        if (e.ClickCount == 2) Maximize_Click(sender, e);
+        // A double click maximizes and restores (zooms, on macOS); a full-screen window keeps its state.
+        if (e.ClickCount == 2) WindowState = MacWindowButtons.TitleDoubleClickState(WindowState);
         else BeginMoveDrag(e);
         e.Handled = true;
     }
