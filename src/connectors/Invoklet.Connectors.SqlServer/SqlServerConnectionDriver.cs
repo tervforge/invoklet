@@ -44,13 +44,10 @@ public sealed class SqlServerConnectionDriver : EfCoreConnectionDriver
     [
         new("SQL Server login", ["Server", "Database", "User Id", "Password"]),
         new("Windows (Integrated Security)", ["Server", "Database"], [new(IntegratedSecurity, "true")],
-            Hint: "Signs in with your Windows account; on macOS and Linux it needs a Kerberos ticket (kinit)."),
+            Hint: "Your Windows account (kinit on macOS and Linux)."),
         new("Microsoft Entra ID", ["Server", "Database", "User Id"], [new(Authentication, "Active Directory Default")],
-            Hint: "Signs in with the account Azure tools are signed in with (az login, Visual Studio, an environment's managed identity); the user is optional."),
+            Hint: "Your az login account."),
     ];
-
-    protected override string AuthenticationHint =>
-        "For your Windows account use Integrated Security=true (on macOS and Linux it needs a Kerberos ticket: kinit).";
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { [Package] = EntityFrameworkVersion };
 

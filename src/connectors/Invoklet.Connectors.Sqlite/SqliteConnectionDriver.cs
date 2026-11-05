@@ -37,7 +37,6 @@ public sealed class SqliteConnectionDriver : EfCoreConnectionDriver
 
     protected override string DefaultConnectionString => "Data Source=database.db";
 
-    protected override string AuthenticationHint => "";
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { [Package] = EntityFrameworkVersion };
 

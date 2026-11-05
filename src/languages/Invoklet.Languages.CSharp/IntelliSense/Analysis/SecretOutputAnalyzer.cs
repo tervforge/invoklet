@@ -23,7 +23,7 @@ internal sealed class SecretOutputAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor Rule = new(
         Id,
         "A secret is written to the output",
-        "The secret '{0}' is written to the output by {1}: it shows in the results and is saved with the run's output",
+        "The secret '{0}' is written to the output by {1}",
         "Security",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

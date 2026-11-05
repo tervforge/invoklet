@@ -11,11 +11,7 @@ public partial class SecretAccessDialog : InvokletDialogWindow
     {
         InitializeComponent();
         Layout.Heading = isSave ? $"Let “{scriptName}” change your secrets?" : $"Let “{scriptName}” read your secrets?";
-        Layout.Message = (isSave
-                ? $"The script wants to change the secret “{secretName}” in the Secret Store."
-                : $"The script asks for the secret “{secretName}” from the Secret Store.")
-            + " Allow it only for a script you trust: a script can send what it reads anywhere."
-            + " Allow Once lasts until Invoklet is closed; Always Allow remembers this file.";
+        Layout.Message = (isSave ? $"It wants to change “{secretName}”." : $"It asks for “{secretName}”.") + " Allow only scripts you trust.";
     }
 
     private void Deny_Click(object? sender, RoutedEventArgs e) => Close(SecretAccessChoice.Deny);

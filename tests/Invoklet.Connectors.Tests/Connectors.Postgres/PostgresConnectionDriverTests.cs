@@ -22,7 +22,7 @@ public class PostgresConnectionDriverTests
         Assert.Equal(["connectionString", "schema"], sut.Params.Select(p => p.Key));
         Assert.True(sut.Params[0].Required);
         Assert.False(sut.Params[1].Required);
-        Assert.Contains("pgpass", sut.Params[0].Description);
+        Assert.Equal(["Password", "pgpass file", "Kerberos (GSSAPI)"], sut.Params[0].AuthModes!.Select(m => m.Label));
     }
 
     [Fact]

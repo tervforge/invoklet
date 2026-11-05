@@ -47,9 +47,6 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     /// <summary>The ways of signing in the form offers; the first is the one of a new connection.</summary>
     protected virtual IReadOnlyList<ConnectionAuthMode> AuthModes => [];
 
-    /// <summary>What the form says about signing in without a password in the text.</summary>
-    protected abstract string AuthenticationHint { get; }
-
     /// <summary>Null when the text is a connection string of this server, otherwise why it is not.</summary>
     protected abstract string? CheckConnectionString(string text);
 
@@ -70,10 +67,8 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     public virtual IReadOnlyList<ConnectionParam> Params =>
     [
         new(ConnectionStringKey, "Connection string", ConnectionParamType.ConnectionString, Required: true, Default: DefaultConnectionString,
-            Description: "Fill in the fields, or write the whole connection string; settings without a field go in the text. "
-                + "Write the password as ${secret:name} to keep it in the Secret Store. " + AuthenticationHint,
             Parts: ConnectionStringParts, AuthModes: AuthModes),
-        new(SchemaKey, "Schema", Description: "Optional. Read only the tables of this schema; without it all schemas are read."),
+        new(SchemaKey, "Schema", Description: "Optional: only this schema's tables."),
     ];
 
     /// <summary>Whether the description depends on the script's folder, as a database file given by a relative path does.</summary>

@@ -18,7 +18,6 @@ internal sealed class SqliteEfDriver : EfCoreConnectionDriver
 
     protected override string DefaultConnectionString => "Data Source=shop.db";
 
-    protected override string AuthenticationHint => "";
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { ["Microsoft.EntityFrameworkCore.Sqlite"] = "10.0.13" };
 

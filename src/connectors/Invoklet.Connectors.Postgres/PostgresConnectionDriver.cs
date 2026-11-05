@@ -35,7 +35,7 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
         new("Database", "Database", ["DB"], "postgres"),
         new("Username", "Username", ["User ID", "UserID", "User Name", "UID", "User"], "postgres"),
         new("Password", "Password", ["PWD", "PSW"], "${secret:name}", IsSecret: true),
-        new("Passfile", "pgpass file", Example: "~/.pgpass, or PGPASSFILE"),
+        new("Passfile", "pgpass file", Example: "~/.pgpass"),
     ];
 
     private static readonly ConnectionStringPart IntegratedSecurity = new("Integrated Security", "Integrated Security");
@@ -44,13 +44,10 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
     [
         new("Password", ["Host", "Port", "Database", "Username", "Password"]),
         new("pgpass file", ["Host", "Port", "Database", "Username", "Passfile"],
-            Hint: "The password is read from the pgpass file: the one named here, else PGPASSFILE, else ~/.pgpass (%APPDATA%\\postgresql\\pgpass.conf on Windows)."),
+            Hint: "Password from ~/.pgpass or PGPASSFILE."),
         new("Kerberos (GSSAPI)", ["Host", "Port", "Database", "Username"], [new(IntegratedSecurity, "true")],
-            Hint: "Signs in with your Kerberos ticket (kinit) or, on Windows, your Windows account; the username is optional."),
+            Hint: "Your Kerberos ticket (kinit)."),
     ];
-
-    protected override string AuthenticationHint =>
-        "Leave the password out to take it from your pgpass file (~/.pgpass, or the file named by Passfile= or PGPASSFILE).";
 
     public override IReadOnlyDictionary<string, string> Packages { get; } = new Dictionary<string, string> { [Package] = EntityFrameworkVersion };
 
