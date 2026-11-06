@@ -1,0 +1,17 @@
+<templatedControls:InvokletDialogWindow xmlns="https://github.com/avaloniaui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                         xmlns:local="using:Invoklet.Windows"
+                         xmlns:templatedControls="clr-namespace:Invoklet.TemplatedControls"
+                         x:Class="Invoklet.Windows.SetupInstallConfirmationDialog"
+                         Icon="/Assets/icon.ico" Title="Setup"
+                         Background="{DynamicResource Invoklet.Panel.BackgroundBrush}"
+                         Foreground="{DynamicResource Invoklet.Text.PrimaryBrush}">
+    <local:DialogLayout x:Name="Layout">
+        <local:DialogLayout.Actions>
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Invoklet.Space.Control}">
+                <Button Classes="secondary" Content="Cancel" MinWidth="{DynamicResource Invoklet.Size.DialogButton}" Click="Cancel_Click" IsCancel="True"/>
+                <Button Classes="primary" Content="Install" MinWidth="{DynamicResource Invoklet.Size.DialogButton}" Click="Install_Click" IsDefault="True"/>
+            </StackPanel>
+        </local:DialogLayout.Actions>
+    </local:DialogLayout>
+</templatedControls:InvokletDialogWindow>

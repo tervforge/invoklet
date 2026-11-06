@@ -40,7 +40,29 @@ public static class ConnectionContractAssemblyCache
             Add(info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         var key = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
-        return Path.Combine(folder, "connection-contracts", "Invoklet.ConnectionContracts." + key + ".dll");
+        return Path.Combine(folder, "connection-contracts", FilePrefix + key + ".dll");
+    }
+
+    private const string FilePrefix = "Invoklet.ConnectionContracts.";
+
+    /// <summary>
+    /// Deletes the contracts in <paramref name="folder"/> but <paramref name="keep"/> (the path of one; null deletes them all): a schema read
+    /// again, another framework or a package update makes a new one, and the old one is never used again. One that can't be deleted (loaded
+    /// by an editor on Windows) is left for the next time.
+    /// </summary>
+    public static void RemoveOthers(string folder, string? keep)
+    {
+        if (!Directory.Exists(folder)) return;
+        var kept = keep is null ? null : Path.GetFileNameWithoutExtension(keep);
+        foreach (var path in Directory.EnumerateFiles(folder, FilePrefix + "*"))
+        {
+            var name = Path.GetFileName(path);
+            // A .tmp is another build's contract on its way in.
+            if (name.EndsWith(".tmp", StringComparison.Ordinal) || name.EndsWith(".tmp.xml", StringComparison.Ordinal)) continue;
+            if (kept is not null && name.StartsWith(kept + ".", StringComparison.Ordinal)) continue;
+            try { File.Delete(path); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
 
     public static string? Find(string folder, IReadOnlyList<GeneratedSourceFile> files,
@@ -87,6 +109,7 @@ public static class ConnectionContractAssemblyCache
             cancellationToken.ThrowIfCancellationRequested();
             // Publish the DLL last, so readers never see it without its documentation.
             Publish(xmlTemp, temp, path, (from, to) => File.Move(from, to, overwrite: true), delay => Thread.Sleep(delay));
+            RemoveOthers(Path.GetDirectoryName(path)!, path);
         }
         finally
         {

@@ -1,4 +1,6 @@
 using Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Fixtures;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
@@ -25,6 +27,25 @@ public class CSharpIntelliSenseDocumentHighlightsTests
         // Declaration + "value = " + "value + 1" + "WriteLine(value)" = 4 occurrences.
         Assert.Equal(4, result!.Count);
         Assert.All(result, h => Assert.Equal("value", code.Substring(h.Start, h.Length)));
+    }
+
+    // The editor asks with its caret and a text that may be shorter by then (characters deleted meanwhile): there is nothing to
+    // highlight, and nothing went wrong either.
+    [Fact]
+    public async Task GetDocumentHighlightsAsync_CaretPastTheEndOfTheText_ReturnsNullWithoutAWarning()
+    {
+        // Arrange
+        var fixture = new CSharpIntelliSenseFixture();
+        using var service = fixture.CreateSut(fixture.Logger.Object);
+        const string code = "var value = 1;";
+
+        // Act
+        var result = await service.GetDocumentHighlightsAsync(code, code.Length + 5, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(result);
+        fixture.Logger.Verify(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(), It.IsAny<Exception?>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Never);
     }
 
     [Fact]

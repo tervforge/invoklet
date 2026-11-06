@@ -37,7 +37,7 @@ public class TargetSdkResolverTests
         var sdk = TargetSdkResolver.Resolve(Installed, target);
 
         Assert.Same(Net10, sdk);
-        Assert.Equal("targetSdk net6.0 is not installed — running on .NET 10.0.100.", TargetSdkResolver.Warning(target, sdk!));
+        Assert.Equal("targetSdk net6.0 is not available — running on .NET 10.0.100.", TargetSdkResolver.Warning(target, sdk!));
     }
 
     [Fact]

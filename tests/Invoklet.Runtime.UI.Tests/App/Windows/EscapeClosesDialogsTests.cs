@@ -24,7 +24,7 @@ public class EscapeClosesDialogsTests
 {
     public static TheoryData<string> Dialogs => new(
         "error", "newfile", "goto", "reload", "revert", "exit", "conflict", "unsaved", "rename", "connection", "secret", "about",
-        "preferences", "nuget");
+        "preferences", "nuget", "setup");
 
     private static Window Create(string kind) => kind switch
     {
@@ -41,6 +41,7 @@ public class EscapeClosesDialogsTests
         "secret" => new SecretAccessDialog("report.inv", "billing", isSave: false),
         "preferences" => new PreferencesWindow(PreferencesViewModel()),
         "nuget" => new NuGetSourcesWindow(new NuGetSourcesWindowViewModel(NuGetSources())),
+        "setup" => new SetupInstallConfirmationDialog(new Invoklet.Services.Setup.SetupInstallPlan(".NET SDK", "10.0.403", "/home/me/.dotnet", "Microsoft", false)),
         _ => new AboutWindow(),
     };
 

@@ -128,9 +128,10 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         return new ConnectionSchema(Summary(entities), [context], data);
     }
 
+    // The script queries with EF Core's extensions (Include, AsNoTracking, ToListAsync) as LINQ's own, without a using.
     public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context) =>
         new(EfContextCode.GenerateClient(connection, context, Kind, ConstructorStatements(connection, context),
-            "global::" + ContextNamespace(context.Schema?.Data ?? "[]") + "." + EfContextCode.ContextClass));
+            "global::" + ContextNamespace(context.Schema?.Data ?? "[]") + "." + EfContextCode.ContextClass), ["Microsoft.EntityFrameworkCore"]);
 
     // Named after what was read, so two connections to the same database share the context, and two databases never mix theirs.
     private string ContextNamespace(string data) =>

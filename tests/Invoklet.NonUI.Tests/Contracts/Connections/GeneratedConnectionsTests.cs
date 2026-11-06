@@ -27,6 +27,26 @@ public sealed class GeneratedConnectionsTests
         Assert.DoesNotContain("#nullable enable annotations", generated.Source, StringComparison.Ordinal);
     }
 
+    // A query is written with the driver's extensions (EF Core's Include) without a using of the script's own; two connections of one
+    // driver import it once.
+    [Fact]
+    public void For_TwoConnectionsWhoseDriverNamesANamespace_ImportItOnceForTheScript()
+    {
+        // Arrange
+        var fixture = new GeneratedConnectionsFixture();
+        var first = GeneratedConnectionsFixture.Connection("inventory");
+        var second = GeneratedConnectionsFixture.Connection("other");
+        fixture.HasSchema(first);
+        fixture.HasSchema(second);
+        fixture.ClientsUse("Microsoft.EntityFrameworkCore");
+
+        // Act
+        var generated = GeneratedConnections.For([first, second], MdRunLanguage.CSharp, [], fixture.Drivers(), fixture.Schemas.Object)!;
+
+        // Assert
+        Assert.StartsWith("#nullable enable\nglobal using global::Microsoft.EntityFrameworkCore;\n/// ", generated.Source, StringComparison.Ordinal);
+    }
+
     // Two connections to servers with the same schema file share it: it is compiled once.
     [Fact]
     public void For_TwoConnectionsWithTheSameSchemaFile_AddItOnce()

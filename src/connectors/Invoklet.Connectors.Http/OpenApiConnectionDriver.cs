@@ -30,7 +30,7 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
 
     public string DisplayName => "OpenAPI/Swagger";
 
-    public string SchemaVersion => "1";
+    public string SchemaVersion => "2";
 
     public ConnectionCategory Category => ConnectionCategory.Http;
 
@@ -44,11 +44,24 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
     public Task<ConnectionTestResult> TestAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, CancellationToken cancellationToken) =>
         _http.TestAsync(resolvedParams, cancellationToken);
 
-    public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context)
+    public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context) =>
+        HttpConnectionDriver.BuildClient(connection, context, "OpenAPI connection", context.Schema is { } schema
+            ? "global::" + ClientNamespace(schema.Data) + "." + OpenApiClientCode.ClientClass
+            : "global::System.Net.Http.HttpClient");
+
+    // The client is a file of the schema, like a gRPC server's classes: it is built once into an assembly that is kept, not again with every
+    // change to the script.
+    internal static ConnectionSchema SchemaOf(OpenApiDocument document)
     {
-        var document = context.Schema is { } schema ? JsonSerializer.Deserialize<OpenApiDocument>(schema.Data) : null;
-        return HttpConnectionDriver.BuildClient(connection, context, document is null ? "" : OpenApiClientCode.Members(document, context.ClassName), "OpenAPI connection");
+        var data = JsonSerializer.Serialize(document);
+        var count = document.Operations.Count;
+        return new ConnectionSchema(count == 1 ? "1 operation." : $"{count} operations.",
+            [new GeneratedSourceFile(ClientNamespace(data) + ".cs", OpenApiClientCode.Generate(ClientNamespace(data), document))], data);
     }
+
+    // Named after the description, so two connections to the same API share the client, and two APIs never mix theirs.
+    private static string ClientNamespace(string data) =>
+        "InvokletApis.Api" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(data)))[..16];
 
     // Where APIs usually publish their description, tried in this order under the base address and then under the address's root.
     internal static readonly string[] DocumentPaths =
@@ -86,9 +99,7 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
                 if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
                     throw new OpenApiException($"The server answered {(int)response.StatusCode} for {uri}: check the credentials in the headers.");
                 if (!response.IsSuccessStatusCode) continue;
-                var document = OpenApiReader.Read(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-                var count = document.Operations.Count;
-                return new ConnectionSchema(count == 1 ? "1 operation." : $"{count} operations.", [], JsonSerializer.Serialize(document));
+                return SchemaOf(OpenApiReader.Read(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)));
             }
             catch (OpenApiException ex) when (ex.Message.StartsWith("The document", StringComparison.Ordinal) || ex.Message.StartsWith("The OpenAPI document", StringComparison.Ordinal))
             {

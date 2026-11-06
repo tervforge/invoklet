@@ -136,6 +136,7 @@
                         IconData="{StaticResource Icon.Bug}"
                         CheckedBrush="{DynamicResource Invoklet.Icon.PlayBrush}"
                         IsChecked="{Binding DebugModeEnabled}"
+                        IsVisible="{Binding HasDebugger}"
                         ToolTip.Tip="Toggle debug mode"
                        />
 

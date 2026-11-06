@@ -7,9 +7,39 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Changed
 
-- A script with a PostgreSQL, SQL Server or SQLite connection runs faster after an edit: the
-  database's context is compiled once, when its schema is read, instead of with every change to the
-  script. Schemas read by an earlier version are read again on the next run.
+- A script with a PostgreSQL, SQL Server, SQLite or OpenAPI connection runs faster after an edit: the
+  database's context or the API's client is compiled once, when its schema is read, instead of with
+  every change to the script. Schemas read by an earlier version are read again on the next run.
+- The `invoklet` command keeps each script's build between runs, as the window does, so an unchanged
+  script is not compiled again. A script already running in another terminal is built in a temporary
+  folder.
+- A run tells what takes the time before the script starts: which connections' schemas are read and
+  which NuGet package is checked, downloaded or installed, with the time counting up beside it. The
+  `invoklet` command prints the same in a terminal, on standard error.
+- The SDK list offers .NET 6 to .NET 10: a newer SDK, a preview included, needs a newer C#
+  compiler than the one Invoklet is built with. A script whose `targetSdk` isn't in the list says
+  *not available* instead of *not installed*.
+- The setup asks before it installs, naming the version of the .NET SDK or netcoredbg and the
+  folder it goes to, and installs that version.
+- With *Dotnet path* empty, Invoklet finds `dotnet` itself each time: on `PATH`, where .NET was
+  installed to, in the usual folders of each system (Ubuntu's and Fedora's packages, Homebrew, snap
+  included), and in `~/.dotnet` last.
+- Without a debugger, the bug button is hidden, **Run → Debug Mode** is unavailable, breakpoints
+  can't be set, and Run runs the script normally. Everything comes back once netcoredbg is set up.
+- Switching a script with a database connection to another .NET version switches its EF Core
+  package to the release for that version (EF Core 8 on .NET 8), unless you chose the version.
+
+### Fixed
+
+- `Include`, `AsNoTracking`, `ToListAsync` and the other EF Core extensions work on the tables of a
+  database connection without `using Microsoft.EntityFrameworkCore;` in the script, in completion too.
+- Go to Definition (F12) on a typed script argument opens the code generated for the arguments, as it
+  does for a connection's classes.
+- Old builds of a connection's schema no longer pile up in a script's build folder.
+- Invoklet no longer keeps the first `dotnet` it found in its settings: a .NET installed later
+  in the usual place is used, and a path stored that way is cleared.
+- Highlighting the occurrences of a symbol no longer logs an error when the caret is past the end
+  of the text, after characters were deleted.
 
 ## [0.11.5] — 2026-11-05
 

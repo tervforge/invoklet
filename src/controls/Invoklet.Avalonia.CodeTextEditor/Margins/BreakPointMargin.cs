@@ -89,10 +89,10 @@ public class BreakPointMargin : AbstractMargin, IDisposable
             var lineNo = vl.FirstDocumentLine.LineNumber;
             // number and markers on the line's first row (see GutterMetrics.FirstRow)
             var (yTop, lineH) = GutterMetrics.FirstRow(TextView, vl);
-            var bpAtLine = _manager?.FirstOrDefault(bp => bp.Line == lineNo);
+            var bpAtLine = BreakpointsOn ? _manager?.FirstOrDefault(bp => bp.Line == lineNo) : null;
             var hasBp = bpAtLine is not null;
             var isDebug = DebugLine == lineNo;
-            var isHover = _previewPointVisible && _previewLine == lineNo;
+            var isHover = BreakpointsOn && _previewPointVisible && _previewLine == lineNo;
 
             if (isDebug && _debugArrowGeo is not null)
             {
@@ -163,9 +163,12 @@ public class BreakPointMargin : AbstractMargin, IDisposable
             bp?.VerificationState == BreakpointVerificationState.Unverified ? bp.VerificationMessage : null);
     }
 
+    // Off (CodeTextEditor.CanSetBreakpoints), the margin is line numbers only.
+    private bool BreakpointsOn => _editor?.CanSetBreakpoints != false;
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        if (_editor is null || _manager is null) return;
+        if (_editor is null || _manager is null || !BreakpointsOn) return;
 
         var offset = _editor.GetOffsetFromPoint(e.GetPosition(this));
         if (offset == -1) return;

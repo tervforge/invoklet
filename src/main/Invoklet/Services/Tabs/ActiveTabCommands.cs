@@ -91,10 +91,10 @@ internal sealed class ActiveTabCommands
         if (_active.ViewModel?.IsPaused == true) _active.Target?.RunToCursor();
     }
 
-    // The toolbar's bug button binds to the same flag.
+    // The toolbar's bug button binds to the same flag; without a debugger there is nothing to switch to.
     internal void ToggleDebugMode()
     {
-        if (_active.ViewModel is { } tab) tab.DebugModeEnabled = !tab.DebugModeEnabled;
+        if (_active.ViewModel is { HasDebugger: true } tab) tab.DebugModeEnabled = !tab.DebugModeEnabled;
     }
 
     internal void ToggleOutputPanel() => _active.ViewModel?.OutputPanel.ToggleCommand.Execute().Subscribe();

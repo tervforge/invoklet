@@ -3,6 +3,7 @@ using Invoklet.Languages.CSharp.IntelliSense;
 using Invoklet.Languages.CSharp.IntelliSense.ScriptDocument;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Fixtures;
 
@@ -20,6 +21,9 @@ internal sealed class CSharpIntelliSenseFixture
 
     // What the service is made with, and so the framework a package update leaves in place.
     public static IReadOnlyList<string> Framework => ReferenceSet.Classify(DefaultReferences.Value, null).DefaultFramework;
+
+    // What the service logs, for a test that passes it to CreateSut.
+    public Mock<ILogger<CSharpIntelliSenseService>> Logger { get; } = new();
 
     // Without a resolver of its own, a package update answers with the framework and nothing else, and looks at nothing on the disk.
     public CSharpIntelliSenseService CreateSut(ILogger<CSharpIntelliSenseService>? logger = null, IReferenceResolver? resolver = null)

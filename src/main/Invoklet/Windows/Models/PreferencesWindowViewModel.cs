@@ -5,6 +5,7 @@ using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Desktop;
 using Invoklet.Format.MdRun;
+using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.Services;
 using Invoklet.Services.Desktop;
 using Invoklet.Services.Preferences;
@@ -530,6 +531,9 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         get => _prefs.Debugger.DotnetPath;
         set => SetPref(_prefs.Debugger.DotnetPath, value, v => _prefs.Debugger.DotnetPath = v);
     }
+
+    /// <summary>What an empty Dotnet path uses, shown in the empty field.</summary>
+    public string DotnetPathPlaceholder => "Automatic: " + DotnetExecutableResolver.Resolve(null);
 
     public string DebuggerPath
     {

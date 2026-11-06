@@ -32,12 +32,18 @@ public class CodeTextEditor : TextEditor, IDisposable
     public static readonly StyledProperty<bool> ShowFoldingProperty =
         AvaloniaProperty.Register<CodeTextEditor, bool>(nameof(ShowFolding));
 
+    /// <summary>Whether breakpoints can be set and are shown; off, the gutter keeps its line numbers and ignores clicks.</summary>
+    public static readonly StyledProperty<bool> CanSetBreakpointsProperty =
+        AvaloniaProperty.Register<CodeTextEditor, bool>(nameof(CanSetBreakpoints), defaultValue: true);
+
     static CodeTextEditor()
     {
         ShowBreakpointsProperty.Changed.AddClassHandler<CodeTextEditor>(
             static (editor, e) => editor.OnShowBreakpointsChanged((bool?)e.NewValue));
         ShowFoldingProperty.Changed.AddClassHandler<CodeTextEditor>(
             static (editor, e) => editor.OnShowFoldingChanged((bool?)e.NewValue));
+        CanSetBreakpointsProperty.Changed.AddClassHandler<CodeTextEditor>(
+            static (editor, _) => editor._breakpointMargin.InvalidateVisual());
     }
 
     private readonly BreakpointStore _breakpointStore;
@@ -316,6 +322,12 @@ public class CodeTextEditor : TextEditor, IDisposable
     {
         get => GetValue(ShowBreakpointsProperty);
         set => SetValue(ShowBreakpointsProperty, value);
+    }
+
+    public bool CanSetBreakpoints
+    {
+        get => GetValue(CanSetBreakpointsProperty);
+        set => SetValue(CanSetBreakpointsProperty, value);
     }
 
     public bool ShowFolding

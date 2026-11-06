@@ -124,4 +124,6 @@ public interface IConnectionDriver
 }
 
 /// <summary>A connection's client class; the packages it uses are the driver's <see cref="IConnectionDriver.Packages"/>.</summary>
-public sealed record ConnectionClientCode(string ClassSource);
+/// <param name="Namespaces">What the script gets to use without a <c>using</c> of its own, such as the extensions a query is written with
+/// (<c>Include</c> of EF Core).</param>
+public sealed record ConnectionClientCode(string ClassSource, IReadOnlyList<string>? Namespaces = null);

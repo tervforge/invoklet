@@ -615,7 +615,7 @@ public class CliRunnerTests
             {
                 Assert.True(exitCode == 0, log);
                 Assert.Contains("SCRIPT_EXECUTED", stdout.Output);
-                Assert.Contains("targetSdk net1.0 is not installed", stderr.Output);
+                Assert.Contains("targetSdk net1.0 is not available", stderr.Output);
             }
             else
             {

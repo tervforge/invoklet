@@ -17,13 +17,25 @@ public sealed class MacWindowButtonsStateTests
     [InlineData(WindowState.FullScreen, true, WindowState.Normal)]
     [InlineData(WindowState.Normal, true, WindowState.Maximized)]
     [InlineData(WindowState.Maximized, true, WindowState.Normal)]
-    public void TheGreenButton_Should_EnterAndLeaveFullScreen_AndZoomWithOption(WindowState current, bool option, WindowState expected)
-        => Assert.Equal(expected, MacWindowButtons.GreenButtonState(current, option));
+    public void GreenButtonState_AWindowStateAndOption_ReturnsFullScreenOrZoom(WindowState current, bool option, WindowState expected)
+    {
+        // Act
+        var next = MacWindowButtons.GreenButtonState(current, option);
+
+        // Assert
+        Assert.Equal(expected, next);
+    }
 
     [Theory]
     [InlineData(WindowState.Normal, WindowState.Maximized)]
     [InlineData(WindowState.Maximized, WindowState.Normal)]
     [InlineData(WindowState.FullScreen, WindowState.FullScreen)]
-    public void ADoubleClickOnTheTitleBar_Should_Zoom_AndLeaveFullScreenAlone(WindowState current, WindowState expected)
-        => Assert.Equal(expected, MacWindowButtons.TitleDoubleClickState(current));
+    public void TitleDoubleClickState_AWindowState_ZoomsAndLeavesFullScreenAlone(WindowState current, WindowState expected)
+    {
+        // Act
+        var next = MacWindowButtons.TitleDoubleClickState(current);
+
+        // Assert
+        Assert.Equal(expected, next);
+    }
 }

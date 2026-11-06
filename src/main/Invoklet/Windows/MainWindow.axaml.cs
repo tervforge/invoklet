@@ -469,7 +469,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
                 Item("C_lear Results", KeyCommands.ClearResults),
                 Item("Stop and Run _Again", KeyCommands.Restart),
                 new MainMenuSeparator(),
-                Item("_Debug Mode", KeyCommands.ToggleDebugMode),
+                // Nothing to switch to without a debugger.
+                Item("_Debug Mode", KeyCommands.ToggleDebugMode, vm.WhenAnyValue(x => x.ActiveTab!.HasDebugger)),
                 new MainMenuSeparator(),
                 Item("Step _Over", KeyCommands.StepOver),
                 Item("Step _Into", KeyCommands.StepInto),
@@ -499,8 +500,9 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
     // A menu item for a key-bindable command: the same action as its key, and the key as a hint
     // (kept current by OnPreferencesChanged).
-    private MainMenuCommand Item(string header, KeyCommand command)
-        => new(header, ReactiveCommand.Create(() => { if (!GetViewModel().IsRestoringWorkspace) _keyActions[command](); }), _prefs.Keyboard.GestureFor(command), command);
+    private MainMenuCommand Item(string header, KeyCommand command, IObservable<bool>? canExecute = null)
+        => new(header, ReactiveCommand.Create(() => { if (!GetViewModel().IsRestoringWorkspace) _keyActions[command](); }, canExecute),
+            _prefs.Keyboard.GestureFor(command), command);
 
     // Undo, Copy… use the platform's keys (Cmd on macOS). Elsewhere the text boxes handle them and
     // the menu only shows them; on macOS the menu bar takes the key first and its Edit command acts on

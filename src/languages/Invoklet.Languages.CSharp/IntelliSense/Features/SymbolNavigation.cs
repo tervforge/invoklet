@@ -36,6 +36,8 @@ internal sealed class SymbolNavigation(
             var root = await document.GetSyntaxRootAsync(ct);
             if (root == null) return null;
 
+            // The caret of a request can be past the end of the text it is asked with (the text changed meanwhile): nothing is there.
+            if (position < 0 || position > code.Length) return null;
             var pos = _layout.ToDocumentOffset(code, position);
             if (SourcePositions.IsInsideComment(root, pos) || SourcePositions.IsInsideStringOrCharLiteral(root, pos)) return null;
 
@@ -152,6 +154,8 @@ internal sealed class SymbolNavigation(
             var root = await document.GetSyntaxRootAsync(ct);
             if (root == null) return null;
 
+            // The caret of a request can be past the end of the text it is asked with (the text changed meanwhile): nothing is there.
+            if (position < 0 || position > code.Length) return null;
             var pos = _layout.ToDocumentOffset(code, position);
             if (SourcePositions.IsInsideComment(root, pos) || SourcePositions.IsInsideStringOrCharLiteral(root, pos)) return null;
 
@@ -240,6 +244,8 @@ internal sealed class SymbolNavigation(
             var root = await document.GetSyntaxRootAsync(ct);
             if (root == null) return null;
 
+            // The caret of a request can be past the end of the text it is asked with (the text changed meanwhile): nothing is there.
+            if (position < 0 || position > code.Length) return null;
             var pos = _layout.ToDocumentOffset(code, position);
             if (SourcePositions.IsInsideComment(root, pos) || SourcePositions.IsInsideStringOrCharLiteral(root, pos)) return null;
 
@@ -302,6 +308,8 @@ internal sealed class SymbolNavigation(
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return null;
 
+        // The caret of a request can be past the end of the text it is asked with (the text changed meanwhile): nothing is there.
+        if (position < 0 || position > code.Length) return null;
         var pos = _layout.ToDocumentOffset(code, position);
         if (SourcePositions.IsInsideComment(root, pos) || SourcePositions.IsInsideStringOrCharLiteral(root, pos)) return null;
 

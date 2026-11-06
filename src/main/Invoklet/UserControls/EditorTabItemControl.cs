@@ -104,6 +104,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private (string Path, Guid Id)? _writtenId;
     private readonly ScriptDocumentWriter _documentWriter = new();
     private IDisposable? _selectedSdkSub;
+    private IDisposable? _hasDebuggerSub;
     private IDisposable? _selectedArgumentSetSub;
     private bool _syncingArgumentSet;
     private bool _disposed;
@@ -134,6 +135,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     // The pauses before work that waits for the user to stop; a test gives zeros.
     private readonly EditorTimings _timings;
+
+    // The time a run has taken so far, shown each second while it goes: restoring packages or reading a schema can take a while, and
+    // a status that doesn't move looked like a hang.
+    private DispatcherTimer? _runClock;
 
     // Background callbacks (these debounces, IntelliSense events, run-host output) marshal back via
     // this control's own Dispatcher (AvaloniaObject.Dispatcher, captured at construction), never the
@@ -222,6 +227,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _filePathSub = _vm.WhenAnyValue(x => x.FilePath).Skip(1).Subscribe(OnFilePathChanged);
         // Another target framework can mean other compile assets of the same packages.
         _selectedSdkSub = _vm.WhenAnyValue(x => x.SelectedSdk).Skip(1).Subscribe(OnSelectedSdkChanged);
+        // Without a debugger a breakpoint would never be hit: none can be set, and those set stay hidden until there is one.
+        _hasDebuggerSub = _vm.WhenAnyValue(x => x.HasDebugger).Subscribe(has => State.Editor.CanSetBreakpoints = has);
         _selectedArgumentSetSub = _vm.WhenAnyValue(x => x.SelectedArgumentSet).Skip(1).Subscribe(OnSelectedArgumentSetChanged);
 
         // Load document content first, without TextMate.
@@ -604,6 +611,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // compile or start has no IL of its own and must not take the previous one away.
         SetStatus("Process", "Invoklet.Status.RunningBrush");
         s.RunStopwatch.Restart();
+        StartRunClock();
         if (s.MdRunDocument is { } doc && TargetSdkResolver.Warning(doc.FrontMatter.TargetSdk, platform) is { } sdkWarning)
             s.Output.Append($"\n<div>warning: {HttpUtility.HtmlEncode(sdkWarning)}</div>");
         UpdateOutputUi();
@@ -679,7 +687,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 var scriptDirectory = ScriptDirectory;
                 var token = runCts.Token;
                 ReachStage(generation, RunStage.ReadingConnectionSchemas);
-                ShowRunStage(RunStage.ReadingConnectionSchemas, null);
+                ShowRunStage(RunStage.ReadingConnectionSchemas, string.Join(", ", list.Select(c => c.Name)));
                 await Task.Run(() => schemas.EnsureAsync(list, scriptDirectory, ConnectionSchemaRefresh.Failed, token), token);
             }
             var request = BuildRunRequest(platform, workDir);
@@ -762,6 +770,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                         _vm.RunState = RunState.Idle;
                         State.Editor.DebugCurrentLine = null;
                         s.RunStopwatch.Stop();
+                        _runClock?.Stop();
                         s.ElapsedText = FormatElapsed(s.RunStopwatch.Elapsed);
 
                         _vm.DebugPanel.ClearStop();
@@ -804,6 +813,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // Once: the editor services it owns must not be disposed twice.
         if (_disposed) return;
         _disposed = true;
+        _runClock?.Stop();
         SpillStore?.Delete(_vm.RecoveryId);
         _prefs.Changed -= OnPreferencesChanged;
         _viewScale.Changed -= OnViewScaleChanged;
@@ -848,6 +858,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _selectedKindSub?.Dispose();
         _filePathSub?.Dispose();
         _selectedSdkSub?.Dispose();
+        _hasDebuggerSub?.Dispose();
         _selectedArgumentSetSub?.Dispose();
         _vm.DebugPanel.WatchExpressions.CollectionChanged -= OnWatchExpressionsCollectionChanged;
         var contextRefreshCts = Interlocked.Exchange(ref _contextRefreshCts, null);
@@ -2571,7 +2582,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             ReferenceBasePath = _vm.ReferenceAnchorPath,
             Platform = _vm.SelectedSdk ?? _vm.AvailableSdks.FirstOrDefault(),
             OutputDirectory = State.OutputDirectory,
-            RuntimePath = _prefs.Debugger?.DotnetPath,
+            RuntimePath = _prefs.Debugger?.ResolvedDotnetPath,
         };
         baseRequest = baseRequest with { Usings = [.. baseRequest.Usings], References = [.. baseRequest.References] };
         List<MdRunConnection> connections = [.. frontMatter?.Connections ?? []];
@@ -2826,7 +2837,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         var target = ReferenceEquals(sdk, _vm.LatestSdk) ? TargetSdk.Default : TargetSdkResolver.ToTarget(sdk);
         if (target == rpad.FrontMatter.TargetSdk) return;
+        // A connection's packages follow the framework (EF Core 8 on net8.0): left as they were, the script wouldn't restore.
+        var retargeted = ConnectionPackages.Retarget(rpad.FrontMatter.Connections, _connectionDrivers, rpad.FrontMatter.Packages,
+            rpad.FrontMatter.TargetSdk.ToString(), target.ToString());
+        foreach (var (id, version) in retargeted) rpad.FrontMatter.Packages[id] = new Package(version);
         rpad.FrontMatter.TargetSdk = target;
+        if (retargeted.Count > 0) RefreshIntelliSenseContext(reanalyze: true);
         UpdateProjectInfoBlock();
         CommitMetadataChange();
     }
@@ -2850,7 +2866,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     // The script runs on another SDK than its targetSdk names (RunAsync prints the warning).
     private string NotInstalledSuffix(TargetSdk target)
-        => _vm.SelectedSdk is { } sdk && TargetSdkResolver.Warning(target, sdk) is not null ? " (not installed)" : "";
+        => _vm.SelectedSdk is { } sdk && TargetSdkResolver.Warning(target, sdk) is not null ? " (not available)" : "";
 
     // The click-time half of
     // the lightbulb (both diagnostic fixes and refactorings feed the same CodeFixEntry.Key/
@@ -2898,6 +2914,18 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private string ResolveLanguageId()
         => (State.MdRunDocument?.FrontMatter.Language ?? MdRunLanguage.CSharp).ToLanguageId();
 
+    private void StartRunClock()
+    {
+        _runClock ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, Dispatcher, (_, _) =>
+        {
+            // Paused at a breakpoint, the time isn't the run's.
+            if (_disposed || !State.RunStopwatch.IsRunning || _vm.IsPaused) return;
+            State.ElapsedText = $"{(int)State.RunStopwatch.Elapsed.TotalSeconds} s";
+            ElapsedBlock.Text = State.ElapsedText;
+        });
+        _runClock.Start();
+    }
+
     private static string FormatElapsed(TimeSpan t) => t switch
     {
         { TotalSeconds: < 1 } => $"{t.TotalMilliseconds:F0} ms",
@@ -2938,7 +2966,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // IntelliSense's are.
         return ExecutionRequestBuilder.Build(rpad?.FrontMatter, _vm.FilePath,
             GeneratedConnectionsFor(rpad?.FrontMatter), _vm.ReferenceAnchorPath, platform,
-            State.OutputDirectory, workDir, _prefs.Debugger.DotnetPath, _prefs.Debugger.DebuggerPath,
+            State.OutputDirectory, workDir, _prefs.Debugger.ResolvedDotnetPath, _prefs.Debugger.DebuggerPath,
             _vm.DebugPanel.BreakOnAllExceptions, _vm.DebugPanel.BreakOnUncaughtExceptions);
     }
 

@@ -8,6 +8,13 @@ internal static class SetupConstants
     public const string DotnetInstallScriptUrlWindows = "https://dot.net/v1/dotnet-install.ps1";
     public const string DotnetInstallScriptUrlUnix = "https://dot.net/v1/dotnet-install.sh";
 
+    // The .NET the setup installs, and Microsoft's list of its releases, whose "latest-sdk" is the version shown and installed.
+    public const string DotnetChannel = "10.0";
+    public const string DotnetReleaseMetadataUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json";
+
+    // GitHub's answer for the latest release, whose "tag_name" is the version shown and installed.
+    public const string NetcoredbgLatestReleaseApi = "https://api.github.com/repos/Samsung/netcoredbg/releases/latest";
+
     public const string NetcoredbgLatestBase = "https://github.com/Samsung/netcoredbg/releases/latest/download";
     public const string NetcoredbgReleasesBase = "https://github.com/Samsung/netcoredbg/releases/download";
 

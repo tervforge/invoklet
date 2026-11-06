@@ -258,6 +258,9 @@ internal sealed class ScriptContext
                 if (docId == id)
                     // 0-based in the document, which has GeneratedHeader's one line above the text: 1-based in the text.
                     return (text, location.GetLineSpan().StartLinePosition.Line);
+            // The typed arguments of the script's front matter.
+            if (_argumentSource is { } arguments && arguments.Id == id)
+                return (arguments.Text, location.GetLineSpan().StartLinePosition.Line);
         }
         return null;
     }

@@ -43,9 +43,10 @@ public static class NuGetRestorer
 {
     private const string ProjectName = "InvokletQuery";
 
+    /// <param name="progress">What the restore is doing now, in words ("downloading npgsql 10.0.0"), as it goes.</param>
     public static async Task<RestoredPackages> RestoreAsync(
         IReadOnlyDictionary<string, string> packages, string targetFramework, string languageFolder,
-        string objDirectory, string? nugetConfigFile, CancellationToken ct)
+        string objDirectory, string? nugetConfigFile, CancellationToken ct, Action<string>? progress = null)
     {
         if (packages.Count == 0) return RestoredPackages.Empty;
 
@@ -67,7 +68,7 @@ public static class NuGetRestorer
         var warnings = new List<ResultItem>();
         if (!(File.Exists(keyPath) && File.Exists(assetsPath) && await File.ReadAllTextAsync(keyPath, ct) == key))
         {
-            var logger = new CollectingLogger();
+            var logger = new CollectingLogger(progress);
             var restored = await RunRestoreAsync(packages, framework, targetFramework, objDirectory, settings,
                 globalPackagesFolder, logger, ct);
             errors.AddRange(logger.Errors);
@@ -479,14 +480,38 @@ public static class NuGetRestorer
         return memory;
     }
 
-    // Restore errors/warnings (NU1101 package not found, NU1603, ...) as compiler-style items.
-    private sealed class CollectingLogger : LoggerBase
+    /// <summary>
+    /// What a line of NuGet's restore log says the restore is doing, in words, or null for the rest: "checking humanizer.core" for a
+    /// package's version list, "downloading humanizer.core 2.8.26" for a package, "installed Humanizer.Core 2.8.26" once it is in.
+    /// </summary>
+    internal static string? DescribeProgress(string message)
+    {
+        var line = message.Trim();
+        if (line.StartsWith("Installed ", StringComparison.Ordinal))
+        {
+            var words = line.Split(' ', 4);
+            return words.Length >= 3 ? $"installed {words[1]} {words[2]}" : null;
+        }
+        if (!line.StartsWith("GET ", StringComparison.Ordinal) || !Uri.TryCreate(line[4..].Trim(), UriKind.Absolute, out var url)) return null;
+        // The flat container's addresses: …/{id}/index.json, …/{id}/{version}/{id}.{version}.nupkg.
+        var segments = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 3 && segments[^1].EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+            return $"downloading {segments[^3]} {segments[^2]}";
+        if (segments.Length >= 2 && segments[^1] == "index.json" && !segments[^2].StartsWith("v3", StringComparison.Ordinal))
+            return $"checking {segments[^2]}";
+        return null;
+    }
+
+    // Restore errors/warnings (NU1101 package not found, NU1603, ...) as compiler-style items, and what it is doing as it goes.
+    private sealed class CollectingLogger(Action<string>? progress) : LoggerBase
     {
         public List<ResultItem> Errors { get; } = [];
         public List<ResultItem> Warnings { get; } = [];
 
         public override void Log(ILogMessage message)
         {
+            if (progress is not null && message.Level == LogLevel.Information && DescribeProgress(message.Message) is { } doing)
+                progress(doing);
             var code = message.Code == NuGetLogCode.Undefined ? "" : message.Code.ToString();
             lock (this)
             {
