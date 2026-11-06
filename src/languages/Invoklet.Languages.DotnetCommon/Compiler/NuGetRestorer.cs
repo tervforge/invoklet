@@ -497,6 +497,9 @@ public static class NuGetRestorer
         var segments = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length >= 3 && segments[^1].EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
             return $"downloading {segments[^3]} {segments[^2]}";
+        // NuGet's audit reads its list of known vulnerabilities as an index too.
+        if (segments.Any(s => s.Contains("vulnerabilit", StringComparison.OrdinalIgnoreCase)))
+            return "checking packages for known vulnerabilities";
         if (segments.Length >= 2 && segments[^1] == "index.json" && !segments[^2].StartsWith("v3", StringComparison.Ordinal))
             return $"checking {segments[^2]}";
         return null;

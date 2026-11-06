@@ -420,7 +420,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            await _windowService.ShowErrorAsync("Open Failed", $"Could not open '{path}':\n{ex.Message}");
+            await _windowService.ShowErrorAsync("Open Failed", FileErrorText.Describe("Could not open", path, ex));
         }
     }
 
@@ -791,7 +791,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _ = _windowService.ShowErrorAsync(
-                "Save Failed", $"Could not save '{Path.GetFileName(newPath)}':\n{ex.Message}");
+                "Save Failed", FileErrorText.Describe("Could not save", fullPath, ex));
             return;
         }
 
@@ -824,7 +824,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _ = _windowService.ShowErrorAsync(
-                "Duplicate Failed", $"Could not create '{Path.GetFileName(newPath)}':\n{ex.Message}");
+                "Duplicate Failed", FileErrorText.Describe("Could not create", newPath, ex));
             return;
         }
 
@@ -938,7 +938,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
         {
             await _windowService.ShowErrorAsync(
-                "Import Failed", $"Could not import '{Path.GetFileName(linqPath)}':\n{ex.Message}");
+                "Import Failed", FileErrorText.Describe("Could not import", linqPath, ex));
             return;
         }
 
@@ -961,7 +961,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             await _windowService.ShowErrorAsync(
-                "Import Failed", $"Could not create '{Path.GetFileName(newPath)}':\n{ex.Message}");
+                "Import Failed", FileErrorText.Describe("Could not create", newPath, ex));
             return;
         }
 
@@ -1277,7 +1277,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
             if (_disposed || version != _refreshVersion || _treeErrorReported) return;
             _treeErrorReported = true;
             _ = _windowService.ShowErrorAsync(
-                "Folder Unavailable", $"Could not read '{_fileSystemService.Folder}':\n{ex.Message}");
+                "Folder Unavailable", FileErrorText.Describe("Could not read", _fileSystemService.Folder, ex));
             return;
         }
 

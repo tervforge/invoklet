@@ -13,6 +13,7 @@ public sealed class NuGetRestorerProgressTests
     [InlineData("  GET https://api.nuget.org/v3-flatcontainer/humanizer.core/index.json", "checking humanizer.core")]
     [InlineData("  OK https://api.nuget.org/v3-flatcontainer/humanizer.core/index.json 66ms", null)]
     [InlineData("  GET https://api.nuget.org/v3/index.json", null)]
+    [InlineData("  GET https://api.nuget.org/v3/vulnerabilities/index.json", "checking packages for known vulnerabilities")]
     [InlineData("Writing assets file to disk. Path: /p/obj/project.assets.json", null)]
     public void DescribeProgress_ALogLine_SaysWhatTheRestoreIsDoing(string line, string? expected)
     {

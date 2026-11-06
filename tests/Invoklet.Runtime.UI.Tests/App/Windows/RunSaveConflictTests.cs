@@ -405,7 +405,7 @@ public class RunSaveConflictTests : IDisposable
             Assert.Equal(changed, File.ReadAllBytes(_script));
             Assert.True(vm.IsDirty);
             Assert.Equal(RunState.Idle, vm.RunState);
-            Assert.Contains("Cannot save 'query.inv'", System.Net.WebUtility.HtmlDecode(ctrl.State.Output.Content));
+            Assert.Contains("Could not save 'query.inv'.", System.Net.WebUtility.HtmlDecode(ctrl.State.Output.Content));
         }
         finally { await CleanupAsync(window, ctrl); }
     }

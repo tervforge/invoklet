@@ -10,8 +10,9 @@ public sealed record SetupInstallPlan(string Name, string? Version, string Folde
 {
     public string Heading => $"Install {Name}?";
 
+    // The folder on a line of its own: a long path wrapped inside a sentence broke in the middle of a name.
     public string Message =>
         (Version is null ? $"The latest release of {Name}" : $"{Name} {Version}")
-        + $" will be installed in {Folder}, for your account only. It is downloaded from {Source}."
+        + $" will be installed for your account only, in\n{Folder}\n\nIt is downloaded from {Source}."
         + (ReplacesExisting ? " The copy already there is replaced." : "");
 }

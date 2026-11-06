@@ -78,7 +78,7 @@ public static class InPlaceSave
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new(InPlaceSaveStatus.Failed, $"Could not save '{Path.GetFileName(path)}':\n{ex.Message}");
+            return new(InPlaceSaveStatus.Failed, FileErrorText.Describe("Could not save", path, ex));
         }
     }
 }

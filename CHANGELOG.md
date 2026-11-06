@@ -44,6 +44,9 @@ Notable changes in each Invoklet release. Downloads are on the
   in the usual place is used, and a path stored that way is cleared.
 - Highlighting the occurrences of a symbol no longer logs an error when the caret is past the end
   of the text, after characters were deleted.
+- Messages about a file that couldn't be saved, opened, moved or deleted name the file once, say why
+  in plain words and show its folder on a line of its own, instead of repeating the whole path; the
+  confirmation for adding a connection lists its NuGet packages one to a line.
 
 ## [0.11.5] — 2026-11-05
 

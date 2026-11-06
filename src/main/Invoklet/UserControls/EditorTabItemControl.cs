@@ -582,7 +582,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 return;
             case RunBlockedBySaveFailure failure:
                 s.Output.Clear();
-                AppendError(new IOException($"Cannot save '{failure.FileName}': {failure.Error.Replace('\n', ' ')}"));
+                // The save's own words already say which file and why.
+                AppendError(new IOException(failure.Error));
                 UpdateOutputUi();
                 return;
             case RunBlockedByArguments arguments:
@@ -1499,7 +1500,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private void AppendError(Exception ex, string status = "Error")
     {
         State.HadRunError = true;
-        State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(ex.Message)}</div>");
+        // A message of several lines (what failed, why, where) keeps its lines.
+        State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(ex.Message).Replace("\n", "<br>")}</div>");
         if (ex.StackTrace is { } st)
             State.Output.Append($"\n<pre class=\"stacktrace\">{HttpUtility.HtmlEncode(st)}</pre>");
         SetStatus(status, "Invoklet.Status.ErrorBrush");

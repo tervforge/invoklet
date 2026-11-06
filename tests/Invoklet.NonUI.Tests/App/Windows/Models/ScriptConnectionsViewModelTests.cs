@@ -168,7 +168,7 @@ public class ScriptConnectionsViewModelTests
         vm.SetFrontMatter(fm);
         Execute(vm.Connections.AddCommand);
         Assert.True(vm.Connections.IsAddConfirmationPending);
-        Assert.Equal("Add 'local' (SQL-ish) to this script? Its client is built into the script, which also gets the NuGet package the connection needs: Microsoft.Data.Sqlite 9.0.0. Cancel leaves the script as it is.", vm.Connections.AddMessage);
+        Assert.Equal("'local' (SQL-ish) also adds this NuGet package to the script:\n\nMicrosoft.Data.Sqlite 9.0.0", vm.Connections.AddMessage);
         Assert.Empty(vm.Connections.Items); // nothing changes before confirming
         Execute(vm.Connections.ConfirmAddCommand);
         Assert.False(vm.Connections.IsAddConfirmationPending);

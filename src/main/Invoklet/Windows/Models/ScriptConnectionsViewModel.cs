@@ -324,7 +324,7 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
         if (driver is IConnectionSchemaDriver && schemas is not null && schemas.Get(connection, _scriptDirectory) is null
             && schemas.ErrorFor(connection, _scriptDirectory) is { } schemaError)
         {
-            CreateMessage = $"'{connection.Name}' can't be added because its contract couldn't be read: {schemaError}";
+            CreateMessage = $"'{connection.Name}' can't be added: its contract couldn't be read.\n{schemaError}";
             return;
         }
         var needed = driver.PackagesFor(_targetFramework()).Where(p => !_scriptPackages().Contains(p.Key)).ToList();
@@ -334,9 +334,9 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
             return;
         }
         _pendingAdd = connection;
-        AddMessage = $"Add '{connection.Name}' ({driver.DisplayName}) to this script? Its client is built into the script, "
-            + $"which also gets the NuGet package{(needed.Count == 1 ? "" : "s")} the connection needs: "
-            + string.Join(", ", needed.Select(p => $"{p.Key} {p.Value}")) + ". Cancel leaves the script as it is.";
+        // The packages one to a line: inside a sentence, their names and versions ran together.
+        AddMessage = $"'{connection.Name}' ({driver.DisplayName}) also adds {(needed.Count == 1 ? "this NuGet package" : "these NuGet packages")} to the script:\n\n"
+            + string.Join("\n", needed.Select(p => $"{p.Key} {p.Value}"));
         if (AddConfirmationDialog is { } show)
         {
             _ = ConfirmAddFromDialogAsync(show, AddMessage, _addConfirmationVersion);
@@ -448,7 +448,7 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
             && schemas.Get(connection, _scriptDirectory) is null
             && schemas.ErrorFor(connection, _scriptDirectory) is { } schemaError)
         {
-            CreateMessage = $"'{connection.Name}' can't be added because its contract couldn't be read: {schemaError}";
+            CreateMessage = $"'{connection.Name}' can't be added: its contract couldn't be read.\n{schemaError}";
             return;
         }
         var item = new ScriptConnectionItemViewModel(Clone(connection));

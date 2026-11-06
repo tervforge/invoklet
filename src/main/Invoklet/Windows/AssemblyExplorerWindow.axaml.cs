@@ -528,7 +528,7 @@ public partial class AssemblyExplorerWindow : Window
             catch (Exception ex) when (ex is BadImageFormatException or IOException or UnauthorizedAccessException)
             {
                 await _windowService.ShowErrorAsync(
-                    "Browse Assembly Failed", $"Could not load '{Path.GetFileName(assemblyPath)}':\n{ex.Message}");
+                    "Browse Assembly Failed", FileErrorText.Describe("Could not load", assemblyPath, ex));
                 return null;
             }
 
@@ -1536,7 +1536,7 @@ public partial class AssemblyExplorerWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            await _windowService.ShowErrorAsync("Save Code Failed", $"Could not write '{path}':\n{ex.Message}");
+            await _windowService.ShowErrorAsync("Save Code Failed", FileErrorText.Describe("Could not write", path, ex));
         }
     }
 

@@ -266,7 +266,7 @@ public sealed class WindowService : IWindowService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            await ShowErrorAsync("Open Text File Failed", $"Could not open '{fullPath}':\n{ex.Message}");
+            await ShowErrorAsync("Open Text File Failed", FileErrorText.Describe("Could not open", fullPath, ex));
             return;
         }
 

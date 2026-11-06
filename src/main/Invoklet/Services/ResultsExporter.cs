@@ -76,7 +76,7 @@ internal sealed class ResultsExporter(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            await windows.ShowErrorAsync("Export Results Failed", $"Could not write '{path}':\n{ex.Message}");
+            await windows.ShowErrorAsync("Export Results Failed", FileErrorText.Describe("Could not write", path, ex));
         }
     }
 }

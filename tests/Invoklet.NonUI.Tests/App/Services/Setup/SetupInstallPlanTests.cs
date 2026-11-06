@@ -17,7 +17,7 @@ public sealed class SetupInstallPlanTests
         var message = sut.Message;
 
         // Assert
-        Assert.Equal(".NET SDK 10.0.403 will be installed in /home/me/.dotnet, for your account only. It is downloaded from Microsoft (dot.net).", message);
+        Assert.Equal(".NET SDK 10.0.403 will be installed for your account only, in\n/home/me/.dotnet\n\nIt is downloaded from Microsoft (dot.net).", message);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class SetupInstallPlanTests
         var message = sut.Message;
 
         // Assert
-        Assert.StartsWith("The latest release of netcoredbg will be installed in /home/me/netcoredbg", message, StringComparison.Ordinal);
+        Assert.StartsWith("The latest release of netcoredbg will be installed for your account only, in\n/home/me/netcoredbg\n", message, StringComparison.Ordinal);
         Assert.EndsWith("The copy already there is replaced.", message, StringComparison.Ordinal);
     }
 }
