@@ -14,6 +14,9 @@ public partial class SetupWizardWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        // Which version goes where, asked over this window; closing the question without an answer is a no.
+        viewModel.ConfirmInstall.RegisterHandler(async context =>
+            context.SetOutput(await new SetupInstallConfirmationDialog(context.Input).ShowDialog<bool?>(this) == true));
     }
 
     public SetupWizardWindow() => InitializeComponent();

@@ -26,7 +26,7 @@ public class SecretAccessGateThreadTests
             askedOnUiThread = Dispatcher.UIThread.CheckAccess();
             // The dialog's answer, finished off the UI thread.
             return Task.Run(() => SecretAccessChoice.Always);
-        });
+        }, _ => "AAAA"); // the script's file, as the gate would read it
 
         var allowed = await Task.Run(() => gate.MayAccessOnUiThreadAsync(
             new SecretAccess(Path.Combine(Path.GetTempPath(), "report.inv"), "billing", IsSave: true), CancellationToken.None));

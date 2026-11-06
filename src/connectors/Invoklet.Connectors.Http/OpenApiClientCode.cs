@@ -5,11 +5,24 @@ using Invoklet.Contracts.Connections;
 namespace Invoklet.Connectors.Http;
 
 /// <summary>
-/// The members the OpenAPI connection adds to its <c>HttpClient</c>: a class for each named schema and an <c>…Async</c> method for each operation,
-/// so a script calls <c>Connections.Pets.GetPetAsync(7)</c> and gets a <c>Pet</c> back. Bodies and answers are JSON.
+/// The <c>HttpClient</c> of an OpenAPI description: a class for each named schema and an <c>…Async</c> method for each operation, so a script
+/// calls <c>Connections.Pets.GetPetAsync(7)</c> and gets a <c>Pet</c> back. Bodies and answers are JSON. It depends only on the description, so
+/// it is a file of the schema, compiled once into an assembly of its own and kept; the connection's class in the script derives from it and
+/// only sets the address and the headers.
 /// </summary>
 internal static class OpenApiClientCode
 {
+    /// <summary>The name of the generated client class.</summary>
+    public const string ClientClass = "Api";
+
+    /// <summary>The client of the description, in <paramref name="namespaceName"/>.</summary>
+    public static string Generate(string namespaceName, OpenApiDocument document) =>
+        "#nullable enable\nnamespace " + namespaceName + ";\n\n"
+        + "/// <summary>The client of an OpenAPI description: a method for each operation, a class for each schema.</summary>\n"
+        + "public abstract class " + ClientClass + " : global::System.Net.Http.HttpClient\n{\n"
+        + Members(document, ClientClass)
+        + "}\n#nullable restore\n";
+
     private static readonly string[] Keywords =
     [
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const", "continue", "decimal", "default",

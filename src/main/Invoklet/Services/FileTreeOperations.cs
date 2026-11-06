@@ -50,7 +50,7 @@ internal sealed class FileTreeOperations(
         }
         catch (Exception ex)
         {
-            _ = windows.ShowErrorAsync("Delete Failed", $"Could not delete '{Path.GetFileName(path)}':\n{ex.Message}");
+            _ = windows.ShowErrorAsync("Delete Failed", FileErrorText.Describe("Could not delete", path, ex));
             return;
         }
 
@@ -87,7 +87,7 @@ internal sealed class FileTreeOperations(
         }
         catch (Exception ex)
         {
-            _ = windows.ShowErrorAsync(errorTitle, $"Could not {verb} '{Path.GetFileName(source)}' {destinationPhrase}:\n{ex.Message}");
+            _ = windows.ShowErrorAsync(errorTitle, $"Could not {verb} '{Path.GetFileName(source)}' {destinationPhrase}.\n{FileErrorText.Reason(ex, source)}");
             return;
         }
 

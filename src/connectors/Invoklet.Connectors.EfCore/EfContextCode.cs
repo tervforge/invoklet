@@ -4,9 +4,16 @@ using Invoklet.Format.MdRun;
 
 namespace Invoklet.Connectors.EfCore;
 
-/// <summary>The <c>DbContext</c> of a connection: a set per table and view, each row a nested class, the keys and the navigation properties.</summary>
+/// <summary>
+/// The <c>DbContext</c> of a database: a set per table and view, each row a nested class, the keys and the navigation properties. It depends
+/// only on what was read from the database, so it is a file of the schema, compiled once into an assembly of its own and kept; a connection's
+/// class in the script derives from it and only says how to open the database.
+/// </summary>
 internal static class EfContextCode
 {
+    /// <summary>The name of the generated context class.</summary>
+    public const string ContextClass = "Database";
+
     // Members of DbContext (and of object) a row class can't be named.
     private static readonly string[] ContextMembers =
     [
@@ -17,29 +24,40 @@ internal static class EfContextCode
         "SavingChanges", "Set", "ToString", "Update", "UpdateRange",
     ];
 
+    /// <summary>The connection's class in the script: the database's context, opened with the connection's string.</summary>
+    /// <param name="contextType">The full name of the context of <see cref="GenerateContext"/>.</param>
     /// <param name="constructorStatements">C# statements, indented for the constructor, that assign <c>ConnectionString</c>.</param>
+    public static string GenerateClient(MdRunConnection connection, ConnectionCodeContext context, string kind, string constructorStatements,
+        string contextType) =>
+        new StringBuilder()
+            .Append("/// <summary>The ").Append(kind).Append(" connection '").Append(ConnectionCodeContext.Doc(connection.Name))
+            .Append("': an Entity Framework Core context with a set per table.</summary>\n")
+            .Append("public sealed class ").Append(context.ClassName).Append(" : ").Append(contextType).Append("\n{\n")
+            .Append("    internal ").Append(context.ClassName).Append("()\n    {\n")
+            .Append(constructorStatements)
+            .Append("    }\n}")
+            .ToString();
+
+    /// <summary>The context of the database, in <paramref name="namespaceName"/>.</summary>
     /// <param name="useCall">The EF Core provider's extension that takes the options builder and the connection string.</param>
-    public static string Generate(MdRunConnection connection, ConnectionCodeContext context, string kind, string constructorStatements, string useCall,
-        IReadOnlyList<EfEntity> entities)
+    public static string GenerateContext(string namespaceName, string kind, string useCall, IReadOnlyList<EfEntity> entities)
     {
         const string ef = "global::Microsoft.EntityFrameworkCore";
 
-        // A row class or a set can't take the name of a member of the context or of the connection's own class.
-        var taken = new HashSet<string>(ContextMembers, StringComparer.Ordinal) { context.ClassName };
+        // A row class or a set can't take the name of a member of the context or of the context itself.
+        var taken = new HashSet<string>(ContextMembers, StringComparer.Ordinal) { ContextClass };
         var classNames = new Dictionary<string, string>(StringComparer.Ordinal);
         var setNames = new Dictionary<EfEntity, string>();
         foreach (var entity in entities) setNames[entity] = Unique(entity.SetName, taken, "Table");
         foreach (var entity in entities) classNames[entity.ClassName] = Unique(entity.ClassName, taken, "Row");
 
         var sb = new StringBuilder()
-            .Append("/// <summary>The ").Append(kind).Append(" connection '").Append(ConnectionCodeContext.Doc(connection.Name))
-            .Append("': an Entity Framework Core context with a set per table.</summary>\n")
-            .Append("public sealed class ").Append(context.ClassName).Append(" : ").Append(ef).Append(".DbContext\n{\n")
-            .Append("    internal ").Append(context.ClassName).Append("()\n    {\n")
-            .Append(constructorStatements)
-            .Append("    }\n\n")
+            .Append("#nullable enable\n")
+            .Append("namespace ").Append(namespaceName).Append(";\n\n")
+            .Append("/// <summary>The ").Append(kind).Append(" database: an Entity Framework Core context with a set per table.</summary>\n")
+            .Append("public abstract class ").Append(ContextClass).Append(" : ").Append(ef).Append(".DbContext\n{\n")
             .Append("    /// <summary>What the context opens the database with.</summary>\n")
-            .Append("    public string ConnectionString { get; }\n\n")
+            .Append("    public string ConnectionString { get; protected set; } = \"\";\n\n")
             .Append("    protected override void OnConfiguring(").Append(ef).Append(".DbContextOptionsBuilder optionsBuilder) =>\n")
             .Append("        ").Append(useCall).Append("(optionsBuilder, ConnectionString);\n");
 
@@ -124,7 +142,7 @@ internal static class EfContextCode
             }
             sb.Append("    }\n");
         }
-        sb.Append('}');
+        sb.Append("}\n#nullable restore\n");
         return sb.ToString();
     }
 

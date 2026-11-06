@@ -104,7 +104,7 @@ internal class SearchInputHandler : TextAreaInputHandler
         _panel.Open();
         if (!(TextArea.Selection.IsEmpty || TextArea.Selection.IsMultiline))
             _panel.SearchPattern = TextArea.Selection.GetText();
-        Dispatcher.UIThread.Post(_panel.Reactivate, DispatcherPriority.Input);
+        _panel.Dispatcher.Post(_panel.Reactivate, DispatcherPriority.Input);
     }
 
     private void CanExecuteWithOpenSearchPanel(object sender, CanExecuteRoutedEventArgs e)

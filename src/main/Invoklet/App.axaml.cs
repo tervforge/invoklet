@@ -257,8 +257,17 @@ public class App : Application
         services.AddSingleton<ILocalPackageCacheService, LocalPackageCacheService>();
         services.AddSingleton<IWindowService, WindowService>();
         // The first time a script asks for a secret, the user is asked whether it may.
-        services.AddSingleton(sp => new SecretAccessGate(sp.GetRequiredService<IPreferencesService>(),
-            (script, secret, isSave, stopped) => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave, stopped)));
+        services.AddSingleton(sp =>
+        {
+            // The window service is taken when a question is asked, on the UI thread: the gate itself may be built on another (the
+            // language registry is warmed up in the background), and the theme behind the window service must not be.
+            var gate = new SecretAccessGate(sp.GetRequiredService<IPreferencesService>(),
+                (script, secret, isSave, stopped) => sp.GetRequiredService<IWindowService>().ConfirmSecretAccessAsync(script, secret, isSave, stopped),
+                confirmChange: (script, secret, remove, stopped) => sp.GetRequiredService<IWindowService>().ConfirmSecretChangeAsync(script, secret, remove, stopped));
+            // Invoklet's own saves keep an allowed script allowed; another program's change is asked about again.
+            ScriptFileWrites.Written += gate.ScriptWritten;
+            return gate;
+        });
         services.AddSingleton<IBuildCacheService, BuildCacheService>();
         services.AddSingleton<IResidencyPolicy, RecentTabsResidencyPolicy>();
         // Released tab content waits in the session folder of the recovery store, which owns it.

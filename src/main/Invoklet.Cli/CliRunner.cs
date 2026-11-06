@@ -126,84 +126,94 @@ public static class CliRunner
             stderr.WriteLine("No .NET SDK found (checked `dotnet --list-sdks`).");
             return NotRunExitCode;
         }
-        if (TargetSdkResolver.Warning(document.FrontMatter.TargetSdk, platform) is { } sdkWarning)
+        if (!cli.Quiet && TargetSdkResolver.Warning(document.FrontMatter.TargetSdk, platform) is { } sdkWarning)
             stderr.WriteLine("warning: " + sdkWarning);
 
-        var outputDirectory = Directory.CreateTempSubdirectory("Invoklet-cli-").FullName;
-        try
+        if (services.BuildsFolder is { } builds) CliBuildFolder.PruneStale(builds, BuildFolderMaxAge);
+        using var buildFolder = CliBuildFolder.Open(services.BuildsFolder, filePath);
+        var outputDirectory = buildFolder.Path;
+        // A gRPC server's classes are part of the build: read the ones not read yet or that failed,
+        // or all of them again with --refresh-connections.
+        // What takes a while before the script starts (packages, schemas) is told in a terminal, so a first run doesn't look stuck;
+        // redirected, stderr stays the script's and the compiler's alone.
+        var tellStages = !Console.IsErrorRedirected && !cli.Quiet;
+        if (services.ConnectionSchemas is { } schemas && document.FrontMatter.Connections.Count > 0)
         {
-            // A gRPC server's classes are part of the build: read the ones not read yet or that failed,
-            // or all of them again with --refresh-connections.
-            if (services.ConnectionSchemas is { } schemas && document.FrontMatter.Connections.Count > 0)
-                await schemas.EnsureAsync(document.FrontMatter.Connections, Path.GetDirectoryName(Path.GetFullPath(filePath)),
-                    cli.RefreshConnections ? ConnectionSchemaRefresh.All : ConnectionSchemaRefresh.Failed, cancellationToken);
-            var request = BuildRequest(document.FrontMatter, platform, outputDirectory, filePath, cli.ScriptArguments,
-                services.ConnectionDrivers, services.ConnectionSchemas?.Cache, cli.ArgumentSet);
+            if (tellStages) stderr.WriteLine("Reading connection schemas: " + string.Join(", ", document.FrontMatter.Connections.Select(c => c.Name)));
+            await schemas.EnsureAsync(document.FrontMatter.Connections, Path.GetDirectoryName(Path.GetFullPath(filePath)),
+                cli.RefreshConnections ? ConnectionSchemaRefresh.All : ConnectionSchemaRefresh.Failed, cancellationToken);
+        }
+        var request = BuildRequest(document.FrontMatter, platform, outputDirectory, filePath, cli.ScriptArguments,
+            services.ConnectionDrivers, services.ConnectionSchemas?.Cache, cli.ArgumentSet);
 
-            RunResult result;
-            await using var host = registry.Create(languageId, request);
-            // Util.ReadLine and a missing secret's question are asked in the terminal: the prompt on stderr, the answer from stdin.
-            host.InputRequested += (prompt, isPassword) => _ = Task.Run(async () =>
+        RunResult result;
+        await using var host = registry.Create(languageId, request);
+        if (tellStages)
+            host.StageChanged += (stage, detail) =>
             {
-                if (!string.IsNullOrEmpty(prompt)) stderr.Write(prompt + " ");
-                // The end of stdin answers with an empty line: nothing else would let the script go on.
-                var answer = (isPassword && !Console.IsInputRedirected ? ReadMasked() : Console.In.ReadLine()) ?? "";
-                await host.SendInputAsync(answer, cancellationToken);
-            }, cancellationToken);
-            if (cli.CompileOnly)
+                if (stage is RunStage.RestoringPackages or RunStage.GeneratingConnections && detail is not null)
+                    stderr.WriteLine((stage == RunStage.RestoringPackages ? "Restoring packages: " : "Generating connections: ") + detail);
+            };
+        // Util.ReadLine and a missing secret's question are asked in the terminal: the prompt on stderr, the answer from stdin.
+        host.InputRequested += (prompt, isPassword) => _ = Task.Run(async () =>
+        {
+            if (!string.IsNullOrEmpty(prompt)) stderr.Write(prompt + " ");
+            // The end of stdin answers with an empty line: nothing else would let the script go on.
+            var answer = (isPassword && !Console.IsInputRedirected ? ReadMasked() : Console.In.ReadLine()) ?? "";
+            await host.SendInputAsync(answer, cancellationToken);
+        }, cancellationToken);
+        if (cli.CompileOnly)
+        {
+            var compilation = await host.CompileAsync(document.RunCode, cancellationToken);
+            foreach (var diagnostic in compilation.Diagnostics)
             {
-                var compilation = await host.CompileAsync(document.RunCode, cancellationToken);
-                foreach (var diagnostic in compilation.Diagnostics)
-                {
-                    stderr.WriteLine(FormatDiagnostic(diagnostic));
-                }
-                return compilation.Success ? 0 : NotRunExitCode;
+                if (cli.Quiet && diagnostic.Severity != DiagnosticSeverity.Error) continue;
+                stderr.WriteLine(FormatDiagnostic(diagnostic));
             }
-
-            // Whether the script's stdout is in the middle of a line (Console.Write without a
-            // line break): a Dump then starts on a new line instead of being glued to that text.
-            var stdoutMidLine = false;
-            result = await host.RunAsync(document.RunCode, (data, outputKind) =>
-            {
-                switch (outputKind)
-                {
-                    case OutputKind.StandardOutput:
-                        stdout.WriteLine(data);
-                        stdoutMidLine = false;
-                        break;
-                    case OutputKind.StandardOutputPartial:
-                        stdout.Write(data);
-                        stdoutMidLine = data.Length > 0;
-                        break;
-                    case OutputKind.StandardError:
-                        stderr.WriteLine(data);
-                        break;
-                    case OutputKind.StandardErrorPartial:
-                        stderr.Write(data);
-                        break;
-                    // Compiler warnings are not script output: stdout carries only what the script wrote.
-                    case OutputKind.Diagnostic:
-                        stderr.WriteLine(data);
-                        break;
-                    case OutputKind.DumpHtml:
-                        var html = Encoding.UTF8.GetString(Convert.FromBase64String(data));
-                        if (stdoutMidLine) stdout.WriteLine();
-                        stdoutMidLine = false;
-                        stdout.Write(DumpHtmlSpectreRenderer.Render(html));
-                        break;
-                }
-            }, cancellationToken);
-
-            if (result.Outcome == RunOutcome.StartFailed)
-                stderr.WriteLine("Failed to start the compiled script.");
-            return ExitCodeFor(result);
+            return compilation.Success ? 0 : NotRunExitCode;
         }
-        finally
+
+        // Whether the script's stdout is in the middle of a line (Console.Write without a
+        // line break): a Dump then starts on a new line instead of being glued to that text.
+        var stdoutMidLine = false;
+        result = await host.RunAsync(document.RunCode, (data, outputKind) =>
         {
-            try { Directory.Delete(outputDirectory, recursive: true); }
-            catch (IOException) { /* best-effort cleanup — a locked file here isn't worth failing the run over */ }
-        }
+            switch (outputKind)
+            {
+                case OutputKind.StandardOutput:
+                    stdout.WriteLine(data);
+                    stdoutMidLine = false;
+                    break;
+                case OutputKind.StandardOutputPartial:
+                    stdout.Write(data);
+                    stdoutMidLine = data.Length > 0;
+                    break;
+                case OutputKind.StandardError:
+                    stderr.WriteLine(data);
+                    break;
+                case OutputKind.StandardErrorPartial:
+                    stderr.Write(data);
+                    break;
+                // Compiler warnings are not script output: stdout carries only what the script wrote.
+                case OutputKind.Diagnostic:
+                    if (!cli.Quiet) stderr.WriteLine(data);
+                    break;
+                case OutputKind.DumpHtml:
+                    var html = Encoding.UTF8.GetString(Convert.FromBase64String(data));
+                    if (stdoutMidLine) stdout.WriteLine();
+                    stdoutMidLine = false;
+                    stdout.Write(DumpHtmlSpectreRenderer.Render(html));
+                    break;
+            }
+        }, cancellationToken);
+
+        if (result.Outcome == RunOutcome.StartFailed)
+            stderr.WriteLine("Failed to start the compiled script.");
+        return ExitCodeFor(result);
     }
+
+    // As long as the window keeps the build folder of a script nobody opens.
+    private static readonly TimeSpan BuildFolderMaxAge = TimeSpan.FromDays(14);
 
     // A password typed in the terminal, not echoed.
     private static string ReadMasked()
@@ -244,6 +254,7 @@ public static class CliRunner
         console.WriteLine("  -s, --sdk <version>               The .NET SDK to run on, such as 9 or net9.0");
         console.WriteLine("  -compileonly, --compile-only      Compile the script without running it");
         console.WriteLine("  --refresh-connections             Read the connections' descriptions (gRPC services) again");
+        console.WriteLine("  -q, --quiet                       Show no warnings, only errors and the script's output");
         console.WriteLine("  --args-set <name>                 Run with the script's argument set of that name");
         console.WriteLine("  -h, --help                        Show this help");
         console.WriteLine("  --version                         Show the version");
@@ -305,7 +316,7 @@ public static class CliRunner
     // The run the script's front matter asks for, built as the window builds its own: the language's
     // backend resolves its references (relative to the script, macros expanded) and package sources.
     // Arguments given on the command line replace the front matter's. The process starts in the
-    // temporary build folder; the PATH's dotnet runs it, and there is no debugger on this path
+    // build folder; the PATH's dotnet runs it, and there is no debugger on this path
     // (ILanguageHost.RunAsync, not RunDebugAsync).
     internal static ExecutionRequest BuildRequest(
         MdRunFrontMatter frontMatter, DotnetSdk platform, string outputDirectory,

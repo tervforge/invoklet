@@ -16,11 +16,12 @@ public static class TargetSdkResolver
             ? available.FirstOrDefault()
             : available.FirstOrDefault(s => Matches(s, target)) ?? available.FirstOrDefault();
 
-    /// <summary>Why <paramref name="sdk"/> isn't what <paramref name="target"/> asks for, or null.</summary>
+    /// <summary>Why <paramref name="sdk"/> isn't what <paramref name="target"/> asks for, or null: the SDK isn't installed, or it is newer
+    /// than this Invoklet's compiler.</summary>
     public static string? Warning(TargetSdk target, DotnetSdk sdk)
         => IsLatest(target) || Matches(sdk, target)
             ? null
-            : $"targetSdk {target} is not installed — running on {sdk.Description}.";
+            : $"targetSdk {target} is not available — running on {sdk.Description}.";
 
     /// <summary>The toolbar's "latest" choice: runs on the newest SDK, shown as
     /// "latest (.NET 10.0.100)"; picking it stores <c>targetSdk: latest</c>. Null without SDKs.</summary>

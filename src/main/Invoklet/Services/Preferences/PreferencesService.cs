@@ -69,10 +69,12 @@ public sealed class PreferencesService : IPreferencesService
             // The settings are taken over only when the whole file has been read and migrated; a failure leaves the defaults.
             var loaded = AppSettings.Parse(File.ReadAllText(SettingsPath));
             var migrated = loaded.Keyboard.MigrateLegacy();
-            var resolvedDotnetPath = DotnetExecutableResolver.Resolve(loaded.Debugger.DotnetPath);
-            var dotnetPathChanged = !string.Equals(loaded.Debugger.DotnetPath, resolvedDotnetPath, StringComparison.Ordinal);
+            // Earlier versions stored the dotnet they found, which then stayed even once a better one was installed. One of the places the
+            // search looks in anyway is that and nothing more: it goes, and the search runs again each time.
+            var dotnetPathChanged = loaded.Debugger.DotnetPath.Length > 0
+                && (DotnetExecutableResolver.IsAutomatic(loaded.Debugger.DotnetPath) || DotnetExecutableResolver.IsInstallLocation(loaded.Debugger.DotnetPath));
             if (dotnetPathChanged)
-                loaded.Debugger.DotnetPath = resolvedDotnetPath;
+                loaded.Debugger.DotnetPath = "";
             _settings = loaded;
             if (migrated || dotnetPathChanged) Save();
         }

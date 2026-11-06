@@ -24,7 +24,7 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     public ConnectionCategory Category => ConnectionCategory.Database;
 
     /// <summary>Change when cached descriptions need to be read again after a driver update.</summary>
-    public virtual string SchemaVersion => "3";
+    public virtual string SchemaVersion => "4";
 
     /// <summary>The provider's EF Core package in the release Invoklet is built with.</summary>
     public abstract IReadOnlyDictionary<string, string> Packages { get; }
@@ -116,15 +116,26 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     public async Task<ConnectionSchema> FetchSchemaAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, ConnectionTools tools,
         CancellationToken cancellationToken)
     {
-        var entities = await ReadAsync(resolvedParams, tools.ScriptDirectory, cancellationToken).ConfigureAwait(false);
-        return new ConnectionSchema(Summary(entities), [], JsonSerializer.Serialize(entities));
+        return SchemaOf(await ReadAsync(resolvedParams, tools.ScriptDirectory, cancellationToken).ConfigureAwait(false));
     }
 
-    public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context)
+    // The context is a file of the schema, like a gRPC server's classes: it is built once into an assembly that is kept, not again with every
+    // change to the script.
+    internal ConnectionSchema SchemaOf(IReadOnlyList<EfEntity> entities)
     {
-        var entities = context.Schema is { } schema ? JsonSerializer.Deserialize<List<EfEntity>>(schema.Data) ?? [] : [];
-        return new ConnectionClientCode(EfContextCode.Generate(connection, context, Kind, ConstructorStatements(connection, context), UseCall, entities));
+        var data = JsonSerializer.Serialize(entities);
+        var context = new GeneratedSourceFile(ContextNamespace(data) + ".cs", EfContextCode.GenerateContext(ContextNamespace(data), Kind, UseCall, entities));
+        return new ConnectionSchema(Summary(entities), [context], data);
     }
+
+    // The script queries with EF Core's extensions (Include, AsNoTracking, ToListAsync) as LINQ's own, without a using.
+    public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context) =>
+        new(EfContextCode.GenerateClient(connection, context, Kind, ConstructorStatements(connection, context),
+            "global::" + ContextNamespace(context.Schema?.Data ?? "[]") + "." + EfContextCode.ContextClass), ["Microsoft.EntityFrameworkCore"]);
+
+    // Named after what was read, so two connections to the same database share the context, and two databases never mix theirs.
+    private string ContextNamespace(string data) =>
+        "InvokletDatabases.Db" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Id + "\n" + UseCall + "\n" + data)))[..16];
 
     private async Task<List<EfEntity>> ReadAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, string? scriptDirectory, CancellationToken cancellationToken)
     {

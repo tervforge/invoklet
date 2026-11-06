@@ -129,9 +129,11 @@ public sealed class SqliteConnectionTests : IDisposable
         var packages = new SqliteConnectionDriver().Packages;
         var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, packages.Keys, schemas.Drivers, schemas.Cache, ScriptDirectory)!;
         Assert.Empty(generated.Errors);
-        Assert.Contains("public global::Microsoft.EntityFrameworkCore.DbSet<Customer> Customers => Set<Customer>();", generated.Source);
-        Assert.Contains("e.HasKey(x => new { x.OrderId, x.Line });", generated.Source);
-        Assert.Contains("public sealed class Log", generated.Source);
+        // The context is a file of the schema, compiled apart from the script.
+        var context = Assert.Single(generated.Files).Text;
+        Assert.Contains("public global::Microsoft.EntityFrameworkCore.DbSet<Customer> Customers => Set<Customer>();", context);
+        Assert.Contains("e.HasKey(x => new { x.OrderId, x.Line });", context);
+        Assert.Contains("public sealed class Log", context);
 
         // The editor knows the sets and the rows' columns before any run.
         var referenceService = new CSharpReferenceService();
@@ -277,9 +279,10 @@ public sealed class SqliteConnectionTests : IDisposable
         var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, new SqliteConnectionDriver().Packages.Keys,
             schemas.Drivers, schemas.Cache, ScriptDirectory)!;
         Assert.Empty(generated.Errors);
-        Assert.DoesNotContain(generated.Source, c => c is (char)0x85 or (char)0x2028 or (char)0x2029);
-        Assert.Contains("evil public static int X = 1; y z", generated.Source, StringComparison.Ordinal);
-        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(generated.Source, cancellationToken: TestContext.Current.CancellationToken);
+        var context = Assert.Single(generated.Files).Text;
+        Assert.DoesNotContain(context, c => c is (char)0x85 or (char)0x2028 or (char)0x2029);
+        Assert.Contains("evil public static int X = 1; y z", context, StringComparison.Ordinal);
+        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(context, cancellationToken: TestContext.Current.CancellationToken);
         Assert.DoesNotContain(tree.GetRoot(TestContext.Current.CancellationToken).DescendantNodes()
                 .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax>(), v => v.Identifier.Text == "X");
 

@@ -23,7 +23,9 @@ public sealed record ConnectionStringSetting(ConnectionStringPart Part, string V
 /// A way of signing in to the server (a password, a pgpass file, Windows): the fields it shows, by <see cref="ConnectionStringPart.Key"/>,
 /// and the settings it writes. The connection string is all that is kept, so the way is read back from it.
 /// </summary>
-public sealed record ConnectionAuthMode(string Label, IReadOnlyList<string> Parts, IReadOnlyList<ConnectionStringSetting>? Settings = null, string? Hint = null)
+/// <param name="Defaults">What choosing the way puts in a field of it that is empty, such as the usual place of a password file.</param>
+public sealed record ConnectionAuthMode(string Label, IReadOnlyList<string> Parts, IReadOnlyList<ConnectionStringSetting>? Settings = null, string? Hint = null,
+    IReadOnlyList<ConnectionStringSetting>? Defaults = null)
 {
     /// <summary>Whether signing in this way uses the field.</summary>
     public bool Shows(ConnectionStringPart part) => Parts.Any(key => string.Equals(key, part.Key, StringComparison.OrdinalIgnoreCase));
@@ -82,6 +84,8 @@ public static class ConnectionStringText
         foreach (var part in shownByAny.Where(p => !mode.Shows(p))) text = Write(text, part, null);
         foreach (var setting in modes.Where(m => m != mode).SelectMany(m => m.Settings ?? [])) text = Write(text, setting.Part, null);
         foreach (var setting in mode.Settings ?? []) text = Write(text, setting.Part, setting.Value);
+        foreach (var value in mode.Defaults ?? [])
+            if (string.IsNullOrEmpty(Read(text, value.Part))) text = Write(text, value.Part, value.Value);
         return text;
     }
 

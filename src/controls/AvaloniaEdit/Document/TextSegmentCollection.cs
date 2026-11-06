@@ -88,7 +88,7 @@ public sealed class TextSegmentCollection<T> : ICollection<T>, ISegmentTree wher
         if (textDocument == null)
             throw new ArgumentNullException(nameof(textDocument));
 
-        Dispatcher.UIThread.VerifyAccess();
+        textDocument.VerifyAccess();
         _isConnectedToDocument = true;
         TextDocumentWeakEventManager.Changed.AddHandler(textDocument, OnDocumentChanged);
     }

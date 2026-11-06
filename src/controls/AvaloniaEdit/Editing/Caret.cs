@@ -485,7 +485,7 @@ public sealed class Caret
         if (!_showScheduled)
         {
             _showScheduled = true;
-            Dispatcher.UIThread.Post(ShowInternal);
+            _textArea.Dispatcher.Post(ShowInternal);
         }
     }
 

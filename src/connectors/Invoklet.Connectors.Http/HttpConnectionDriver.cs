@@ -118,17 +118,18 @@ public sealed class HttpConnectionDriver : IConnectionDriver
 
     // An HttpClient with the base address, headers and timeout set, so the script calls
     // Connections.Billing.GetStringAsync("invoices") and the like.
-    public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context) => BuildClient(connection, context, "", "HTTP connection");
+    public ConnectionClientCode CreateClient(MdRunConnection connection, ConnectionCodeContext context) => BuildClient(connection, context, "HTTP connection");
 
-    // The same client with members of its own added, for the connection types built on this one.
-    internal static ConnectionClientCode BuildClient(MdRunConnection connection, ConnectionCodeContext context, string members, string kind)
+    // The same client on another base class, for the connection types built on this one.
+    internal static ConnectionClientCode BuildClient(MdRunConnection connection, ConnectionCodeContext context, string kind,
+        string baseClass = "global::System.Net.Http.HttpClient")
     {
         var parameters = connection.Params;
         var address = parameters[BaseAddress].Text!;
         var sb = new StringBuilder()
             .Append("/// <summary>The ").Append(kind).Append(" '").Append(ConnectionCodeContext.Doc(connection.Name)).Append("': an HttpClient for ")
             .Append(ConnectionCodeContext.Doc(address)).Append(".</summary>\n")
-            .Append("public sealed class ").Append(context.ClassName).Append(" : global::System.Net.Http.HttpClient\n{\n")
+            .Append("public sealed class ").Append(context.ClassName).Append(" : ").Append(baseClass).Append("\n{\n")
             .Append("    internal ").Append(context.ClassName).Append("()\n    {\n")
             .Append("        BaseAddress = new global::System.Uri(").Append(context.Text(address)).Append(");\n");
         if (parameters.TryGetValue(Timeout, out var timeout) && timeout.Text is { Length: > 0 } seconds)
@@ -137,9 +138,7 @@ public sealed class HttpConnectionDriver : IConnectionDriver
         foreach (var (name, value) in parameters.TryGetValue(Headers, out var headers) ? headers.Fields ?? [] : [])
             sb.Append("        DefaultRequestHeaders.TryAddWithoutValidation(").Append(ConnectionCodeContext.Literal(name)).Append(", ")
                 .Append(context.Text(value.Text ?? "")).Append(");\n");
-        sb.Append("    }\n");
-        if (members.Length > 0) sb.Append('\n').Append(members);
-        sb.Append('}');
+        sb.Append("    }\n}");
         return new ConnectionClientCode(sb.ToString());
     }
 

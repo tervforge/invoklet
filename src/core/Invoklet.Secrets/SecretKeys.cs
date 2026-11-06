@@ -52,7 +52,10 @@ public static class SecretKeys
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "secrets.json");
 
     /// <summary>Takes away a key (<see cref="EnvVar"/>) a process would inherit from whoever started Invoklet: no program Invoklet starts gets it.</summary>
-    public static void RemoveFrom(ProcessStartInfo startInfo) => startInfo.Environment.Remove(EnvVar);
+    public static void RemoveFrom(ProcessStartInfo startInfo) => RemoveFrom(startInfo.Environment);
+
+    /// <summary>Takes the store's key out of a process's <paramref name="environment"/>.</summary>
+    public static void RemoveFrom(IDictionary<string, string?> environment) => environment.Remove(EnvVar);
 
     /// <summary>Whether the store's values are encrypted with a keychain key. Only the file's
     /// <c>Protection</c> is read, so a store without secrets never opens the keychain.</summary>

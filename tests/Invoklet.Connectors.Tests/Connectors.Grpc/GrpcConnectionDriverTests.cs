@@ -151,7 +151,7 @@ public sealed class GrpcConnectionDriverTests
 
     // Plaintext HTTP/2 on any port (the Postman Echo server is http:// on 443), and the certificate check left alone.
     [Fact]
-    public void CreateClient_AnHttpAddress_IsUsedAsWritten_WithTheCertificateCheckKept()
+    public void CreateClient_AnHttpAddress_KeepsTheAddressAndTheCertificateCheck()
     {
         // Arrange
         var fixture = new GrpcConnectionDriverFixture();

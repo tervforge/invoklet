@@ -52,37 +52,4 @@ public class ChildProcessCurrentQueryPathTests
 
         Assert.Equal(["out.dll"], process.StartInfoForTests.ArgumentList);
     }
-
-    // A debugged script loads Invoklet.Runtime's startup hook first, after any hook the user's environment already names.
-    [Theory]
-    [InlineData(null, "/bin/Invoklet.Runtime.dll")]
-    [InlineData("/mine.dll", "/mine.dll|/bin/Invoklet.Runtime.dll")]
-    public void ForExecution_Should_AddTheStartupHook_AfterTheOnesAlreadyNamed(string? existing, string expected)
-    {
-        var options = CreateOptions();
-        options.StartupHook = "/bin/Invoklet.Runtime.dll";
-        var saved = Environment.GetEnvironmentVariable("DOTNET_STARTUP_HOOKS");
-        Environment.SetEnvironmentVariable("DOTNET_STARTUP_HOOKS", existing);
-        try
-        {
-            var process = ChildProcess.ForExecution(options, "out.dll", "123");
-
-            Assert.Equal(expected.Replace('|', Path.PathSeparator), process.StartInfoForTests.Environment["DOTNET_STARTUP_HOOKS"]);
-        }
-        finally { Environment.SetEnvironmentVariable("DOTNET_STARTUP_HOOKS", saved); }
-    }
-
-    [Fact]
-    public void ForExecution_Should_NameNoStartupHook_ForARun()
-    {
-        var saved = Environment.GetEnvironmentVariable("DOTNET_STARTUP_HOOKS");
-        Environment.SetEnvironmentVariable("DOTNET_STARTUP_HOOKS", null);
-        try
-        {
-            var process = ChildProcess.ForExecution(CreateOptions(), "out.dll", "123");
-
-            Assert.False(process.StartInfoForTests.Environment.ContainsKey("DOTNET_STARTUP_HOOKS"));
-        }
-        finally { Environment.SetEnvironmentVariable("DOTNET_STARTUP_HOOKS", saved); }
-    }
 }

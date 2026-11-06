@@ -225,6 +225,22 @@ public sealed class ActiveTabCommandsTests
     }
 
     [Fact]
+    public void ToggleDebugMode_NoDebugger_LeavesDebugModeOff()
+    {
+        // Arrange
+        var fixture = new ActiveTabCommandsFixture();
+        var tab = fixture.CreateTab(withDebugger: false);
+        fixture.Activate(tab);
+        var sut = fixture.CreateSut();
+
+        // Act
+        sut.ToggleDebugMode();
+
+        // Assert
+        Assert.False(tab.DebugModeEnabled);
+    }
+
+    [Fact]
     public void ToggleDebugMode_Called_FlipsTheTabsFlagBackAndForth()
     {
         // Arrange

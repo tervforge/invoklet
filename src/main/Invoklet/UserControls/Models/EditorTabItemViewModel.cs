@@ -98,6 +98,9 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
     // see EditorsTabItemControl's constructor for why the TextChanged subscription that sets this is
     // attached only after the initial SetDocumentContent call, not before. Cleared back to false by
     // every successful write (SaveIfNeeded, the pre-run save in RunAsync, Save As).
+    /// <summary>The window whose strip shows the tab: 0 is the main window, others were opened by moving a tab out of a strip.</summary>
+    public int WindowId { get; internal set; }
+
     public bool IsDirty
     {
         get;
@@ -127,6 +130,11 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
     public ExampleScript? Example { get; init; }
 
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
+
+    /// <summary>The tab's menu: a window of its own. What it does is the strip's, which shows the tab (<see cref="MoveToNewWindow"/>).</summary>
+    public ReactiveCommand<Unit, Unit> MoveToNewWindowCommand { get; }
+
+    internal Action? MoveToNewWindow { get; set; }
 
     public List<DotnetSdk> AvailableSdks { get; }
 
@@ -168,11 +176,30 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
         set => this.RaiseAndSetIfChanged(ref _selectedSdk, value);
     }
 
+    // Off while there is no debugger to run under: a run is then a plain run, whatever was chosen, and the choice comes back with one.
     public bool DebugModeEnabled
     {
+        get => _debugModeChosen && HasDebugger;
+        set
+        {
+            if (_debugModeChosen == value) return;
+            _debugModeChosen = value;
+            this.RaisePropertyChanged();
+        }
+    }
+    private bool _debugModeChosen = true;
+
+    /// <summary>Whether the debugger set in Preferences is there; the bug button shows only then.</summary>
+    public bool HasDebugger
+    {
         get;
-        set => this.RaiseAndSetIfChanged(ref field, value);
-    } = true;
+        private set
+        {
+            if (field == value) return;
+            this.RaiseAndSetIfChanged(ref field, value);
+            this.RaisePropertyChanged(nameof(DebugModeEnabled));
+        }
+    }
 
     public EditorLayoutState Layout { get; }
     public ScriptPreviewMode PreviewMode
@@ -283,8 +310,10 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
         IEditorTabActions actions,
         MdRunLanguage newFileLanguage = MdRunLanguage.CSharp,
         MdRunKind newFileKind = MdRunKind.Statements,
-        string untitledTitle = "Untitled")
+        string untitledTitle = "Untitled",
+        Func<bool>? debuggerInstalled = null)
     {
+        _debuggerInstalled = debuggerInstalled ?? (() => prefs.Debugger?.DebuggerPath is { Length: > 0 } path && File.Exists(path));
         FilePath = filePath;
         AvailableSdks = sdks;
         LatestSdk = TargetSdkResolver.LatestChoice(sdks);
@@ -297,6 +326,7 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
         UntitledTitle = untitledTitle;
 
         CloseCommand = ReactiveCommand.CreateFromTask(() => _actions.CloseAsync(this));
+        MoveToNewWindowCommand = ReactiveCommand.Create(() => MoveToNewWindow?.Invoke());
         SaveAsCommand = ReactiveCommand.CreateFromTask(() => _actions.SaveAsAsync(this));
         DuplicateCommand = ReactiveCommand.Create(() => _actions.Duplicate(this));
         OpenContainingFolderCommand = ReactiveCommand.Create(() => _actions.OpenContainingFolder(this));
@@ -312,9 +342,20 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
 
         SyncTooltips();
         _prefs.Changed += OnPreferencesChanged;
+        SyncDebugger();
     }
 
-    private void OnPreferencesChanged() => SyncTooltips();
+    private void OnPreferencesChanged()
+    {
+        SyncTooltips();
+        SyncDebugger();
+    }
+
+    // The setup or Preferences may have just installed or set one.
+    private void SyncDebugger() => HasDebugger = _debuggerInstalled();
+
+    // Whether the debugger set in Preferences is there (by default, its file).
+    private readonly Func<bool> _debuggerInstalled;
 
     private void SyncTooltips()
     {

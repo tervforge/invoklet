@@ -103,7 +103,11 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
         // Coming back to Invoklet from another program is when its files were most likely changed
         // there; scripts outside the watched scripts folder are only noticed this way.
-        Activated += (_, _) => _ = editorTabsCtrl.CheckFilesChangedOnDiskAsync();
+        Activated += (_, _) =>
+        {
+            editorTabsCtrl.WindowActivated();
+            _ = editorTabsCtrl.CheckFilesChangedOnDiskAsync();
+        };
 
         Closing += OnClosing;
         // The window owns the per-window view model and controls. Dispose them on every
@@ -130,6 +134,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        // The tabs of the other windows are asked about here with the rest, so they come back first and their windows close.
+        _editorTabs.GatherOtherWindows();
         // Runs up to its first wait here, so that e.Cancel is set before this returns; an error is raised here as it was when this did the work itself.
         var closing = ClosingAsync(e);
         ClosingTask = closing;
@@ -469,7 +475,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
                 Item("C_lear Results", KeyCommands.ClearResults),
                 Item("Stop and Run _Again", KeyCommands.Restart),
                 new MainMenuSeparator(),
-                Item("_Debug Mode", KeyCommands.ToggleDebugMode),
+                // Nothing to switch to without a debugger.
+                Item("_Debug Mode", KeyCommands.ToggleDebugMode, vm.WhenAnyValue(x => x.ActiveTab!.HasDebugger)),
                 new MainMenuSeparator(),
                 Item("Step _Over", KeyCommands.StepOver),
                 Item("Step _Into", KeyCommands.StepInto),
@@ -499,8 +506,9 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
     // A menu item for a key-bindable command: the same action as its key, and the key as a hint
     // (kept current by OnPreferencesChanged).
-    private MainMenuCommand Item(string header, KeyCommand command)
-        => new(header, ReactiveCommand.Create(() => { if (!GetViewModel().IsRestoringWorkspace) _keyActions[command](); }), _prefs.Keyboard.GestureFor(command), command);
+    private MainMenuCommand Item(string header, KeyCommand command, IObservable<bool>? canExecute = null)
+        => new(header, ReactiveCommand.Create(() => { if (!GetViewModel().IsRestoringWorkspace) _keyActions[command](); }, canExecute),
+            _prefs.Keyboard.GestureFor(command), command);
 
     // Undo, Copy… use the platform's keys (Cmd on macOS). Elsewhere the text boxes handle them and
     // the menu only shows them; on macOS the menu bar takes the key first and its Edit command acts on

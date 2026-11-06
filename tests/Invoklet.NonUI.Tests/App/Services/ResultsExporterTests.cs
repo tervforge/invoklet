@@ -72,9 +72,9 @@ public sealed class ResultsExporterTests
     }
 
     [Theory]
-    [InlineData(typeof(IOException))]
-    [InlineData(typeof(UnauthorizedAccessException))]
-    public async Task ExportAsync_TheFileCannotBeWritten_ReportsItWithThePathAndTheReason(Type failure)
+    [InlineData(typeof(IOException), "disk full")]
+    [InlineData(typeof(UnauthorizedAccessException), "Access was denied.")]
+    public async Task ExportAsync_TheFileCannotBeWritten_ReportsItWithThePathAndTheReason(Type failure, string reason)
     {
         // Arrange
         var fixture = new ResultsExporterFixture { WriteFails = (Exception)Activator.CreateInstance(failure, "disk full")! };
@@ -84,7 +84,7 @@ public sealed class ResultsExporterTests
         await sut.ExportAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Results Failed", "Could not write 'chosen.html':\ndisk full"), Times.Once);
+        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Results Failed", "Could not write 'chosen.html'.\n" + reason), Times.Once);
     }
 
     [Fact]

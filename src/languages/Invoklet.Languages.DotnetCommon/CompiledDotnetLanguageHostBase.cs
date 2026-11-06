@@ -603,12 +603,12 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
     }
 
     // Whether the user lets this script reach the secret; a failing question is a no.
-    private async Task<bool> MayAccessAsync(string name, bool isSave)
+    private async Task<bool> MayAccessAsync(string name, bool isSave, SecretChange change = SecretChange.None)
     {
         if (SecretAccessApprover is not { } approve) return true;
         try
         {
-            return await approve(new SecretAccess(_options.CurrentQueryPath, name, isSave), _runCts?.Token ?? CancellationToken.None);
+            return await approve(new SecretAccess(_options.CurrentQueryPath, name, isSave, change), _runCts?.Token ?? CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -623,7 +623,9 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
     {
         if (_currentInputStream is not { } stream) return;
         var kept = false;
-        var allowed = await MayAccessAsync(name, isSave: true);
+        // A secret already kept is replaced or removed only with the user's say: a script must not wipe what another one needs.
+        var change = await Task.Run(() => Exists(name)) ? value is null ? SecretChange.Remove : SecretChange.Replace : SecretChange.None;
+        var allowed = await MayAccessAsync(name, isSave: true, change);
         if (allowed && SecretSaver is { } save)
         {
             try
@@ -645,6 +647,13 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
         {
             // The script ended meanwhile.
         }
+    }
+
+    // Whether the store holds the name; a store that can't be read holds nothing as far as the question goes (the save fails on it anyway).
+    private bool Exists(string name)
+    {
+        try { return SecretReader?.Invoke(name) is not null; }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { return false; }
     }
 
     private static (string? Prompt, bool IsPassword, string? Secret, string? Value, bool Remove, bool Read) ParseInputRequest(string base64)

@@ -235,7 +235,7 @@
 
                 <StackPanel Tag="dotnet" IsVisible="{Binding IsDotnetSelected}" Spacing="4">
                     <TextBlock Text="Dotnet path:"/>
-                    <TextBox PlaceholderText="Path to dotnet.exe" Text="{Binding DotnetPath}"/>
+                    <TextBox PlaceholderText="{Binding DotnetPathPlaceholder}" Text="{Binding DotnetPath}"/>
                     <TextBlock Text="Debugger path:" Margin="0,8,0,0"/>
                     <TextBox PlaceholderText="Path to netcoredbg.exe" Text="{Binding DebuggerPath}"/>
                 </StackPanel>

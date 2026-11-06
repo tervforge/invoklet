@@ -246,7 +246,7 @@ public class CompletionWindowBase : Popup
 
     private void TextAreaLostFocus(object sender, RoutedEventArgs e)
     {
-        Dispatcher.UIThread.Post(CloseIfFocusLost, DispatcherPriority.Background);
+        Dispatcher.Post(CloseIfFocusLost, DispatcherPriority.Background);
     }
 
     private void ParentWindow_Deactivated(object sender, EventArgs e)
@@ -261,7 +261,7 @@ public class CompletionWindowBase : Popup
 
     private void OnDeactivated(object sender, EventArgs e)
     {
-        Dispatcher.UIThread.Post(CloseIfFocusLost, DispatcherPriority.Background);
+        Dispatcher.Post(CloseIfFocusLost, DispatcherPriority.Background);
     }
 
     #endregion

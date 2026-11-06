@@ -21,9 +21,14 @@ namespace Invoklet.Cli;
 /// (a gRPC server's services), shared with the Invoklet window. <see cref="CreateDefault"/> is the only place that knows
 /// the concrete language modules, connectors and .NET backend; <see cref="CliRunner"/> uses just these contracts.
 /// </summary>
+/// <param name="BuildsFolder">Where scripts are built, a folder kept for each; null builds each run in a temporary folder.</param>
 public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sdks, ConnectionDriverRegistry? ConnectionDrivers = null,
-    ConnectionSchemas? ConnectionSchemas = null)
+    ConnectionSchemas? ConnectionSchemas = null, string? BuildsFolder = null)
 {
+    /// <summary>The builds of scripts run from the command line, beside the window's own data; what <c>invoklet</c> itself builds in.</summary>
+    public static string DefaultBuildsFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "cli-builds");
+
     public static CliServices CreateDefault()
     {
         var runtimeReferences = new DotnetRuntimeReferenceLocator();

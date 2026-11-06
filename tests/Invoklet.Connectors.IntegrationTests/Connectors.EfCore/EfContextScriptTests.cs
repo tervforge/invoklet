@@ -12,6 +12,7 @@ using Xunit;
 namespace Invoklet.Connectors.IntegrationTests.Connectors.EfCore;
 
 // The context written from EF Core's own model is compiled and used: queries, navigation properties, a write, a view and a composite key.
+// EF Core's extensions (Include) need no using of the script's own.
 public sealed class EfContextScriptTests : IDisposable
 {
     private readonly ShopDatabaseFixture _shop = new();
@@ -52,7 +53,6 @@ public sealed class EfContextScriptTests : IDisposable
         var output = new ConcurrentQueue<string>();
         var errors = new ConcurrentQueue<string>();
         const string script = """
-            using Microsoft.EntityFrameworkCore;
             var shop = Connections.Shop;
             Console.WriteLine(string.Join(",", shop.Customers.Where(c => c.City == "Oslo").Select(c => c.Name)));
             var ann = shop.Customers.Include(c => c.Orders).Single(c => c.Name == "Ann");

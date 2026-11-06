@@ -9,7 +9,8 @@ public sealed class SetupDownloader : ISetupDownloader, IDisposable
 
     private readonly HttpClient _client;
 
-    public SetupDownloader() : this(new HttpClient())
+    // GitHub's API refuses a request without a User-Agent; a plain name of the client, nothing about the user.
+    public SetupDownloader() : this(new HttpClient { DefaultRequestHeaders = { { "User-Agent", "Invoklet-setup" } } })
     {
     }
 

@@ -137,6 +137,28 @@ public class CliRunnerTests
         finally { File.Delete(path); }
     }
 
+    // --quiet: the compiler's warning isn't written, its error still is.
+    [Fact]
+    public async Task RunAsync_Quiet_WritesTheErrorsButNotTheWarnings()
+    {
+        // Arrange
+        var path = Path.Combine(Path.GetTempPath(), $"Invoklet-cli-quiet-{Guid.NewGuid():N}.inv");
+        await File.WriteAllTextAsync(path,
+            "---\nlanguage: csharp\nkind: statements\n---\n\n```csharp run\nint unused = 1;\nmissingName++;\n```\n");
+        var stderr = new TestConsole().Width(1000);
+
+        try
+        {
+            // Act
+            await CliRunner.RunAsync(["--quiet", "--compile-only", path], CliServices.CreateDefault(), new TestConsole(), stderr, CancellationToken.None);
+
+            // Assert
+            Assert.DoesNotContain("CS0219", stderr.Output);
+            Assert.Contains("CS0103", stderr.Output);
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public async Task CompileOnly_Should_SendWarningsAndErrorsToStderr_AndNeverRunScript()
     {
@@ -615,7 +637,7 @@ public class CliRunnerTests
             {
                 Assert.True(exitCode == 0, log);
                 Assert.Contains("SCRIPT_EXECUTED", stdout.Output);
-                Assert.Contains("targetSdk net1.0 is not installed", stderr.Output);
+                Assert.Contains("targetSdk net1.0 is not available", stderr.Output);
             }
             else
             {

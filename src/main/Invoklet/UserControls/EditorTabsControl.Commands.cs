@@ -16,9 +16,9 @@ public partial class EditorTabsControl
 
     Task ITabReverter.RevertAsync(EditorTabItemViewModel tab) => _diskSync?.RevertAsync(this, tab) ?? Task.CompletedTask;
 
-    EditorTabItemViewModel? IActiveTabSource.ViewModel => _vm?.ActiveTab;
+    EditorTabItemViewModel? IActiveTabSource.ViewModel => Shown;
 
-    ITabCommandTarget? IActiveTabSource.Target => GetActiveControl();
+    ITabCommandTarget? IActiveTabSource.Target => Shown is { } shown && _tabs.TryGetValue(shown, out var entry) ? entry.Control : null;
 
-    EditorTabItemViewModel? ITabDiskHost.ActiveTab => _vm?.ActiveTab;
+    EditorTabItemViewModel? ITabDiskHost.ActiveTab => Shown;
 }

@@ -680,7 +680,7 @@ internal sealed class DocumentLineTree : IList<DocumentLine>
     {
         get
         {
-            Dispatcher.UIThread.VerifyAccess();
+            _document.VerifyAccess();
             return GetByNumber(1 + index);
         }
         set => throw new NotSupportedException();
@@ -690,7 +690,7 @@ internal sealed class DocumentLineTree : IList<DocumentLine>
     {
         get
         {
-            Dispatcher.UIThread.VerifyAccess();
+            _document.VerifyAccess();
             return LineCount;
         }
     }
@@ -699,7 +699,7 @@ internal sealed class DocumentLineTree : IList<DocumentLine>
 
     int IList<DocumentLine>.IndexOf(DocumentLine item)
     {
-        Dispatcher.UIThread.VerifyAccess();
+        _document.VerifyAccess();
         if (item == null || item.IsDeleted)
             return -1;
         var index = item.LineNumber - 1;
@@ -756,13 +756,13 @@ internal sealed class DocumentLineTree : IList<DocumentLine>
 
     public IEnumerator<DocumentLine> GetEnumerator()
     {
-        Dispatcher.UIThread.VerifyAccess();
+        _document.VerifyAccess();
         return Enumerate();
     }
 
     private IEnumerator<DocumentLine> Enumerate()
     {
-        Dispatcher.UIThread.VerifyAccess();
+        _document.VerifyAccess();
         var line = _root.LeftMost;
         while (line != null)
         {

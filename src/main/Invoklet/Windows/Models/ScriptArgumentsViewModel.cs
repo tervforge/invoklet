@@ -192,7 +192,11 @@ public sealed class ArgumentSetItemViewModel : ReactiveObject
 
     internal ArgumentSetItemViewModel(string name) => _name = name;
 
+    /// <summary>The set was renamed.</summary>
     internal event Action? Edited;
+
+    /// <summary>One of its values was typed: only the draft changes, the rows stay (rebuilding them took the focus off the field typed in).</summary>
+    internal event Action? ValueEdited;
 
     public string Name
     {
@@ -222,7 +226,7 @@ public sealed class ArgumentSetItemViewModel : ReactiveObject
     internal void SetText(ArgumentRowViewModel argument, string text)
     {
         _values[argument] = (text, _values.TryGetValue(argument, out var v) ? v.Original : null);
-        Edited?.Invoke();
+        ValueEdited?.Invoke();
     }
 
     internal void ShowRows(IEnumerable<ArgumentRowViewModel> arguments) => Values = [.. arguments.Select(a => new ArgumentSetValueViewModel(this, a))];
@@ -391,6 +395,7 @@ public sealed class ScriptArgumentsViewModel : ReactiveObject
     private ArgumentSetItemViewModel Track(ArgumentSetItemViewModel set)
     {
         set.Edited += OnSetEdited;
+        set.ValueEdited += OnDraftChanged;
         return set;
     }
 
@@ -403,8 +408,8 @@ public sealed class ScriptArgumentsViewModel : ReactiveObject
 
     private void OnSetEdited()
     {
-        // A renamed set keeps being the one runs use: the choice holds the set, not its name.
-        RefreshSets(RunChoice?.Set);
+        // A renamed set keeps being the one runs use: the choice holds the set, not its name. Its value rows stay as they are.
+        RefreshRunChoices(RunChoice?.Set);
         OnDraftChanged();
     }
 
@@ -440,6 +445,7 @@ public sealed class ScriptArgumentsViewModel : ReactiveObject
         if (SelectedSet is not { } set) return;
         var index = Sets.IndexOf(set);
         set.Edited -= OnSetEdited;
+        set.ValueEdited -= OnDraftChanged;
         Sets.Remove(set);
         SelectedSet = Sets.Count == 0 ? null : Sets[Math.Min(index, Sets.Count - 1)];
         // Runs that used the removed set go back to the defaults.
@@ -450,6 +456,11 @@ public sealed class ScriptArgumentsViewModel : ReactiveObject
     private void RefreshSets(ArgumentSetItemViewModel? selected)
     {
         foreach (var set in Sets) set.ShowRows(Arguments);
+        RefreshRunChoices(selected);
+    }
+
+    private void RefreshRunChoices(ArgumentSetItemViewModel? selected)
+    {
         RunChoices = [new ArgumentRunChoice(null), .. Sets.Select(s => new ArgumentRunChoice(s))];
         _runChoice = RunChoices.First(c => c.Set == selected);
         this.RaisePropertyChanged(nameof(RunChoice));

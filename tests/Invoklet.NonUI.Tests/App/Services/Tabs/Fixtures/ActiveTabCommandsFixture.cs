@@ -43,7 +43,7 @@ internal sealed class ActiveTabCommandsFixture
 
     public DotnetSdk CreateSdk(string name = "net10") => new(name, "net10.0", "10.0.0", name);
 
-    public EditorTabItemViewModel CreateTab(string? path = "/scripts/a.inv", bool withSdk = true)
+    public EditorTabItemViewModel CreateTab(string? path = "/scripts/a.inv", bool withSdk = true, bool withDebugger = true)
     {
         var prefs = new Mock<IPreferencesService>();
         prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -52,7 +52,8 @@ internal sealed class ActiveTabCommandsFixture
         prefs.Setup(p => p.CSharp).Returns(new CSharpLanguageSettings());
         prefs.Setup(p => p.Session).Returns(new SessionSettings());
         List<DotnetSdk> sdks = withSdk ? [CreateSdk()] : [];
-        return new EditorTabItemViewModel(path, sdks, prefs.Object, TabActions.Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+        return new EditorTabItemViewModel(path, sdks, prefs.Object, TabActions.Object, MdRunLanguage.CSharp, MdRunKind.Statements,
+            debuggerInstalled: () => withDebugger);
     }
 
     /// <summary>Makes <paramref name="tab"/> the active one; <paramref name="withView"/> false is a tab that has no view yet.</summary>

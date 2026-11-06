@@ -43,7 +43,7 @@ public class FoldingManager
     {
         Document = document ?? throw new ArgumentNullException(nameof(document));
         _foldings = new TextSegmentCollection<FoldingSection>();
-        Dispatcher.UIThread.VerifyAccess();
+        Document.VerifyAccess();
         TextDocumentWeakEventManager.Changed.AddHandler(document, OnDocumentChanged);
     }
     #endregion
@@ -153,7 +153,7 @@ public class FoldingManager
     /// </summary>
     public void Clear()
     {
-        Dispatcher.UIThread.VerifyAccess();
+        Document.VerifyAccess();
         foreach (var s in _foldings)
             s.IsFolded = false;
         _foldings.Clear();

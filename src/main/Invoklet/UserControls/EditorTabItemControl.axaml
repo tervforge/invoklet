@@ -29,6 +29,7 @@
                                 <PathIcon Data="{StaticResource Icon.FolderOpen}" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
+                        <MenuItem Header="Move to New Window" Command="{Binding MoveToNewWindowCommand}"/>
                     </ContextMenu>
                 </StackPanel.ContextMenu>
                 <TextBlock Text="{Binding FileName}"
@@ -136,6 +137,7 @@
                         IconData="{StaticResource Icon.Bug}"
                         CheckedBrush="{DynamicResource Invoklet.Icon.PlayBrush}"
                         IsChecked="{Binding DebugModeEnabled}"
+                        IsVisible="{Binding HasDebugger}"
                         ToolTip.Tip="Toggle debug mode"
                        />
 

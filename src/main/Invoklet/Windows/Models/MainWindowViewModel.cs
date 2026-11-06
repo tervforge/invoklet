@@ -420,7 +420,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            await _windowService.ShowErrorAsync("Open Failed", $"Could not open '{path}':\n{ex.Message}");
+            await _windowService.ShowErrorAsync("Open Failed", FileErrorText.Describe("Could not open", path, ex));
         }
     }
 
@@ -648,6 +648,16 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
     // disk, so there's no path to remember them by ("tab lifecycle (leftover)").
     // Called after every tab open/close/switch — a plain local JSON write on a low-frequency user
     // action, not worth the debounce Sidebar's own drag-frame writes need.
+    /// <summary>Moves <paramref name="tab"/> to <paramref name="index"/> among the tabs (a drag along the strip); the next start opens
+    /// them in the new order. An index outside the tabs, or a tab that isn't one, changes nothing.</summary>
+    public void MoveTab(EditorTabItemViewModel tab, int index)
+    {
+        var from = Tabs.IndexOf(tab);
+        if (from < 0 || index < 0 || index >= Tabs.Count || from == index) return;
+        Tabs.Move(from, index);
+        PersistSession();
+    }
+
     private void PersistSession()
     {
         if (_restoringSession) return;
@@ -791,7 +801,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _ = _windowService.ShowErrorAsync(
-                "Save Failed", $"Could not save '{Path.GetFileName(newPath)}':\n{ex.Message}");
+                "Save Failed", FileErrorText.Describe("Could not save", fullPath, ex));
             return;
         }
 
@@ -824,7 +834,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _ = _windowService.ShowErrorAsync(
-                "Duplicate Failed", $"Could not create '{Path.GetFileName(newPath)}':\n{ex.Message}");
+                "Duplicate Failed", FileErrorText.Describe("Could not create", newPath, ex));
             return;
         }
 
@@ -938,7 +948,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
         {
             await _windowService.ShowErrorAsync(
-                "Import Failed", $"Could not import '{Path.GetFileName(linqPath)}':\n{ex.Message}");
+                "Import Failed", FileErrorText.Describe("Could not import", linqPath, ex));
             return;
         }
 
@@ -961,7 +971,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             await _windowService.ShowErrorAsync(
-                "Import Failed", $"Could not create '{Path.GetFileName(newPath)}':\n{ex.Message}");
+                "Import Failed", FileErrorText.Describe("Could not create", newPath, ex));
             return;
         }
 
@@ -985,8 +995,8 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
 
         bool wasActive = ActiveTab == vm;
         Tabs.Remove(vm);
-        if (wasActive)
-            ActiveTab = Tabs.LastOrDefault(); // also persists the session (see the setter)
+        if (wasActive) // the next one in the same window; the window closes when it has none
+            ActiveTab = Tabs.LastOrDefault(t => t.WindowId == vm.WindowId) ?? Tabs.LastOrDefault(); // also persists the session (see the setter)
         else
             PersistSession(); // ActiveTab unchanged, so its setter won't fire — persist explicitly
     }
@@ -1000,7 +1010,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         var wasActive = ActiveTab == vm;
         _openTabs.Remove(path);
         Tabs.RemoveAt(index);
-        var reopened = new EditorTabItemViewModel(path, AvailableSdks, _prefs, this);
+        var reopened = new EditorTabItemViewModel(path, AvailableSdks, _prefs, this) { WindowId = vm.WindowId };
         _openTabs[path] = reopened;
         Tabs.Insert(index, reopened);
         if (wasActive)
@@ -1277,7 +1287,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
             if (_disposed || version != _refreshVersion || _treeErrorReported) return;
             _treeErrorReported = true;
             _ = _windowService.ShowErrorAsync(
-                "Folder Unavailable", $"Could not read '{_fileSystemService.Folder}':\n{ex.Message}");
+                "Folder Unavailable", FileErrorText.Describe("Could not read", _fileSystemService.Folder, ex));
             return;
         }
 

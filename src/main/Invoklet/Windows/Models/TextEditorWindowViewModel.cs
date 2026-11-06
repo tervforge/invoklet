@@ -115,7 +115,7 @@ public sealed class TextEditorWindowViewModel : ReactiveObject
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
                                        or EncoderFallbackException)
         {
-            await _windowService.ShowErrorAsync("Save Failed", $"Could not save '{path}':\n{ex.Message}");
+            await _windowService.ShowErrorAsync("Save Failed", FileErrorText.Describe("Could not save", path, ex));
             return false;
         }
 

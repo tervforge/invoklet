@@ -390,7 +390,7 @@ public class CompletionList : TemplatedControl
         _currentList = listBoxItems;
         //_listBox.Items = null; Makes no sense? Tooltip disappeared because of this
         _listBox.ItemsSource = listBoxItems;
-        Dispatcher.UIThread.Post(() => { SelectIndexCentered(bestIndex); }, DispatcherPriority.Loaded);
+        Dispatcher.Post(() => { SelectIndexCentered(bestIndex); }, DispatcherPriority.Loaded);
     }
 
     /// <summary>

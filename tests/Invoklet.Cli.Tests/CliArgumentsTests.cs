@@ -97,6 +97,19 @@ public class CliArgumentsTests
         Assert.True(CliArguments.Parse([option, "a.inv"]).CompileOnly);
     }
 
+    [Theory]
+    [InlineData("-q")]
+    [InlineData("--quiet")]
+    public void Parse_TheQuietOption_TurnsOffWarnings(string option)
+    {
+        // Act
+        var parsed = CliArguments.Parse([option, "a.inv"]);
+
+        // Assert
+        Assert.True(parsed.Quiet);
+        Assert.Equal("a.inv", parsed.ScriptPath);
+    }
+
     [Fact]
     public void Parse_Should_ReadRefreshConnections_BeforeOrAfterTheScript()
     {

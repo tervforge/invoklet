@@ -12,12 +12,8 @@ namespace Invoklet.Connectors.Tests.Connectors.EfCore;
 
 // A row another client changed since it was read must not be overwritten by a script: the columns EF Core marks as concurrency tokens
 // (a SQL Server rowversion) have to reach the generated context, or its updates carry no condition on them.
-public sealed class EfConcurrencyTokenTests : IDisposable
+public sealed class EfConcurrencyTokenTests
 {
-    private readonly string _folder = Directory.CreateTempSubdirectory("Invoklet-concurrency").FullName;
-
-    public void Dispose() => Directory.Delete(_folder, true);
-
     private sealed class Person
     {
         public int Id { get; set; }
@@ -58,13 +54,6 @@ public sealed class EfConcurrencyTokenTests : IDisposable
     public void TheGeneratedContext_AColumnThatIsAConcurrencyToken_SaysSo()
     {
         // Arrange
-        var driver = new SqlServerConnectionDriver();
-        var connection = new MdRunConnection
-        {
-            Name = "shop",
-            Driver = driver.Id,
-            Params = new(StringComparer.Ordinal) { ["connectionString"] = MdRunValue.Of("Server=localhost;Database=shop") },
-        };
         List<EfEntity> entities =
         [
             new("dbo", "customers", false, "Customer", "Customers",
@@ -74,17 +63,12 @@ public sealed class EfConcurrencyTokenTests : IDisposable
                 new("name", "Name", "nvarchar(100)", "string", false, true, 0),
             ]),
         ];
-        var drivers = new ConnectionDriverRegistry();
-        drivers.Register(driver);
-        var schemas = new ConnectionSchemas(drivers, _folder, new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
-        schemas.Cache.Put(connection, new ConnectionSchema("x", [], JsonSerializer.Serialize(entities)));
 
         // Act
-        var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, driver.Packages.Keys, drivers, schemas.Cache)!;
+        var source = EfContextCode.GenerateContext("Shop", "SQL Server", "Use", entities);
 
         // Assert
-        Assert.Empty(generated.Errors);
-        var lines = generated.Source.Split('\n').Select(l => l.Trim()).ToList();
+        var lines = source.Split('\n').Select(l => l.Trim()).ToList();
         Assert.Contains("e.Property(x => x.Version).IsConcurrencyToken();", lines);
         Assert.DoesNotContain("e.Property(x => x.Name).IsConcurrencyToken();", lines);
     }
@@ -93,8 +77,8 @@ public sealed class EfConcurrencyTokenTests : IDisposable
     public void TheDescriptionOfADatabase_ThatHasNoConcurrencyTokenYet_IsReadAgain()
     {
         // The descriptions already kept were made without the mark: a new version of the format makes them be read again.
-        Assert.Equal("3", new SqlServerConnectionDriver().SchemaVersion);
-        Assert.Equal("3", new Invoklet.Connectors.Postgres.PostgresConnectionDriver().SchemaVersion);
-        Assert.Equal("6", new Invoklet.Connectors.Sqlite.SqliteConnectionDriver().SchemaVersion);
+        Assert.Equal("4", new SqlServerConnectionDriver().SchemaVersion);
+        Assert.Equal("4", new Invoklet.Connectors.Postgres.PostgresConnectionDriver().SchemaVersion);
+        Assert.Equal("7", new Invoklet.Connectors.Sqlite.SqliteConnectionDriver().SchemaVersion);
     }
 }

@@ -94,7 +94,7 @@ public class EditorTabTargetSdkTests
             Assert.Equal("net6.0", ctrl.State.MdRunDocument!.FrontMatter.TargetSdk.ToString());
             Assert.Contains("targetSdk: net6.0", File.ReadAllText(path));
             var status = ctrl.FindControl<TextBlock>("ProjectInfoBlock")!.Text;
-            Assert.Equal("Statements · net6.0 (not installed)", status);
+            Assert.Equal("Statements · net6.0 (not available)", status);
         }
         finally
         {

@@ -13,12 +13,21 @@ public sealed class DotnetSdkProvider : ISdkProvider
     // somehow still installed alongside newer SDKs.
     private const int MinSupportedSdkMajorVersion = 6;
 
-    public IReadOnlyList<DotnetSdk> Get(string? dotnetExecutableOverride = null)
+    /// <summary>
+    /// The newest .NET whose C# the compiler Invoklet is built with knows (CSharpScriptCompiler.LanguageVersionFor). A newer SDK's
+    /// reference assemblies can need what this compiler can't read, and its C# isn't there: it is not offered until the compiler is updated.
+    /// </summary>
+    public const int MaxSupportedSdkMajorVersion = 10;
+
+    public IReadOnlyList<DotnetSdk> Get(string? dotnetExecutableOverride = null) =>
+        Parse(ListSdks(DotnetExecutableResolver.Resolve(dotnetExecutableOverride)));
+
+    /// <summary>The SDKs Invoklet can build for, newest first, from the lines of <c>dotnet --list-sdks</c>: the newest of each target.</summary>
+    internal static IReadOnlyList<DotnetSdk> Parse(IEnumerable<string> lines)
     {
-        var fileName = DotnetExecutableResolver.Resolve(dotnetExecutableOverride);
         List<(string tfm, NuGetVersion version)> versions = [];
 
-        foreach (string line in ListSdks(fileName))
+        foreach (string line in lines)
         {
             string trimmed = line.Trim();
             if (string.IsNullOrEmpty(trimmed)) continue;
@@ -27,7 +36,7 @@ public sealed class DotnetSdkProvider : ISdkProvider
             if (spaceIdx < 0) continue;
 
             string versionStr = trimmed[..spaceIdx];
-            if (!NuGetVersion.TryParse(versionStr, out NuGetVersion? v) || v.Major < MinSupportedSdkMajorVersion) continue;
+            if (!NuGetVersion.TryParse(versionStr, out NuGetVersion? v) || v.Major is < MinSupportedSdkMajorVersion or > MaxSupportedSdkMajorVersion) continue;
 
             versions.Add(($"net{v.Major}.{v.Minor}", v));
         }

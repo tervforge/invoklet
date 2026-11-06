@@ -1,4 +1,5 @@
 using System.Reactive;
+using System.Reactive.Linq;
 using Invoklet.Services.Preferences;
 using Invoklet.Services.Setup;
 using ReactiveUI;
@@ -40,6 +41,9 @@ public sealed class SetupWizardViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> InstallSdkCommand { get; }
     public ReactiveCommand<Unit, Unit> InstallDebuggerCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelInstallCommand { get; }
+
+    /// <summary>Asks, before anything is downloaded, whether to install what the plan says (which version, where); true to go on.</summary>
+    public Interaction<SetupInstallPlan, bool> ConfirmInstall { get; } = new();
 
     public SetupWizardViewModel(
         ISetupInstallerService installer, IPreferencesService preferences, IPrerequisiteService prerequisites)
@@ -101,10 +105,17 @@ public sealed class SetupWizardViewModel : ReactiveObject
         _installCts = cts;
         try
         {
+            StatusText = "Checking the latest .NET SDK...";
+            var plan = await _installer.PlanDotnetSdkAsync(cts.Token);
+            if (!await ConfirmInstall.Handle(plan))
+            {
+                StatusText = "";
+                return;
+            }
             var progress = CreateProgressReporter();
             // Saved like netcoredbg's path: the installer only puts the SDK on this process's PATH,
             // so after a restart — on macOS any start from Finder or the Dock — it wasn't found again.
-            var dotnetPath = await _installer.InstallDotnetSdkAsync(progress, cts.Token);
+            var dotnetPath = await _installer.InstallDotnetSdkAsync(plan, progress, cts.Token);
             _preferences.Debugger.DotnetPath = dotnetPath;
             _preferences.Save();
             StatusText = ".NET SDK installed.";
@@ -140,8 +151,15 @@ public sealed class SetupWizardViewModel : ReactiveObject
         _installCts = cts;
         try
         {
+            StatusText = "Checking the latest netcoredbg...";
+            var plan = await _installer.PlanNetcoredbgAsync(cts.Token);
+            if (!await ConfirmInstall.Handle(plan))
+            {
+                StatusText = "";
+                return;
+            }
             var progress = CreateProgressReporter();
-            var debuggerPath = await _installer.InstallNetcoredbgAsync(progress, cts.Token);
+            var debuggerPath = await _installer.InstallNetcoredbgAsync(plan, progress, cts.Token);
             _preferences.Debugger.DebuggerPath = debuggerPath;
             _preferences.Save();
             StatusText = "netcoredbg installed.";

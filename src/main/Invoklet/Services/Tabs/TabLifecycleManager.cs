@@ -29,6 +29,8 @@ public sealed class TabLifecycleManager
     private readonly ILogger<TabLifecycleManager>? _logger;
     private readonly Dictionary<EditorTabItemViewModel, Entry> _entries = new();
     private Func<EditorTabItemViewModel?>? _activeTab;
+    // The tabs shown by the other windows' strips: each is looked at as much as the main window's.
+    private readonly List<Func<EditorTabItemViewModel?>> _otherWindows = [];
     private Action<EditorTabItemViewModel>? _contentNotRestored;
 
     public TabLifecycleManager(IResidencyPolicy policy, ITabSpillStore spill, ILogger<TabLifecycleManager>? logger = null)
@@ -46,6 +48,13 @@ public sealed class TabLifecycleManager
     {
         if (_activeTab is not null) throw new InvalidOperationException("The tab lifecycle manager is attached already.");
         (_activeTab, _contentNotRestored) = (activeTab, contentNotRestored);
+    }
+
+    /// <summary>Another window's strip shows <paramref name="shown"/>'s tab too; disposing the result forgets it.</summary>
+    internal IDisposable WatchWindow(Func<EditorTabItemViewModel?> shown)
+    {
+        _otherWindows.Add(shown);
+        return System.Reactive.Disposables.Disposable.Create(() => _otherWindows.Remove(shown));
     }
 
     /// <summary>The strip went away: stops watching its tabs and removes what was kept for them.</summary>
@@ -116,14 +125,14 @@ public sealed class TabLifecycleManager
     /// <summary>Starts releasing the content of the tabs the policy gives up, and colours only the tab being looked at.</summary>
     internal void Rebalance()
     {
-        var active = _activeTab?.Invoke();
+        var shown = Shown();
         // A tab being released is still loaded, but not one to pick again.
         var loaded = _entries.Where(e => !e.Value.View.IsContentReleased && e.Value.Releasing is null).Select(e => e.Key).ToList();
-        foreach (var tab in _policy.ColdTabs(loaded, tab => CanRelease(tab, _entries[tab], active)).ToList())
+        foreach (var tab in _policy.ColdTabs(loaded, tab => CanRelease(tab, _entries[tab], shown)).ToList())
             ReleaseAsync(tab, _entries[tab]);
 
         foreach (var (tab, entry) in _entries)
-            entry.View.SetHighlightingActive(ReferenceEquals(tab, active));
+            entry.View.SetHighlightingActive(shown.Contains(tab));
     }
 
     // The text goes to disk off the UI thread; the tab lets go of it only if, when that is done, it is still one to give up.
@@ -139,7 +148,7 @@ public sealed class TabLifecycleManager
         try
         {
             // The tab was closed while its text was being written: nothing is asked of its view any more.
-            if (!await entry.View.TryReleaseContentAsync(() => _entries.ContainsKey(tab) && CanRelease(tab, entry, _activeTab?.Invoke())))
+            if (!await entry.View.TryReleaseContentAsync(() => _entries.ContainsKey(tab) && CanRelease(tab, entry, Shown())))
                 _logger?.LogDebug("The content of a tab was not released");
         }
         catch (Exception ex)
@@ -178,10 +187,20 @@ public sealed class TabLifecycleManager
         }
     }
 
-    private bool IsActive(EditorTabItemViewModel tab) => ReferenceEquals(tab, _activeTab?.Invoke());
+    private bool IsActive(EditorTabItemViewModel tab) => Shown().Contains(tab);
 
-    private static bool CanRelease(EditorTabItemViewModel tab, Entry entry, EditorTabItemViewModel? active)
-        => !ReferenceEquals(tab, active) && tab.RunState == RunState.Idle && !entry.UnseenResult
+    // The tab each window shows.
+    private HashSet<EditorTabItemViewModel> Shown()
+    {
+        var shown = new HashSet<EditorTabItemViewModel>(ReferenceEqualityComparer.Instance);
+        if (_activeTab?.Invoke() is { } active) shown.Add(active);
+        foreach (var window in _otherWindows)
+            if (window() is { } tab) shown.Add(tab);
+        return shown;
+    }
+
+    private static bool CanRelease(EditorTabItemViewModel tab, Entry entry, HashSet<EditorTabItemViewModel> shown)
+        => !shown.Contains(tab) && tab.RunState == RunState.Idle && !entry.UnseenResult
             && tab.PendingSave is not { IsCompleted: false };
 
     private void Forget(EditorTabItemViewModel tab)

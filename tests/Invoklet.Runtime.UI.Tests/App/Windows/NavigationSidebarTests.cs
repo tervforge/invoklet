@@ -420,6 +420,11 @@ public sealed class NavigationSidebarTests : IDisposable
         Settle();
         windowService.Verify(w => w.ShowConnectionsAsync("billing"), Times.Once);
 
+        // Opening the connections editor may rebuild the tree asynchronously. Select the row
+        // explicitly before testing the context-menu projection, rather than depending on that
+        // unrelated selection update.
+        view.Selected = (ConnectionNavigationNode)billing.DataContext!;
+        Settle();
         var menu = view.Tree.ContextMenu!;
         view.FillContextMenu(menu);
         var headers = menu.Items.OfType<MenuItem>().Where(m => m.IsVisible).Select(m => m.Header as string).ToList();

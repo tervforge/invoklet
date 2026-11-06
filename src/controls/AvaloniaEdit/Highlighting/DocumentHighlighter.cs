@@ -58,7 +58,7 @@ public class DocumentHighlighter : ILineTracker, IHighlighter
         Document = document ?? throw new ArgumentNullException(nameof(document));
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _engine = new HighlightingEngine(definition.MainRuleSet);
-        Dispatcher.UIThread.VerifyAccess();
+        document.VerifyAccess();
         _weakLineTracker = WeakLineTracker.Register(document, this);
         InvalidateSpanStacks();
     }

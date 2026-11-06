@@ -833,7 +833,7 @@ public class TextView : Control, ITextEditorComponent, ILogicalScrollable
     /// It is not allowed to call this method during the construction of a visual line.</exception>
     public void EnsureVisualLines()
     {
-        Dispatcher.UIThread.VerifyAccess();
+        VerifyAccess();
         if (_inMeasure)
             throw new InvalidOperationException("The visual line build process is already running! Cannot EnsureVisualLines() during Measure!");
         if (!VisualLinesValid)

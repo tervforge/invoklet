@@ -210,6 +210,7 @@ public sealed class SecretStoreWindowViewModel : ViewModelBase
     {
         AllowedScripts.Remove(script);
         if (_preferences?.Secrets is not { } settings || !settings.AllowedScripts.Remove(script)) return;
+        settings.AllowedScriptHashes.Remove(script);
         _preferences.Save();
     }
 

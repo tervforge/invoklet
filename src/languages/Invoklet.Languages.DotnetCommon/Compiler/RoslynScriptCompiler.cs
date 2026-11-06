@@ -156,7 +156,8 @@ public abstract class RoslynScriptCompiler : IDotnetProcessCompiler
             return Failed(Message("", $"The {TargetingPack.PackageId} targeting pack for {tfm} isn't installed and couldn't be downloaded."));
         var target = new ScriptTarget(tfm, major, minor, pack);
 
-        var packages = await NuGetRestorer.RestoreAsync(Options.Packages, tfm, LanguageFolder, _objDir, Options.NuGetConfigFile, ct);
+        var packages = await NuGetRestorer.RestoreAsync(Options.Packages, tfm, LanguageFolder, _objDir, Options.NuGetConfigFile, ct,
+            doing => StageChanged?.Invoke(RunStage.RestoringPackages, doing));
         if (packages.Errors.Count > 0)
             return new ProcessCompilerResult(_dllPath, false, packages.Errors, [.. ReferenceWarnings(), .. packages.Warnings]);
 
@@ -173,10 +174,14 @@ public abstract class RoslynScriptCompiler : IDotnetProcessCompiler
         var sourcePath = DebugSourcePath.Canonicalize(_sourcePath);
         var generatedPath = DebugSourcePath.Canonicalize(
             Path.Combine(_objDir, Options.OutputName + ".Generated" + SourceFileExtension));
+        var connectionsPath = DebugSourcePath.Canonicalize(
+            Path.Combine(_objDir, Options.OutputName + ".Connections" + SourceFileExtension));
 
-        // The connections' code is part of the generated file, so it decides about reuse like the script's own.
-        var generatedSource = GeneratedSource(target) + (Options.ConnectionSource is { } connections ? "\n" + connections : "");
+        // The connections' code is a file of its own, as it may start with global usings; it decides about reuse like the script's own.
+        var baseSource = GeneratedSource(target);
+        var generatedSource = baseSource + (Options.ConnectionSource is { } connections ? "\n" + connections : "");
         var separateContract = Options.ConnectionFiles.Count > 0 && !ConnectionContractAssemblyCache.RequiresSourceCompilation(code);
+        string? contractPath = null;
         if (separateContract)
         {
             StageChanged?.Invoke(RunStage.GeneratingConnections, Options.ConnectionFiles.Count switch
@@ -194,6 +199,7 @@ public abstract class RoslynScriptCompiler : IDotnetProcessCompiler
                         contractReferences.Select(GetReference), target), ct);
                 packageReferences.Add(contract);
                 runtimeFiles.Add(new RuntimeFile(contract, Path.GetFileName(contract)));
+                contractPath = contract;
             }
             catch (ConnectionContractCompilationException ex)
             {
@@ -204,12 +210,14 @@ public abstract class RoslynScriptCompiler : IDotnetProcessCompiler
                 return Failed(Message("", $"Couldn't cache the connection contract: {ex.Message}"));
             }
         }
+        // The copies of earlier contracts beside the script's library are never loaded again.
+        ConnectionContractAssemblyCache.RemoveOthers(_binDir, contractPath);
         var connectionFiles = Options.ConnectionFiles.Select(f => (Path: DebugSourcePath.Canonicalize(
             Path.Combine(_objDir, "Connections", f.Name)), f.Text)).ToList();
         // Argument declarations change the generated facade even without connections.
         var keyCode = code + "\n\0" + generatedSource
             + string.Concat(connectionFiles.Select(f => "\n\0" + f.Path + "\n" + f.Text));
-        var key = Fingerprint(keyCode, pack, [sourcePath, generatedPath], userReferences, packageReferences, runtimeFiles, generatorPaths);
+        var key = Fingerprint(keyCode, pack, [sourcePath, generatedPath, connectionsPath], userReferences, packageReferences, runtimeFiles, generatorPaths);
         var keyPath = Path.Combine(_objDir, Options.OutputName + ".roslyn.key");
         if (IsUpToDate(keyPath, key))
         {
@@ -233,14 +241,17 @@ public abstract class RoslynScriptCompiler : IDotnetProcessCompiler
 
         var scriptText = SourceText.From(code, Encoding.UTF8, SourceHashAlgorithm.Sha256);
         var scriptTree = TransformScriptTree(Parse(scriptText, sourcePath, target, ct));
-        var generatedTree = Parse(SourceText.From(generatedSource, Encoding.UTF8, SourceHashAlgorithm.Sha256),
+        var generatedTree = Parse(SourceText.From(baseSource, Encoding.UTF8, SourceHashAlgorithm.Sha256),
             generatedPath, target, ct);
+        SyntaxTree[] connectionsTree = Options.ConnectionSource is { } connectionsSource
+            ? [Parse(SourceText.From(connectionsSource, Encoding.UTF8, SourceHashAlgorithm.Sha256), connectionsPath, target, ct)]
+            : [];
 
         var references = frameworkReferences.Concat([Options.RuntimeLibPath]).Concat(userReferences).Concat(packageReferences)
             .Select(GetReference);
         var connectionTrees = separateContract ? [] : connectionFiles
             .Select(f => Parse(SourceText.From(f.Text, Encoding.UTF8, SourceHashAlgorithm.Sha256), f.Path, target, ct)).ToArray();
-        var compilation = CreateCompilation(Options.OutputName, [scriptTree, generatedTree, .. connectionTrees], references, target);
+        var compilation = CreateCompilation(Options.OutputName, [scriptTree, generatedTree, .. connectionsTree, .. connectionTrees], references, target);
 
         var diagnostics = new List<RoslynDiagnostic>();
         var generators = generatorPaths.SelectMany(p => GetGenerators(p)).ToImmutableArray();

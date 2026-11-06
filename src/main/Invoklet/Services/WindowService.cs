@@ -75,6 +75,14 @@ public sealed class WindowService : IWindowService
         return await dialog.ShowDialog<SecretAccessChoice?>(owner) ?? SecretAccessChoice.Deny;
     }
 
+    public async Task<bool> ConfirmSecretChangeAsync(string scriptName, string secretName, bool remove, CancellationToken cancellationToken = default)
+    {
+        if (MainWindow is not { } owner || cancellationToken.IsCancellationRequested) return false;
+        var dialog = new SecretChangeDialog(scriptName, secretName, remove);
+        await using var stopped = cancellationToken.Register(() => dialog.Dispatcher.Post(() => dialog.Close()));
+        return await dialog.ShowDialog<bool?>(owner) == true;
+    }
+
     public Task ShowPreferencesAsync()
         => ShowDialogAsync(_preferencesWindowFactory());
 
@@ -266,7 +274,7 @@ public sealed class WindowService : IWindowService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            await ShowErrorAsync("Open Text File Failed", $"Could not open '{fullPath}':\n{ex.Message}");
+            await ShowErrorAsync("Open Text File Failed", FileErrorText.Describe("Could not open", fullPath, ex));
             return;
         }
 

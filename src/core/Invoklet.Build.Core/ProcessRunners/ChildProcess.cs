@@ -155,12 +155,15 @@ public sealed class ChildProcess : IChildProcess
         startInfo.Environment[CancelFileEnvVar] = cancelFile;
         SecretKeys.RemoveFrom(startInfo);
         if (options.StartupHook is { } hook)
-            startInfo.Environment[StartupHooksEnvVar] = startInfo.Environment.TryGetValue(StartupHooksEnvVar, out var others) && !string.IsNullOrEmpty(others)
-                ? others + Path.PathSeparator + hook
-                : hook;
+            startInfo.Environment[StartupHooksEnvVar] = WithStartupHook(startInfo.Environment.TryGetValue(StartupHooksEnvVar, out var hooks) ? hooks : null, hook);
 
         return new ChildProcess(startInfo) { _cancelFilePath = cancelFile };
     }
+
+    /// <summary>The startup hooks <paramref name="hooks"/> (as the environment names them) with <paramref name="hook"/> last, so the
+    /// user's own run first.</summary>
+    internal static string WithStartupHook(string? hooks, string hook) =>
+        string.IsNullOrEmpty(hooks) ? hook : hooks + Path.PathSeparator + hook;
 
     /// <summary>Creates a process for the netcoredbg DAP debugger.</summary>
     public static ChildProcess ForDebugger(ExecutionOptions options)

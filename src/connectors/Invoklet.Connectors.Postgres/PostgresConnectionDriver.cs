@@ -1,5 +1,6 @@
 using Invoklet.Connectors.EfCore;
 using Invoklet.Contracts.Connections;
+using Invoklet.Format.MdRun;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -27,6 +28,12 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
 
     protected override string DefaultConnectionString => "Host=localhost;Port=5432;Database=postgres;Username=postgres";
 
+    // Where libpq and Npgsql look for the password file when none is named, under the user's home ("~", which Invoklet expands where
+    // the file is read: Npgsql takes Passfile as it is written).
+    internal static string DefaultPassfile => OperatingSystem.IsWindows() ? @"~\AppData\Roaming\postgresql\pgpass.conf" : "~/.pgpass";
+
+    private static readonly ConnectionStringPart Passfile = new("Passfile", "pgpass file", Example: DefaultPassfile);
+
     // Npgsql's keys and the synonyms it takes for them.
     protected override IReadOnlyList<ConnectionStringPart> ConnectionStringParts { get; } =
     [
@@ -35,7 +42,7 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
         new("Database", "Database", ["DB"], "postgres"),
         new("Username", "Username", ["User ID", "UserID", "User Name", "UID", "User"], "postgres"),
         new("Password", "Password", ["PWD", "PSW"], "${secret:name}", IsSecret: true),
-        new("Passfile", "pgpass file", Example: "~/.pgpass"),
+        Passfile,
     ];
 
     private static readonly ConnectionStringPart IntegratedSecurity = new("Integrated Security", "Integrated Security");
@@ -44,7 +51,7 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
     [
         new("Password", ["Host", "Port", "Database", "Username", "Password"]),
         new("pgpass file", ["Host", "Port", "Database", "Username", "Passfile"],
-            Hint: "Password from ~/.pgpass or PGPASSFILE."),
+            Hint: "~ is your home folder.", Defaults: [new(Passfile, DefaultPassfile)]),
         new("Kerberos (GSSAPI)", ["Host", "Port", "Database", "Username"], [new(IntegratedSecurity, "true")],
             Hint: "Your Kerberos ticket (kinit)."),
     ];
@@ -72,6 +79,37 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
         }
     }
 
+    /// <summary>The connection string with a password file named from the home folder ("~/.pgpass") under <paramref name="home"/>.</summary>
+    internal static string ExpandPassfile(string connectionString, string home)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        if (builder.Passfile is not { } passfile || !(passfile == "~" || passfile.StartsWith("~/", StringComparison.Ordinal) || passfile.StartsWith("~\\", StringComparison.Ordinal)))
+            return connectionString;
+        builder.Passfile = Path.Join(home, passfile[1..].TrimStart('/', '\\'));
+        return builder.ConnectionString;
+    }
+
+    private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    protected override (string ConnectionString, string? Schema) ReadingTarget(IReadOnlyDictionary<string, MdRunValue> resolvedParams, string? scriptDirectory)
+    {
+        var (connectionString, schema) = base.ReadingTarget(resolvedParams, scriptDirectory);
+        return (ExpandPassfile(connectionString, Home), schema);
+    }
+
+    // The script runs for whoever runs it: "~" is that user's home.
+    protected override string ConstructorStatements(MdRunConnection connection, ConnectionCodeContext context) =>
+        base.ConstructorStatements(connection, context)
+        + "        {\n"
+        + "            var builder = new global::Npgsql.NpgsqlConnectionStringBuilder(ConnectionString);\n"
+        + "            if (builder.Passfile is { } passfile && (passfile == \"~\" || passfile.StartsWith(\"~/\") || passfile.StartsWith(\"~\\\\\")))\n"
+        + "            {\n"
+        + "                builder.Passfile = global::System.IO.Path.Join(global::System.Environment.GetFolderPath(global::System.Environment.SpecialFolder.UserProfile),\n"
+        + "                    passfile.Substring(1).TrimStart('/', '\\\\'));\n"
+        + "                ConnectionString = builder.ConnectionString;\n"
+        + "            }\n"
+        + "        }\n";
+
     protected override void UseProvider(DbContextOptionsBuilder options, string connectionString) =>
         options.UseNpgsql(new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ToString());
 
@@ -95,7 +133,7 @@ public sealed class PostgresConnectionDriver : EfCoreConnectionDriver
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
         return string.IsNullOrEmpty(builder.Password)
             ? $"The server asked for a password. The connection string has none, and no line of the pgpass file matches {builder.Host}:{builder.Port}:{builder.Database}:{builder.Username} "
-              + "(~/.pgpass, or the file named by Passfile= or PGPASSFILE; each line is host:port:database:user:password). " + message
+              + $"({DefaultPassfile}, or the file named by Passfile= or PGPASSFILE; each line is host:port:database:user:password). " + message
             : $"The server refused the password of user '{builder.Username}'. {message}";
     }
 }

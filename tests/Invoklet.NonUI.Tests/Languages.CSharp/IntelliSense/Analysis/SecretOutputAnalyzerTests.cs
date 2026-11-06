@@ -1,43 +1,55 @@
 using Invoklet.Contracts.IntelliSense;
-using Invoklet.Languages.CSharp;
-using Invoklet.Languages.CSharp.IntelliSense;
-using Microsoft.Extensions.Logging.Abstractions;
+using Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Analysis.Fixtures;
 using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Analysis;
 
 // A secret written to the output stays in the results and the run's saved output: the editor warns, and offers to take the output away.
-// Through the real IntelliSense service, with Invoklet.Runtime referenced, as the editor runs it.
+// Through the real IntelliSense service, as the editor runs it.
 [Trait("Platform", "Independent")]
 public sealed class SecretOutputAnalyzerTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
-
-    private static CSharpIntelliSenseService CreateService()
-    {
-        var references = new CSharpReferenceService();
-        return new CSharpIntelliSenseService(
-            references.GetDefault().Append(references.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance)
-        {
-            BackgroundAnalysisDebounce = TimeSpan.Zero,
-        };
-    }
-
     [Theory]
     [InlineData("Util.GetSecret(\"billing\").Dump();\n", ".Dump()")]
     [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.WriteLine($\"token {t}\");\n", "Console.WriteLine")]
     [InlineData("var t = Util.GetSecret(\"billing\");\nvar u = t;\n(\"Bearer \" + u).Dump(\"auth\");\n", ".Dump()")]
     [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.Write(\"{0}\", t ?? \"none\");\n", "Console.Write")]
-    public async Task ASecretWrittenToTheOutput_Should_BeWarnedAbout(string code, string sink)
+    [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.Error.WriteLine(t);\n", "Console.Error.WriteLine")]
+    [InlineData("var t = Util.GetSecret(\"billing\");\nSystem.Diagnostics.Debug.WriteLine(t);\n", "Debug.WriteLine")]
+    [InlineData("var t = Util.GetSecret(\"billing\");\nSystem.Diagnostics.Trace.TraceInformation(t);\n", "Trace.TraceInformation")]
+    public async Task NotifyTextChanged_ASecretWrittenToTheOutput_WarnsNamingTheSecretAndTheOutput(string code, string sink)
     {
-        using var service = CreateService();
+        // Arrange
+        using var sut = new SecretOutputAnalyzerFixture().CreateSut();
+        var warnings = SecretOutputAnalyzerFixture.SecretWarnings(sut, code);
 
-        var warnings = await SecretWarningsAsync(service, code);
+        // Act
+        sut.NotifyTextChanged(code);
+        var reported = await warnings.WaitAsync(SecretOutputAnalyzerFixture.Timeout, TestContext.Current.CancellationToken);
 
-        var warning = Assert.Single(warnings);
+        // Assert
+        var warning = Assert.Single(reported);
         Assert.Equal(DiagnosticSeverity.Warning, warning.Severity);
         Assert.Contains("'billing'", warning.Message);
         Assert.Contains(sink, warning.Message);
+    }
+
+    // A connection string built from a ${secret:…} holds the secret.
+    [Fact]
+    public async Task NotifyTextChanged_AConnectionStringWithASecretWritten_WarnsNamingTheConnectionsSecret()
+    {
+        // Arrange
+        using var sut = new SecretOutputAnalyzerFixture().CreateSut();
+        sut.UpdateExecutionContext(SecretOutputAnalyzerFixture.WithSecretConnection());
+        const string code = "Connections.Shop.ConnectionString.Dump();\n";
+        var warnings = SecretOutputAnalyzerFixture.SecretWarnings(sut, code);
+
+        // Act
+        sut.NotifyTextChanged(code);
+        var reported = await warnings.WaitAsync(SecretOutputAnalyzerFixture.Timeout, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Contains("'shop-db'", Assert.Single(reported).Message);
     }
 
     // What is computed from a secret is not the secret; output that never holds it says nothing about it.
@@ -45,11 +57,18 @@ public sealed class SecretOutputAnalyzerTests
     [InlineData("var t = Util.GetSecret(\"billing\");\nt.Length.Dump();\n")]
     [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.WriteLine(\"connected\");\n")]
     [InlineData("var t = \"public\";\nt.Dump();\n")]
-    public async Task OutputWithoutTheSecret_Should_NotBeWarnedAbout(string code)
+    public async Task NotifyTextChanged_OutputWithoutTheSecret_WarnsOfNothing(string code)
     {
-        using var service = CreateService();
+        // Arrange
+        using var sut = new SecretOutputAnalyzerFixture().CreateSut();
+        var warnings = SecretOutputAnalyzerFixture.SecretWarnings(sut, code);
 
-        Assert.Empty(await SecretWarningsAsync(service, code));
+        // Act
+        sut.NotifyTextChanged(code);
+        var reported = await warnings.WaitAsync(SecretOutputAnalyzerFixture.Timeout, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Empty(reported);
     }
 
     // Only the Dump goes; the line goes only when what is left could not stand as a statement.
@@ -62,32 +81,19 @@ public sealed class SecretOutputAnalyzerTests
         "var t = Util.GetSecret(\"billing\");\nConsole.WriteLine(1);\n")]
     [InlineData("var t = Util.GetSecret(\"billing\");\n// shows the token\nConsole.WriteLine(t);\nConsole.WriteLine(1);\n", "Remove the output of the secret 'billing'",
         "var t = Util.GetSecret(\"billing\");\n// shows the token\nConsole.WriteLine(1);\n")]
-    public async Task TheFix_Should_TakeTheOutputAway_AndKeepTheRest(string code, string title, string expected)
+    public async Task MaterializeFixAsync_TheFixOfAWarning_TakesTheOutputAwayAndKeepsTheRest(string code, string title, string expected)
     {
-        using var service = CreateService();
-        var listed = new TaskCompletionSource<IReadOnlyList<ICodeFixInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        service.CodeFixesChanged += (analyzed, fixes) =>
-        {
-            if (analyzed == code && fixes.Any(f => f.Title == title)) listed.TrySetResult(fixes);
-        };
+        // Arrange
+        using var sut = new SecretOutputAnalyzerFixture().CreateSut();
+        var offered = SecretOutputAnalyzerFixture.Fix(sut, code, title);
+        sut.NotifyTextChanged(code);
+        var fix = await offered.WaitAsync(SecretOutputAnalyzerFixture.Timeout, TestContext.Current.CancellationToken);
 
-        service.NotifyTextChanged(code);
-        var fix = (await listed.Task.WaitAsync(Timeout, TestContext.Current.CancellationToken)).First(f => f.Title == title);
-        var applied = await service.MaterializeFixAsync(code, fix.Key, TestContext.Current.CancellationToken);
+        // Act
+        var applied = await sut.MaterializeFixAsync(code, fix.Key, TestContext.Current.CancellationToken);
 
+        // Assert
         Assert.NotNull(applied);
         Assert.Equal(expected, applied.NewCode);
-    }
-
-    private static async Task<IReadOnlyList<IDiagnosticInfo>> SecretWarningsAsync(CSharpIntelliSenseService service, string code)
-    {
-        var analyzed = new TaskCompletionSource<IReadOnlyList<IDiagnosticInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        service.DiagnosticsChanged += (text, diagnostics) =>
-        {
-            if (text == code) analyzed.TrySetResult(diagnostics);
-        };
-        service.NotifyTextChanged(code);
-        var diagnostics = await analyzed.Task.WaitAsync(Timeout, TestContext.Current.CancellationToken);
-        return [.. diagnostics.Where(d => d.Message.Contains("is written to the output", StringComparison.Ordinal))];
     }
 }

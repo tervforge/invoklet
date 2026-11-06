@@ -3,6 +3,66 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.6] — 2026-11-06
+
+### Changed
+
+- A script with a PostgreSQL, SQL Server, SQLite or OpenAPI connection runs faster after an edit: the
+  database's context or the API's client is compiled once, when its schema is read, instead of with
+  every change to the script. Schemas read by an earlier version are read again on the next run.
+- The `invoklet` command keeps each script's build between runs, as the window does, so an unchanged
+  script is not compiled again. A script already running in another terminal is built in a temporary
+  folder.
+- A run tells what takes the time before the script starts: which connections' schemas are read and
+  which NuGet package is checked, downloaded or installed, with the time counting up beside it. The
+  `invoklet` command prints the same in a terminal, on standard error.
+- The SDK list offers .NET 6 to .NET 10: a newer SDK, a preview included, needs a newer C#
+  compiler than the one Invoklet is built with. A script whose `targetSdk` isn't in the list says
+  *not available* instead of *not installed*.
+- The setup asks before it installs, naming the version of the .NET SDK or netcoredbg and the
+  folder it goes to, and installs that version.
+- With *Dotnet path* empty, Invoklet finds `dotnet` itself each time: on `PATH`, where .NET was
+  installed to, in the usual folders of each system (Ubuntu's and Fedora's packages, Homebrew, snap
+  included), and in `~/.dotnet` last.
+- Without a debugger, the bug button is hidden, **Run → Debug Mode** is unavailable, breakpoints
+  can't be set, and Run runs the script normally. Everything comes back once netcoredbg is set up.
+- Switching a script with a database connection to another .NET version switches its EF Core
+  package to the release for that version (EF Core 8 on .NET 8), unless you chose the version.
+
+### Fixed
+
+- `Include`, `AsNoTracking`, `ToListAsync` and the other EF Core extensions work on the tables of a
+  database connection without `using Microsoft.EntityFrameworkCore;` in the script, in completion too.
+- Go to Definition (F12) on a typed script argument opens the code generated for the arguments, as it
+  does for a connection's classes.
+- Choosing **pgpass file** for a PostgreSQL connection fills in the usual file of your system
+  (`~/.pgpass`, or `~\AppData\Roaming\postgresql\pgpass.conf` on Windows), and `~` in that field now
+  means the home folder of whoever runs the script. Before, `~` was passed to the server's driver as
+  it was written and the file wasn't found.
+- Old builds of a connection's schema no longer pile up in a script's build folder.
+- Invoklet no longer keeps the first `dotnet` it found in its settings: a .NET installed later
+  in the usual place is used, and a path stored that way is cleared.
+- Highlighting the occurrences of a symbol no longer logs an error when the caret is past the end
+  of the text, after characters were deleted.
+- Tabs can be reordered by dragging: the tab follows the pointer anywhere over the window, a mark
+  shows where it will go, and the strip scrolls near its ends. The order is kept for the next start.
+  The **+** button follows the last tab, the list of all tabs stays at the right edge, where tabs no
+  longer slide under the buttons, and the strip's scroll bar is a thin line under the tabs.
+- A tab can be moved to a window of its own: drop it well below the strip or outside the window, or
+  use **Move to New Window** in its context menu. The window has its own tabs, editor and results.
+- Typing a value into an argument set no longer takes the focus off the field after each key.
+- The compiler's warnings are no longer added to the Results: the editor already underlines them.
+  The `invoklet` command still writes them to standard error, and `--quiet` (`-q`) leaves them out.
+- **Always Allow** for the secrets holds for the file as you allowed and saved it: a script another
+  program changed (a new download, a copy put in its place) is asked about again.
+- A script allowed to use the secrets asks before it replaces or removes a secret already in the
+  store (`Util.SetSecret`).
+- The warning about a secret written to the output also covers a connection string with a
+  `${secret:…}` in it, `Console.Error`, `Debug.Write*` and `Trace.Write*`.
+- Messages about a file that couldn't be saved, opened, moved or deleted name the file once, say why
+  in plain words and show its folder on a line of its own, instead of repeating the whole path; the
+  confirmation for adding a connection lists its NuGet packages one to a line.
+
 ## [0.11.5] — 2026-11-05
 
 This release improves how scripts access secrets, adds dedicated database sign-in fields, and
@@ -1153,3 +1213,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.5]: https://github.com/tervforge/invoklet/releases/tag/v0.11.5
 [0.10.4]: https://github.com/tervforge/invoklet/releases/tag/v0.10.4
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5
+[0.11.6]: https://github.com/tervforge/invoklet/releases/tag/v0.11.6

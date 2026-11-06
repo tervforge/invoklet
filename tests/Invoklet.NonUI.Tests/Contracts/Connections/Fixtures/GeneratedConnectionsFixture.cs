@@ -28,6 +28,11 @@ internal sealed class GeneratedConnectionsFixture
     public void HasSchema(MdRunConnection connection, params GeneratedSourceFile[] files) =>
         Schemas.Setup(s => s.Get(connection, It.IsAny<string?>())).Returns(new ConnectionSchema("", files, "[]"));
 
+    /// <summary>The driver's clients bring these namespaces to the script.</summary>
+    public void ClientsUse(params string[] namespaces) =>
+        Driver.Setup(d => d.CreateClient(It.IsAny<MdRunConnection>(), It.IsAny<ConnectionCodeContext>()))
+            .Returns((MdRunConnection _, ConnectionCodeContext context) => new ConnectionClientCode($"public sealed class {context.ClassName} {{ }}", namespaces));
+
     /// <summary>The last read of <paramref name="connection"/>'s schema failed, for this reason.</summary>
     public void CouldNotRead(MdRunConnection connection, string why) =>
         Schemas.Setup(s => s.ErrorFor(connection, It.IsAny<string?>())).Returns(why);

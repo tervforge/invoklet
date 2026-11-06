@@ -51,6 +51,8 @@ public class MainWindowChromeTests
         prefs.Setup(p => p.Keyboard).Returns(keyboard);
         prefs.Setup(p => p.Editor).Returns(new EditorSettings());
         prefs.Setup(p => p.CSharp).Returns(new CSharpLanguageSettings());
+        // A debugger is there (a file that exists stands for it), so Debug Mode can be switched.
+        prefs.Setup(p => p.Debugger).Returns(new DebuggerSettings { DebuggerPath = typeof(object).Assembly.Location });
 
         var fileSystem = new Mock<IFileSystemService>();
         fileSystem.Setup(f => f.Folder).Returns(Path.GetTempPath());

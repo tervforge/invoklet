@@ -564,7 +564,7 @@ public class EditorTabRunResultTests
 
             await driver.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-            Assert.Equal("Reading connection schemas…", ctrl.State.ExecStatusText);
+            Assert.Equal("Reading connection schemas (slow)…", ctrl.State.ExecStatusText);
 
 
 
@@ -667,7 +667,7 @@ public class EditorTabRunResultTests
         Assert.Equal(MdRunKind.Statements, request.Kind);
         Assert.Empty(request.References);
         Assert.Empty(request.Arguments);
-        Assert.Equal(new DebuggerSettings().DotnetPath, request.RuntimePath);
+        Assert.Equal(new DebuggerSettings().ResolvedDotnetPath, request.RuntimePath);
         Assert.Equal(new DebuggerSettings().DebuggerPath, request.DebuggerPath);
         Assert.False(request.BreakOnAllExceptions);
         Assert.True(request.BreakOnUncaughtExceptions);

@@ -1,7 +1,6 @@
 using Invoklet.Contracts;
+using Invoklet.NonUI.Tests.App.Services.Secrets.Fixtures;
 using Invoklet.Services;
-using Invoklet.Services.Preferences;
-using Invoklet.Services.Secrets;
 using Moq;
 using Xunit;
 
@@ -10,120 +9,261 @@ namespace Invoklet.NonUI.Tests.App.Services.Secrets;
 // The first time a script asks for a secret the user is asked; Always is kept in the settings, Once until Invoklet closes, a no not at all.
 public sealed class SecretAccessGateTests
 {
-    private static readonly string Script = Path.Combine(Path.GetTempPath(), "report.inv");
-
-    private readonly SecretsSettings _settings = new();
-    private readonly Mock<IPreferencesService> _preferences = new();
-    private readonly List<(string Script, string Secret, bool IsSave)> _asked = [];
-
-    public SecretAccessGateTests() => _preferences.SetupGet(p => p.Secrets).Returns(_settings);
-
-    private SecretAccessGate CreateSut(SecretAccessChoice answer) => new(_preferences.Object, (script, secret, isSave, _) =>
+    [Fact]
+    public async Task MayAccessAsync_AlwaysAllowed_KeepsTheScriptInTheSettings()
     {
-        _asked.Add((script, secret, isSave));
-        return Task.FromResult(answer);
-    });
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Equal([Path.GetFullPath(fixture.ScriptPath)], fixture.Settings.AllowedScripts);
+        fixture.Preferences.Verify(p => p.Save(), Times.Once);
+    }
 
     [Fact]
-    public async Task AlwaysAllow_Should_BeKeptForTheFile_AndAskedNoMore()
+    public async Task MayAccessAsync_AScriptAlwaysAllowedBefore_AsksNoMore()
     {
-        var sut = CreateSut(SecretAccessChoice.Always);
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        await fixture.CreateSut().MayAccessAsync(fixture.Request(), CancellationToken.None);
+        fixture.Answer = SecretAccessChoice.Deny;
+        var sut = fixture.CreateSut();
 
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "other", true), CancellationToken.None));
-        Assert.True(await CreateSut(SecretAccessChoice.Deny).MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("other", isSave: true), CancellationToken.None);
 
-        Assert.Equal([("report.inv", "billing", false)], _asked);
-        Assert.Equal([Path.GetFullPath(Script)], _settings.AllowedScripts);
-        _preferences.Verify(p => p.Save(), Times.Once);
+        // Assert
+        Assert.True(allowed);
+        Assert.Equal([("report.inv", "billing", false)], fixture.Asked);
+    }
+
+    // A file another program changed (a new download, a replaced copy) is not the file the user allowed.
+    [Fact]
+    public async Task MayAccessAsync_AnAllowedScriptChangedByAnotherProgram_AsksAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+        fixture.FileContents = "BBBB";
+
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.Equal(2, fixture.Asked.Count);
+    }
+
+    // The user's own edits, saved by Invoklet, keep the script allowed.
+    [Fact]
+    public async Task ScriptWritten_AnAllowedScriptSavedByInvoklet_KeepsItAllowed()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+        byte[] saved = [1, 2, 3];
+        fixture.FileContents = SecretAccessGateFixture.HashOf(saved);
+
+        // Act
+        sut.ScriptWritten(fixture.ScriptPath, saved);
+        var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Single(fixture.Asked);
+    }
+
+    // An earlier version kept the path only: such a script is asked about once more, and its contents are kept then.
+    [Fact]
+    public async Task MayAccessAsync_AScriptAllowedWithoutItsContents_AsksAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        fixture.Settings.AllowedScripts.Add(fixture.ScriptPath);
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.Single(fixture.Asked);
+        Assert.Equal("AAAA", fixture.Settings.AllowedScriptHashes[fixture.ScriptPath]);
+    }
+
+    // A script allowed before may still not wipe what another script needs: replacing a kept secret is asked about that once.
+    [Fact]
+    public async Task MayAccessAsync_AnAllowedScriptReplacingAKeptSecret_AsksAboutTheChange()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Equal([("report.inv", "db", false)], fixture.ChangesAsked);
+    }
+
+    [Fact]
+    public async Task MayAccessAsync_ARemovalTheUserRefuses_IsNotAllowed()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always, AllowChange = false };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Remove), CancellationToken.None);
+
+        // Assert
+        Assert.False(allowed);
+        Assert.Equal([("report.inv", "db", true)], fixture.ChangesAsked);
+    }
+
+    // The first question already says the script wants to change the secret: it isn't asked twice in a row.
+    [Fact]
+    public async Task MayAccessAsync_AScriptAskedAboutJustNow_IsNotAskedAboutTheChangeToo()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Empty(fixture.ChangesAsked);
     }
 
     // Always is kept only in the settings: taking it away there (the Secret Store window) makes the next request ask again at once.
     [Fact]
-    public async Task AlwaysAllow_TakenAwayInTheSettings_Should_BeAskedAgain()
+    public async Task MayAccessAsync_AlwaysTakenAwayInTheSettings_AsksAgain()
     {
-        var sut = CreateSut(SecretAccessChoice.Always);
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+        fixture.Settings.AllowedScripts.Clear();
 
-        _settings.AllowedScripts.Clear();
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
 
-        Assert.Equal(2, _asked.Count);
+        // Assert
+        Assert.Equal(2, fixture.Asked.Count);
     }
 
     // The script was stopped while the question was open: whatever the dialog then says, the script gets no secret and nothing is kept.
     [Fact]
-    public async Task AQuestionTheRunEndedDuring_Should_Refuse_AndRememberNothing()
+    public async Task MayAccessAsync_TheRunStoppedDuringTheQuestion_RefusesAndKeepsNothing()
     {
+        // Arrange
         using var stopped = new CancellationTokenSource();
-        var sut = new SecretAccessGate(_preferences.Object, (_, _, _, token) =>
-        {
-            stopped.Cancel();
-            return Task.FromResult(token.IsCancellationRequested ? SecretAccessChoice.Deny : SecretAccessChoice.Always);
-        });
+        var fixture = new SecretAccessGateFixture { StoppedWhileAsking = stopped };
+        var sut = fixture.CreateSut();
 
-        Assert.False(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), stopped.Token));
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request(), stopped.Token);
 
-        Assert.Empty(_settings.AllowedScripts);
-        _preferences.Verify(p => p.Save(), Times.Never);
+        // Assert
+        Assert.False(allowed);
+        Assert.Empty(fixture.Settings.AllowedScripts);
+        fixture.Preferences.Verify(p => p.Save(), Times.Never);
     }
 
     [Fact]
-    public async Task AllowOnce_Should_LastUntilInvokletCloses_AndNotBeSaved()
+    public async Task MayAccessAsync_AllowedOnce_AsksNoMoreWhileInvokletRunsAndSavesNothing()
     {
-        var sut = CreateSut(SecretAccessChoice.Once);
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
 
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
-        Assert.True(await CreateSut(SecretAccessChoice.Once).MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
 
-        Assert.Equal(2, _asked.Count);
-        Assert.Empty(_settings.AllowedScripts);
-        _preferences.Verify(p => p.Save(), Times.Never);
+        // Assert
+        Assert.True(allowed);
+        Assert.Single(fixture.Asked);
+        Assert.Empty(fixture.Settings.AllowedScripts);
+        fixture.Preferences.Verify(p => p.Save(), Times.Never);
+    }
+
+    // Once lasts as long as this Invoklet: a new one (a new gate) asks again.
+    [Fact]
+    public async Task MayAccessAsync_AllowedOnceByAnEarlierInvoklet_AsksAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        await fixture.CreateSut().MayAccessAsync(fixture.Request(), CancellationToken.None);
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.Equal(2, fixture.Asked.Count);
     }
 
     [Fact]
-    public async Task DontAllow_Should_Refuse_AndAskAgainNextTime()
+    public async Task MayAccessAsync_Denied_RefusesAndAsksAgainNextTime()
     {
-        var sut = CreateSut(SecretAccessChoice.Deny);
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Deny };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
 
-        Assert.False(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
-        Assert.False(await sut.MayAccessAsync(new SecretAccess(Script, "billing", false), CancellationToken.None));
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
 
-        Assert.Equal(2, _asked.Count);
+        // Assert
+        Assert.False(allowed);
+        Assert.Equal(2, fixture.Asked.Count);
     }
 
     // An unsaved script has no file to remember: Always Allow lasts until Invoklet closes, and nothing is saved.
     [Fact]
-    public async Task AnUnsavedScript_Should_BeAllowedOnlyUntilInvokletCloses()
+    public async Task MayAccessAsync_AnUnsavedScriptAlwaysAllowed_AllowsUntilInvokletClosesWithoutSaving()
     {
-        var sut = CreateSut(SecretAccessChoice.Always);
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(unsaved: true), CancellationToken.None);
 
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(null, "billing", false), CancellationToken.None));
-        Assert.True(await sut.MayAccessAsync(new SecretAccess(null, "billing", false), CancellationToken.None));
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request(unsaved: true), CancellationToken.None);
 
-        Assert.Equal([("an unsaved script", "billing", false)], _asked);
-        Assert.Empty(_settings.AllowedScripts);
+        // Assert
+        Assert.True(allowed);
+        Assert.Equal([("an unsaved script", "billing", false)], fixture.Asked);
+        Assert.Empty(fixture.Settings.AllowedScripts);
     }
 
     // Two requests while the question is open (a script asking for two secrets, two runs at once) get one question.
     [Fact]
-    public async Task RequestsWhileTheQuestionIsOpen_Should_BeAskedOnce()
+    public async Task MayAccessAsync_TwoRequestsWhileTheQuestionIsOpen_AsksOnceForBoth()
     {
-        var answer = new TaskCompletionSource<SecretAccessChoice>();
-        var asked = 0;
-        var sut = new SecretAccessGate(_preferences.Object, (_, _, _, _) =>
-        {
-            asked++;
-            return answer.Task;
-        });
+        // Arrange
+        var fixture = new SecretAccessGateFixture { OpenQuestion = new TaskCompletionSource<SecretAccessChoice>() };
+        var sut = fixture.CreateSut();
 
-        var first = sut.MayAccessAsync(new SecretAccess(Script, "a", false), CancellationToken.None);
-        var second = sut.MayAccessAsync(new SecretAccess(Script, "b", false), CancellationToken.None);
-        answer.SetResult(SecretAccessChoice.Once);
-
+        // Act
+        var first = sut.MayAccessAsync(fixture.Request("a"), CancellationToken.None);
+        var second = sut.MayAccessAsync(fixture.Request("b"), CancellationToken.None);
+        fixture.OpenQuestion.SetResult(SecretAccessChoice.Once);
         var results = await Task.WhenAll(first, second);
+
+        // Assert
         Assert.All(results, Assert.True);
-        Assert.Equal(1, asked);
+        Assert.Single(fixture.Asked);
     }
 }
