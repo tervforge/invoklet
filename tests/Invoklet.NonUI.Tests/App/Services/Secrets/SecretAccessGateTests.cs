@@ -79,6 +79,25 @@ public sealed class SecretAccessGateTests
         Assert.Single(fixture.Asked);
     }
 
+    [Fact]
+    public async Task ScriptWritten_AWritableScriptSavedByInvoklet_KeepsWriteAccess()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request("db", isSave: true), CancellationToken.None);
+        byte[] saved = [1, 2, 3];
+        fixture.FileContents = SecretAccessGateFixture.HashOf(saved);
+
+        // Act
+        sut.ScriptWritten(fixture.ScriptPath, saved);
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Empty(fixture.ChangesAsked);
+    }
+
     // An earlier version kept the path only: such a script is asked about once more, and its contents are kept then.
     [Fact]
     public async Task MayAccessAsync_AScriptAllowedWithoutItsContents_AsksAgain()
@@ -98,7 +117,7 @@ public sealed class SecretAccessGateTests
 
     // A script allowed before may still not wipe what another script needs: replacing a kept secret is asked about that once.
     [Fact]
-    public async Task MayAccessAsync_AnAllowedScriptReplacingAKeptSecret_AsksAboutTheChange()
+    public async Task MayAccessAsync_AnAllowedScriptApprovesAReplacement_RemembersWriteAccessForRemoval()
     {
         // Arrange
         var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
@@ -107,10 +126,70 @@ public sealed class SecretAccessGateTests
 
         // Act
         var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+        var removalAllowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Remove), CancellationToken.None);
 
         // Assert
         Assert.True(allowed);
+        Assert.True(removalAllowed);
         Assert.Equal([("report.inv", "db", false)], fixture.ChangesAsked);
+        Assert.Equal([Path.GetFullPath(fixture.ScriptPath)], fixture.Settings.WritableScripts);
+    }
+
+    [Fact]
+    public async Task MayAccessAsync_AnAllowedScriptCreatesASecret_GrantsWriteAccessWithoutASecondPrompt()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Act
+        var created = await sut.MayAccessAsync(fixture.Request("db", isSave: true), CancellationToken.None);
+        var replaced = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(created);
+        Assert.True(replaced);
+        Assert.Empty(fixture.ChangesAsked);
+        Assert.Equal([Path.GetFullPath(fixture.ScriptPath)], fixture.Settings.WritableScripts);
+    }
+
+    [Fact]
+    public async Task MayAccessAsync_AWritableScriptChangedOutsideInvoklet_AsksForAccessAndWriteAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request("db", isSave: true), CancellationToken.None);
+        fixture.FileContents = "BBBB";
+
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+        var replaced = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(replaced);
+        Assert.Equal(2, fixture.Asked.Count);
+        Assert.Single(fixture.ChangesAsked);
+        Assert.Equal([Path.GetFullPath(fixture.ScriptPath)], fixture.Settings.WritableScripts);
+    }
+
+    [Fact]
+    public async Task MayAccessAsync_SessionWritePermissionAndExternalChange_AsksForWriteAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request("db", isSave: true), CancellationToken.None);
+        await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+        fixture.FileContents = "BBBB";
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Single(fixture.ChangesAsked);
     }
 
     [Fact]
@@ -127,6 +206,7 @@ public sealed class SecretAccessGateTests
         // Assert
         Assert.False(allowed);
         Assert.Equal([("report.inv", "db", true)], fixture.ChangesAsked);
+        Assert.Empty(fixture.Settings.WritableScripts);
     }
 
     // The first question already says the script wants to change the secret: it isn't asked twice in a row.

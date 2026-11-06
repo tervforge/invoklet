@@ -8,8 +8,9 @@ namespace Invoklet.Services.Secrets;
 /// <summary>
 /// Whether a running script may use the Secret Store: the first time a script asks, the user is asked. Always Allow is kept in the
 /// settings by the script's full path and the contents of its file, which Invoklet's own saves keep up to date: a file another program
-/// changed is asked about again. Allow Once and a script not saved yet (one answer for all of them) last until Invoklet closes. A no is
-/// not remembered: the next run asks again.
+/// changed is asked about again. Read access and read/write access are kept separately; creating a secret or approving one replacement
+/// grants write access to that version of the script. Allow Once and a script not saved yet last until Invoklet closes. A no is not
+/// remembered: the next run asks again.
 /// </summary>
 /// <param name="confirmChange">Whether an allowed script may replace (or, <c>true</c>, remove) a secret already kept: script name, secret,
 /// removes. Without it, an allowed script changes secrets unasked.</param>
@@ -25,6 +26,7 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     private const string Unsaved = "";
 
     private readonly HashSet<string> _allowedThisSession = new(PathComparer);
+    private readonly Dictionary<string, string?> _writableThisSession = new(PathComparer);
 
     // The UI thread's dispatcher, taken where the gate is made (on the UI thread): requests come on other threads, where reading the
     // static Dispatcher.UIThread while it is unset would make that thread the UI thread.
@@ -44,7 +46,7 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     {
         var script = access.ScriptPath is { Length: > 0 } path ? Path.GetFullPath(path) : Unsaved;
         var changes = access.IsSave && access.Change != SecretChange.None && confirmChange is not null;
-        if (IsAllowed(script) && !changes) return true;
+        if (IsAllowed(script) && !changes && (!access.IsSave || CanWrite(script))) return true;
         await _asking.WaitAsync(cancellationToken);
         try
         {
@@ -52,8 +54,18 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
             // An allowed script replacing or removing a kept secret is asked about that one change. A script asked about just now was told
             // it wants to change the secret, and isn't asked twice.
             if (IsAllowed(script))
-                return !changes || (await confirmChange!(name, access.Name, access.Change == SecretChange.Remove, cancellationToken)
-                    && !cancellationToken.IsCancellationRequested);
+            {
+                if (!changes)
+                {
+                    if (access.IsSave) GrantWrite(script);
+                    return true;
+                }
+                if (CanWrite(script)) return true;
+                var changeAllowed = await confirmChange!(name, access.Name, access.Change == SecretChange.Remove, cancellationToken)
+                    && !cancellationToken.IsCancellationRequested;
+                if (changeAllowed) GrantWrite(script);
+                return changeAllowed;
+            }
             var choice = await ask(name, access.Name, access.IsSave, cancellationToken);
             if (choice == SecretAccessChoice.Deny || cancellationToken.IsCancellationRequested) return false;
             // Always is kept only in the settings, so taking it away there (the Secret Store window) works at once.
@@ -61,12 +73,15 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
             {
                 var settings = preferences.Secrets;
                 if (!settings.AllowedScripts.Contains(script, PathComparer)) settings.AllowedScripts.Add(script);
-                settings.AllowedScriptHashes[script] = contents;
+                var key = Stored(settings, script) ?? script;
+                settings.AllowedScriptHashes[key] = contents;
+                SetWritable(settings, key, access.IsSave);
                 preferences.Save();
             }
             else
             {
                 lock (_allowedThisSession) _allowedThisSession.Add(script);
+                if (access.IsSave) RememberSessionWrite(script);
             }
             return true;
         }
@@ -81,8 +96,11 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     /// </summary>
     public void ScriptWritten(string path, byte[] bytes)
     {
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
+        lock (_writableThisSession)
+            if (_writableThisSession.ContainsKey(path)) _writableThisSession[path] = hash;
         if (preferences.Secrets is not { } settings || !settings.AllowedScripts.Contains(path, PathComparer)) return;
-        settings.AllowedScriptHashes[Stored(settings, path) ?? path] = Convert.ToHexString(SHA256.HashData(bytes));
+        settings.AllowedScriptHashes[Stored(settings, path) ?? path] = hash;
         preferences.Save();
     }
 
@@ -90,10 +108,54 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     {
         lock (_allowedThisSession)
             if (_allowedThisSession.Contains(script)) return true;
-        if (script == Unsaved || preferences.Secrets is not { } settings || !settings.AllowedScripts.Contains(script, PathComparer)) return false;
+        return PersistedPermissionKey(script) is not null;
+    }
+
+    private bool CanWrite(string script)
+    {
+        string? allowed;
+        bool allowedThisSession;
+        lock (_writableThisSession)
+        {
+            allowedThisSession = _writableThisSession.TryGetValue(script, out allowed);
+        }
+        if (allowedThisSession)
+            return script == Unsaved || string.Equals(allowed, _fingerprint(script), StringComparison.OrdinalIgnoreCase);
+        return PersistedPermissionKey(script) is { } key
+            && preferences.Secrets.WritableScripts.Contains(key, PathComparer);
+    }
+
+    private void GrantWrite(string script)
+    {
+        if (PersistedPermissionKey(script) is { } key)
+        {
+            var settings = preferences.Secrets;
+            if (settings.WritableScripts.Contains(key, PathComparer)) return;
+            settings.WritableScripts.Add(key);
+            preferences.Save();
+            return;
+        }
+        RememberSessionWrite(script);
+    }
+
+    private void RememberSessionWrite(string script)
+    {
+        var fingerprint = script == Unsaved ? null : _fingerprint(script);
+        lock (_writableThisSession) _writableThisSession[script] = fingerprint;
+    }
+
+    private string? PersistedPermissionKey(string script)
+    {
+        if (script == Unsaved || preferences.Secrets is not { } settings || !settings.AllowedScripts.Contains(script, PathComparer)) return null;
         // Allowed as it was: a file changed since by another program, or allowed by a version that kept no contents, is asked about again.
         return Stored(settings, script) is { } key && settings.AllowedScriptHashes.TryGetValue(key, out var allowed)
-            && string.Equals(allowed, _fingerprint(script), StringComparison.OrdinalIgnoreCase);
+            && string.Equals(allowed, _fingerprint(script), StringComparison.OrdinalIgnoreCase) ? key : null;
+    }
+
+    private static void SetWritable(SecretsSettings settings, string script, bool writable)
+    {
+        settings.WritableScripts.RemoveAll(path => PathComparer.Equals(path, script));
+        if (writable) settings.WritableScripts.Add(script);
     }
 
     // The key the settings keep the script's contents under, written as it was allowed.

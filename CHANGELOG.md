@@ -10,6 +10,11 @@ Notable changes in each Invoklet release. Downloads are on the
 - Invoklet checks the public GitHub release metadata once a day after startup and shows a quiet
   notification when a newer version is available. It does not download or install updates.
 
+### Changed
+
+- A script that creates a secret or receives approval to replace or remove one keeps read/write
+  access until its file is changed outside Invoklet, so repeated runs no longer show the same prompt.
+
 ## [0.11.6] — 2026-11-06
 
 ### Changed

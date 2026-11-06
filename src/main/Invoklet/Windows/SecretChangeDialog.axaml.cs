@@ -13,6 +13,7 @@ public partial class SecretChangeDialog : InvokletDialogWindow
         Layout.Message = remove
             ? "The secret is kept in your Secret Store. Other scripts that use it won't find it."
             : "The secret is already in your Secret Store. Its value will be replaced.";
+        Layout.Message += " Allowing this remembers read/write access until the script changes outside Invoklet.";
         AllowButton.Content = remove ? "Remove" : "Replace";
     }
 
