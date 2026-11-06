@@ -403,6 +403,7 @@ public sealed class NavigationSidebarTests : IDisposable
         var (window, vm, windowService) = CreateMainWindow();
         await WaitSettlingAsync(() => !(vm.ConnectionNavigation!.IsLoaded is false));
         Settle();
+        var navigation = Assert.IsType<ConnectionNavigationViewModel>(vm.ConnectionNavigation);
         var view = Named<ConnectionNavigationView>(window, "ConnectionNavigationView");
         var rows = view.Tree.GetVisualDescendants().OfType<TreeViewItem>().ToList();
         Assert.Equal(["billing, HTTP", "orders, HTTP"],
@@ -420,10 +421,15 @@ public sealed class NavigationSidebarTests : IDisposable
         Settle();
         windowService.Verify(w => w.ShowConnectionsAsync("billing"), Times.Once);
 
-        // Opening the connections editor may rebuild the tree asynchronously. Select the row
-        // explicitly before testing the context-menu projection, rather than depending on that
-        // unrelated selection update.
-        view.Selected = (ConnectionNavigationNode)billing.DataContext!;
+        // Opening the connections editor rebuilds the tree asynchronously. The old row's node is no
+        // longer in ItemsSource after that, so wait for and select the replacement node.
+        ConnectionNavigationNode? currentBilling = null;
+        await WaitSettlingAsync(() => !navigation.IsLoading
+            && (currentBilling = navigation.Find("billing", isConnection: true)) is not null
+            && !ReferenceEquals(currentBilling, billing.DataContext));
+        Assert.NotNull(currentBilling);
+        Assert.NotSame(billing.DataContext, currentBilling);
+        view.Selected = currentBilling;
         Settle();
         var menu = view.Tree.ContextMenu!;
         view.FillContextMenu(menu);
@@ -498,9 +504,9 @@ public sealed class NavigationSidebarTests : IDisposable
         item.Set(ConnectionNavigationView.NodeFormat, "c:billing");
         data.Add(item);
         const DragDropEffects allowed = DragDropEffects.Move | DragDropEffects.Copy;
-        window.DragDrop(point, RawDragEventType.DragEnter, data, allowed, RawInputModifiers.None);
-        window.DragDrop(point, RawDragEventType.DragOver, data, allowed, RawInputModifiers.None);
-        window.DragDrop(point, RawDragEventType.Drop, data, allowed, RawInputModifiers.None);
+        window.DragDrop(point, RawDragEventType.DragEnter, data, allowed);
+        window.DragDrop(point, RawDragEventType.DragOver, data, allowed);
+        window.DragDrop(point, RawDragEventType.Drop, data, allowed);
         await WaitSettlingAsync(() => !(!frontMatter.Connections.Any(c => c.Name == "billing")));
 
         Assert.Contains(frontMatter.Connections, c => c.Name == "billing");
@@ -522,7 +528,7 @@ public sealed class NavigationSidebarTests : IDisposable
         var item = new DataTransferItem();
         item.Set(ConnectionNavigationView.NodeFormat, "g:some-group");
         data.Add(item);
-        window.DragDrop(point, RawDragEventType.Drop, data, DragDropEffects.Move | DragDropEffects.Copy, RawInputModifiers.None);
+        window.DragDrop(point, RawDragEventType.Drop, data, DragDropEffects.Move | DragDropEffects.Copy);
         Settle();
         Assert.Equal(before, vm.ActiveTab!.FrontMatter!.Connections.Count);
     }

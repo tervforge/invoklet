@@ -80,7 +80,7 @@ public class EditorTabSdkChangeAnalysisTests
             new InterfaceTheme("Test", ThemeVariant.Dark, true),
             new EditorTheme("Test", TextMateSharp.Grammars.ThemeName.DarkPlus, true)));
         var vm = new EditorTabItemViewModel(
-            null, [Current, Older], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [Current, Older], prefs.Object, new Mock<IEditorTabActions>().Object);
         var ctrl = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object, new Mock<ILanguageHostRegistry>().Object,
             prefs.Object, intelliSense, new Mock<IBuildCacheService>().Object);
         new Window { Content = ctrl }.Show();

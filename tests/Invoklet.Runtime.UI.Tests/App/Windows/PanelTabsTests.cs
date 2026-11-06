@@ -47,7 +47,7 @@ public class PanelTabsTests
         themeService.Setup(t => t.CurrentTheme).Returns(new ActiveTheme(
             new InterfaceTheme("Test", ThemeVariant.Dark, true),
             new EditorTheme("Test", TextMateSharp.Grammars.ThemeName.DarkPlus, true)));
-        var vm = new EditorTabItemViewModel(null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+        var vm = new EditorTabItemViewModel(null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var tab = new EditorsTabItemControl(vm, themeService.Object, new Mock<IWindowService>().Object,
             new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense: null, new Mock<IBuildCacheService>().Object);
         host = Host(tab, theme);

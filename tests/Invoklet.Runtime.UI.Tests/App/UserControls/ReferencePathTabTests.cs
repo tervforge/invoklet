@@ -89,7 +89,7 @@ public class ReferencePathTabTests : IDisposable
         registry.Setup(r => r.Create(It.IsAny<string>(), It.IsAny<ExecutionRequest>()))
             .Callback<string, ExecutionRequest>((_, request) => _runRequest = request).Returns(host.Object);
 
-        var vm = new EditorTabItemViewModel(untitled ? null : _script, [Sdk], prefs.Object, shell, MdRunLanguage.CSharp, MdRunKind.Statements);
+        var vm = new EditorTabItemViewModel(untitled ? null : _script, [Sdk], prefs.Object, shell);
         var buildCache = new Mock<IBuildCacheService>();
         var output = Path.Combine(_root, "build");
         buildCache.Setup(b => b.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>()))

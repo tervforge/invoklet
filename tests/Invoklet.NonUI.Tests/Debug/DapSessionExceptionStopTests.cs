@@ -240,7 +240,7 @@ public class DapSessionExceptionStopTests
         Assert.Equal(["threads", "stackTrace", "scopes", "variables", "exceptionInfo"],
             WrittenCommands(process.Input).SkipWhile(c => c != "threads").ToList());
 
-        context.Resume(DebugAction.Continue);
+        context.Resume();
         await WaitForRequestAsync(process.Input, "continue");
         process.Output.Push(Frame(new { seq = 20, type = "event", @event = "exited" }));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -277,7 +277,7 @@ public class DapSessionExceptionStopTests
         if (!supportsExceptionInfo)
             Assert.DoesNotContain("exceptionInfo", WrittenCommands(process.Input));
 
-        context.Resume(DebugAction.Continue);
+        context.Resume();
         await WaitForRequestAsync(process.Input, "continue");
         process.Output.Push(Frame(new { seq = 20, type = "event", @event = "exited" }));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -309,7 +309,7 @@ public class DapSessionExceptionStopTests
         Assert.Equal(UnhandledText, again.Exception?.Description);
         Assert.Equal(1, again.CallStack[0].Line);
 
-        again.Resume(DebugAction.Continue);
+        again.Resume();
         await WaitForRequestAsync(process.Input, "continue");
         process.Output.Push(Frame(new { seq = 20, type = "event", @event = "exited" }));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -333,7 +333,7 @@ public class DapSessionExceptionStopTests
         Assert.IsType<TestBreakpoint>(context.Breakpoint);
         Assert.DoesNotContain("exceptionInfo", WrittenCommands(process.Input));
 
-        context.Resume(DebugAction.Continue);
+        context.Resume();
         await WaitForRequestAsync(process.Input, "continue");
         process.Output.Push(Frame(new { seq = 20, type = "event", @event = "exited" }));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -367,7 +367,7 @@ public class DapSessionExceptionStopTests
         // The late answer arrives while paused, then the user continues to a second exception stop.
         var firstSeq = RequestSeq(process.Input, "exceptionInfo");
         process.Output.Push(Frame(Response(30, "exceptionInfo", ExceptionInfoBody("Late.FirstException"), requestSeq: firstSeq)));
-        first.Resume(DebugAction.Continue);
+        first.Resume();
         await WaitForRequestAsync(process.Input, "continue");
         process.Output.Push(Frame(ExceptionStopped()));
         await AnswerStopQueriesAsync(process, count: 2);
@@ -380,7 +380,7 @@ public class DapSessionExceptionStopTests
         Assert.Equal("details of System.FormatException", second.Exception?.Message);
         Assert.True(second.Exception?.IsUnhandled);
 
-        second.Resume(DebugAction.Continue);
+        second.Resume();
         await WaitForRequestAsync(process.Input, "continue", count: 2);
         process.Output.Push(Frame(new { seq = 40, type = "event", @event = "exited" }));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -403,7 +403,7 @@ public class DapSessionExceptionStopTests
         await AnswerStopQueriesAsync(process);
         await WaitForRequestAsync(process.Input, "exceptionInfo");
         var first = await hits.Reader.ReadAsync(timeout.Token);
-        first.Resume(DebugAction.Continue);
+        first.Resume();
         await WaitForRequestAsync(process.Input, "continue");
 
         process.Output.Push(Frame(ExceptionStopped()));
@@ -417,7 +417,7 @@ public class DapSessionExceptionStopTests
         var second = await hits.Reader.ReadAsync(timeout.Token);
 
         Assert.Equal("System.FormatException", second.Exception?.TypeName);
-        second.Resume(DebugAction.Continue);
+        second.Resume();
         await WaitForRequestAsync(process.Input, "continue", count: 2);
         process.Output.Push(Frame(new { seq = 40, type = "event", @event = "exited" }));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);

@@ -53,7 +53,7 @@ public class EditorTabPackageReferencesTests
 
         var intelliSense = new Mock<IIntelliSenseService>().ForwardingExecutionContext();
         var vm = new EditorTabItemViewModel(
-            null, [Sdk], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [Sdk], prefs.Object, new Mock<IEditorTabActions>().Object);
         var ctrl = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object, registry.Object, prefs.Object,
             intelliSense.Object, new Mock<IBuildCacheService>().Object);
         new Window { Content = ctrl }.Show();

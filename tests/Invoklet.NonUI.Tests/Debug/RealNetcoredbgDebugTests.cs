@@ -99,7 +99,7 @@ public class RealNetcoredbgDebugTests : IDisposable
         host.BreakpointHit += ctx =>
         {
             hit.TrySetResult(ctx);
-            ctx.Resume(DebugAction.Continue);
+            ctx.Resume();
         };
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);

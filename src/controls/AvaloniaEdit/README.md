@@ -18,9 +18,11 @@ control for Avalonia, itself a port of AvalonEdit from the SharpDevelop project.
   a compact full-width search template with inline options and a second replacement row, and
   parameter info (`OverloadViewer`) that draws its `CornerRadius`, and thread checks and posts that use the
   document's owner thread or the control's own dispatcher instead of the static `Dispatcher.UIThread`, which
-  a read from another thread while it is unset would bind to that thread.
+  a read from another thread while it is unset would bind to that thread. Arguments equal to their
+  parameters' defaults were also dropped from calls, here and in the upstream tests (a code-style cleanup that
+  changes no behavior).
   `git log -- src/controls/AvaloniaEdit src/controls/AvaloniaEdit.TextMate` shows every change.
-- **Tests:** the upstream NUnit suite is kept unchanged in
+- **Tests:** the upstream NUnit suite is kept, apart from that cleanup, in
   [`tests/AvaloniaEdit.Tests`](../../../tests/AvaloniaEdit.Tests); Invoklet's own tests for the fork live
   in `tests/Invoklet.Runtime.UI.Tests`.
 

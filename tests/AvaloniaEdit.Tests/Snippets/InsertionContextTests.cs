@@ -117,7 +117,7 @@ public class InsertionContextTests
     public void Constructor_ShouldSetTabToSpaces_When_ConvertTabsToSpaces()
     {
         // arrange
-        var textArea = CreateTextAreaWithSpaces("hello", 4);
+        var textArea = CreateTextAreaWithSpaces("hello");
         var context = new InsertionContext(textArea, 0);
 
         // assert
@@ -302,7 +302,7 @@ public class InsertionContextTests
     public void InsertText_Tab_ShouldReplaceWithSpaces_When_ConvertTabsToSpaces()
     {
         // arrange
-        var textArea = CreateTextAreaWithSpaces("", 4);
+        var textArea = CreateTextAreaWithSpaces("");
         var context = CreateContext(textArea, 0);
 
         // act
@@ -332,7 +332,7 @@ public class InsertionContextTests
     public void InsertText_TabSurroundedByText_ShouldReplaceTabOnly()
     {
         // arrange
-        var textArea = CreateTextAreaWithSpaces("", 4);
+        var textArea = CreateTextAreaWithSpaces("");
         var context = CreateContext(textArea, 0);
 
         // act
@@ -707,7 +707,7 @@ public class InsertionContextTests
     public void InsertText_TabsAndNewlines_ShouldReplaceAll()
     {
         // arrange - use spaces for tabs so we can verify expansion
-        var textArea = CreateTextAreaWithSpaces("start\n", 4);
+        var textArea = CreateTextAreaWithSpaces("start\n");
         var context = CreateContext(textArea, 0);
         string term = context.LineTerminator;
         string indent = context.Indentation;
@@ -865,7 +865,7 @@ public class InsertionContextTests
     public void InsertText_InsertionPosition_ShouldAccountForExpandedTabs()
     {
         // arrange
-        var textArea = CreateTextAreaWithSpaces("", 4);
+        var textArea = CreateTextAreaWithSpaces("");
         var context = CreateContext(textArea, 0);
 
         // act
@@ -1212,7 +1212,7 @@ public class InsertionContextTests
         // inserting "if (condition)\n{\n\tstatement;\n}" into an indented context.
 
         // arrange
-        var textArea = CreateTextAreaWithSpaces("    \n", 4);
+        var textArea = CreateTextAreaWithSpaces("    \n");
         // Insert at offset 4, which is after "    " indentation on line 1
         var context = CreateContext(textArea, 4);
 
@@ -1240,7 +1240,7 @@ public class InsertionContextTests
         // Simulates: "\t\tint x = 0;\n\t\tint y = 0;"
 
         // arrange
-        var textArea = CreateTextAreaWithSpaces("", 4);
+        var textArea = CreateTextAreaWithSpaces("");
         var context = CreateContext(textArea, 0);
         string term = context.LineTerminator;
         string indent = context.Indentation;

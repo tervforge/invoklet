@@ -201,7 +201,7 @@ public class MdRunArgumentSetsTests
         var fm = Parse(Script).FrontMatter;
 
         Assert.Equal(["cli"], MdRunArguments.Resolve(fm, ["cli"], "nightly").Arguments);
-        Assert.Empty(MdRunArguments.Resolve(fm, [], null).Arguments);
+        Assert.Empty(MdRunArguments.Resolve(fm, []).Arguments);
         Assert.Null(MdRunArguments.Resolve(fm, ["cli"], "nightly").Error);
     }
 

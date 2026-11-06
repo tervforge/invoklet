@@ -88,7 +88,7 @@ public class RoslynCompilerDebugTests : IDisposable
         host.BreakpointHit += ctx =>
         {
             hit.TrySetResult(ctx);
-            ctx.Resume(DebugAction.Continue);
+            ctx.Resume();
         };
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -116,7 +116,7 @@ public class RoslynCompilerDebugTests : IDisposable
         host.BreakpointHit += ctx =>
         {
             values.Add(ctx.LocalVariables.FirstOrDefault(v => v.Name == "i")?.Value);
-            ctx.Resume(DebugAction.Continue);
+            ctx.Resume();
         };
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(45));
@@ -182,7 +182,7 @@ public class RoslynCompilerDebugTests : IDisposable
         var context = await hit.Task.WaitAsync(TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
         var sum = await context.EvaluateAsync("x + 1", TestContext.Current.CancellationToken);
         var text = await context.EvaluateAsync("x * 2", TestContext.Current.CancellationToken);
-        context.Resume(DebugAction.Continue);
+        context.Resume();
         await run;
 
         // Method-call chains such as x.ToString().Length fail in netcoredbg's own evaluator — identically for
@@ -208,7 +208,7 @@ public class RoslynCompilerDebugTests : IDisposable
         host.BreakpointHit += ctx =>
         {
             hit.TrySetResult(ctx);
-            ctx.Resume(DebugAction.Continue);
+            ctx.Resume();
         };
 
         using var runCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -253,7 +253,7 @@ public class RoslynCompilerDebugTests : IDisposable
         host.BreakpointHit += ctx =>
         {
             hit.TrySetResult(ctx);
-            ctx.Resume(DebugAction.Continue);
+            ctx.Resume();
         };
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);

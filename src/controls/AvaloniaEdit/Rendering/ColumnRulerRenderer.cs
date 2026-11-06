@@ -37,7 +37,7 @@ internal sealed class ColumnRulerRenderer : IBackgroundRenderer
 
     public ColumnRulerRenderer(TextView textView)
     {
-        _pen = new ImmutablePen(new ImmutableSolidColorBrush(DefaultForeground), 1);
+        _pen = new ImmutablePen(new ImmutableSolidColorBrush(DefaultForeground));
         _textView = textView ?? throw new ArgumentNullException(nameof(textView));
         _textView.BackgroundRenderers.Add(this);
     }

@@ -51,8 +51,7 @@ internal sealed class TabDiskSyncFixture
         prefs.Setup(p => p.CSharp).Returns(new CSharpLanguageSettings());
         prefs.Setup(p => p.Session).Returns(new SessionSettings());
         var path = "/scripts/" + name + ".inv";
-        var tab = new EditorTabItemViewModel(path, [], prefs.Object, new Mock<IEditorTabActions>().Object,
-            MdRunLanguage.CSharp, MdRunKind.Statements)
+        var tab = new EditorTabItemViewModel(path, [], prefs.Object, new Mock<IEditorTabActions>().Object)
         {
             DiskState = State(1),
             IsDirty = dirty,

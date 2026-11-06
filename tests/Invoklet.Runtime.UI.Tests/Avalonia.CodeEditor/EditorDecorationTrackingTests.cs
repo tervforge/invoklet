@@ -166,7 +166,7 @@ public class EditorDecorationTrackingTests
         using var intelliSense = new CSharpIntelliSenseService(
             references.GetDefault().Append(references.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance);
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var control = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object,
             new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense, new Mock<IBuildCacheService>().Object);
         new Window { Content = control }.Show();

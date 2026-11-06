@@ -449,7 +449,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             State.RunCts?.Cancel();
             if (State.RunningHost is { } runningHost)
                 _ = TerminateHostAsync(runningHost);
-            State.CurrentDebugCtx?.Resume(DebugAction.Continue);
+            State.CurrentDebugCtx?.Resume();
             InvalidateHoverTooltip();
             State.CurrentDebugCtx = null;
             _vm.DebugPanel.ClearStop();

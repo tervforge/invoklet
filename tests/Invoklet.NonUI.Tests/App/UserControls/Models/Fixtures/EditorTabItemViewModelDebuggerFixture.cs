@@ -26,5 +26,5 @@ internal sealed class EditorTabItemViewModelDebuggerFixture
     public void RaisePreferencesChanged() => Preferences.Raise(p => p.Changed += null);
 
     public EditorTabItemViewModel CreateSut() =>
-        new("/scripts/a.inv", [], Preferences.Object, Actions.Object, MdRunLanguage.CSharp, MdRunKind.Statements, debuggerInstalled: () => Installed);
+        new("/scripts/a.inv", [], Preferences.Object, Actions.Object, debuggerInstalled: () => Installed);
 }

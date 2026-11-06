@@ -741,7 +741,7 @@ public class TextArea : TemplatedControl, ITextEditorComponent, IRoutedCommandBi
     /// The <see cref="RightClickMovesCaret"/> property.
     /// </summary>
     public static readonly StyledProperty<bool> RightClickMovesCaretProperty =
-        AvaloniaProperty.Register<TextArea, bool>(nameof(RightClickMovesCaret), false);
+        AvaloniaProperty.Register<TextArea, bool>(nameof(RightClickMovesCaret));
 
     /// <summary>
     /// Determines whether caret position should be changed to the mouse position when you right click or not.

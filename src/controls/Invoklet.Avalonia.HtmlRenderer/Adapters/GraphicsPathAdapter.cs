@@ -38,7 +38,7 @@ internal sealed class GraphicsPathAdapter : RGraphicsPath
 
     public override void Start(double x, double y)
     {
-        _geometryContext.BeginFigure(new Point(x, y), true);
+        _geometryContext.BeginFigure(new Point(x, y));
     }
 
     public override void LineTo(double x, double y)

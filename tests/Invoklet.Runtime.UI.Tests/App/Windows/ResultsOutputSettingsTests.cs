@@ -53,7 +53,7 @@ public class ResultsOutputSettingsTests
         registry.Setup(r => r.Create(It.IsAny<string>(), It.IsAny<ExecutionRequest>())).Returns(host.Object);
 
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var ctrl = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object, registry.Object, prefs.Object,
             intelliSense: null, new Mock<IBuildCacheService>().Object);
         new Window { Content = ctrl }.Show();

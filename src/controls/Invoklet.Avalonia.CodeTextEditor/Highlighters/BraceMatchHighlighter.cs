@@ -79,7 +79,7 @@ internal sealed class BraceMatchHighlighter : IBackgroundRenderer
         var from = new Point(x, Math.Max(0, top.Y));
         var to = new Point(x, Math.Min(textView.Bounds.Height, bottom.Y));
         if (to.Y <= from.Y) return;
-        ctx.DrawLine(new Pen(brush, 1.0), from, to);
+        ctx.DrawLine(new Pen(brush), from, to);
         LastGuide = (from, to);
     }
 }

@@ -111,7 +111,7 @@ public class TextMateThemeSwitchTests
     public void DualTheme_Highlight_follows_the_application_theme(bool dark)
     {
         using var theme = new ThemeScope(dark ? ThemeVariant.Dark : ThemeVariant.Light);
-        var highlighter = new DualThemeTextMateHighlighter(new TextMateHighlighter(ThemeName.DarkPlus), new TextMateHighlighter(ThemeName.LightPlus));
+        var highlighter = new DualThemeTextMateHighlighter(new TextMateHighlighter(), new TextMateHighlighter(ThemeName.LightPlus));
         var line = "public class Foo { }".AsMemory();
 
         var viaTheme = highlighter.Highlight(line, "csharp")!.Select(t => t.Foreground?.ToString());

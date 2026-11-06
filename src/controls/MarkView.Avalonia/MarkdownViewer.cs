@@ -385,20 +385,20 @@ public partial class MarkdownViewer : ContentControl
             {
                 case MarkdownSelectableTextBlock tb:
                     layer.Register(new IndexEntry(tb,
-                        MarkdownSelectableTextBlock.ExtractPlainText(tb.Inlines!), "\n"));
+                        MarkdownSelectableTextBlock.ExtractPlainText(tb.Inlines!)));
                     break;
                 case Border { Child: TextBlock codeTb } border
                     when border.Classes.Contains("markdown-code-block"):
                     layer.Register(new IndexEntry(codeTb,
                         codeTb.Inlines != null
                             ? MarkdownSelectableTextBlock.ExtractPlainText(codeTb.Inlines)
-                            : codeTb.Text ?? string.Empty, "\n"));
+                            : codeTb.Text ?? string.Empty));
                     break;
                 case Border { Child: LazyCodeLines lazy } border
                     when border.Classes.Contains("markdown-code-block"):
                     var index = 0;
                     foreach (var chunk in lazy.Chunks)
-                        layer.Register(new IndexEntry(chunk, lazy.ChunkText(index++), "\n"));
+                        layer.Register(new IndexEntry(chunk, lazy.ChunkText(index++)));
                     break;
                 case Panel listPanel when listPanel.Classes.Contains("markdown-list"):
                     RegisterListItems(layer, listPanel);
@@ -453,7 +453,7 @@ public partial class MarkdownViewer : ContentControl
                         text = marker + " " + text;
                         markerApplied = true;
                     }
-                    layer.Register(new IndexEntry(tb, text, "\n"));
+                    layer.Register(new IndexEntry(tb, text));
                     break;
                 // Nested list — recurse with its own markers
                 case Panel nestedList when nestedList.Classes.Contains("markdown-list"):

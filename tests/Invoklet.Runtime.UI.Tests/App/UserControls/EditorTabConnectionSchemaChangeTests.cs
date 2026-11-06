@@ -74,7 +74,7 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
             new EditorTheme("Test", TextMateSharp.Grammars.ThemeName.DarkPlus, true)));
         var intelliSense = new Mock<IIntelliSenseService>();
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var tab = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object,
             new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense.Object, new Mock<IBuildCacheService>().Object,
             connectionDrivers: drivers, connectionSchemas: schemas);

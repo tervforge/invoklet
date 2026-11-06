@@ -23,7 +23,7 @@ public class TextMateCodeBlockRendererTests
         var pipeline = new MarkdownPipelineBuilder().Build();
         var document = Markdown.Parse(markdown, pipeline);
         var renderer = new AvaloniaRenderer();
-        var extension = new TextMateExtension(ThemeName.DarkPlus);
+        var extension = new TextMateExtension();
         extension.Register(renderer);
         pipeline.Setup(renderer);
         renderer.Render(document);
@@ -68,7 +68,7 @@ public class TextMateCodeBlockRendererTests
     public void TextMateExtension_Register_sets_CodeHighlighter_on_renderer()
     {
         var renderer = new AvaloniaRenderer();
-        var extension = new TextMateExtension(ThemeName.DarkPlus);
+        var extension = new TextMateExtension();
         extension.Register(renderer);
         Assert.NotNull(renderer.CodeHighlighter);
     }

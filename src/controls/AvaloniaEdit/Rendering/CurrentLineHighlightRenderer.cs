@@ -38,7 +38,7 @@ internal sealed class CurrentLineHighlightRenderer : IBackgroundRenderer
 
     public void SetDefaultColors()
     {
-        BorderPen = new ImmutablePen(new ImmutableSolidColorBrush(DefaultBorder), 1);
+        BorderPen = new ImmutablePen(new ImmutableSolidColorBrush(DefaultBorder));
         BackgroundBrush = new ImmutableSolidColorBrush(DefaultBackground);
     }
 
@@ -71,7 +71,7 @@ internal sealed class CurrentLineHighlightRenderer : IBackgroundRenderer
 
     public CurrentLineHighlightRenderer(TextView textView)
     {
-        BorderPen = new ImmutablePen(new ImmutableSolidColorBrush(DefaultBorder), 1);
+        BorderPen = new ImmutablePen(new ImmutableSolidColorBrush(DefaultBorder));
 
         BackgroundBrush = new ImmutableSolidColorBrush(DefaultBackground);
 

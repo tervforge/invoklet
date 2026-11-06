@@ -123,7 +123,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         try
         {
             tabs.Attach(shell); // the initial blank C# tab
-            shell.NewMdRunFile(MdRunLanguage.CSharp);
+            shell.NewMdRunFile();
 
             var first = await ShownAsync(tabs, shell.Tabs[0]);
             var second = await ShownAsync(tabs, shell.Tabs[1]);

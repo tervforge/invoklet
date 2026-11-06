@@ -52,7 +52,7 @@ internal sealed class ActiveTabCommandsFixture
         prefs.Setup(p => p.CSharp).Returns(new CSharpLanguageSettings());
         prefs.Setup(p => p.Session).Returns(new SessionSettings());
         List<DotnetSdk> sdks = withSdk ? [CreateSdk()] : [];
-        return new EditorTabItemViewModel(path, sdks, prefs.Object, TabActions.Object, MdRunLanguage.CSharp, MdRunKind.Statements,
+        return new EditorTabItemViewModel(path, sdks, prefs.Object, TabActions.Object,
             debuggerInstalled: () => withDebugger);
     }
 
