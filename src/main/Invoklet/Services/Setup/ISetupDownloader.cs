@@ -4,6 +4,8 @@ namespace Invoklet.Services.Setup;
 // a fake — no real network access in tests.
 public interface ISetupDownloader
 {
+    Task<string> ReadTextAsync(Uri url, CancellationToken ct);
+
     // percent is 0-100 when the server sends a Content-Length, otherwise progress is never reported
     // (a determinate ProgressBar can't be driven off an unknown total) — callers fall back to an
     // indeterminate display when they never see a report.

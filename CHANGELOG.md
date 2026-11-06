@@ -3,6 +3,13 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Added
+
+- Invoklet checks the public GitHub release metadata once a day after startup and shows a quiet
+  notification when a newer version is available. It does not download or install updates.
+
 ## [0.11.6] — 2026-11-06
 
 ### Changed

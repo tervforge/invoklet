@@ -211,6 +211,21 @@
 
             <!-- ── Editor area ───────────────────────────────────────────── -->
             <DockPanel Grid.Column="2">
+                <Border x:Name="UpdateNoticeBar" DockPanel.Dock="Top" IsVisible="False"
+                        Background="{DynamicResource Invoklet.Sidebar.BackgroundBrush}"
+                        BorderBrush="{DynamicResource Invoklet.Accent.BackgroundBrush}" BorderThickness="0,0,0,1"
+                        Padding="10,6">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0">
+                            <Button Classes="secondary" Content="View release" Click="OpenUpdate_Click"
+                                    AutomationProperties.Name="View available Invoklet release"/>
+                            <Button Classes="secondary" Content="Dismiss" Click="DismissUpdate_Click"
+                                    AutomationProperties.Name="Dismiss update notification"/>
+                        </StackPanel>
+                        <TextBlock x:Name="UpdateNoticeText" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   AutomationProperties.Name="Invoklet update available"/>
+                    </DockPanel>
+                </Border>
                 <!-- Startup draft recovery notice: informs without blocking, and stays until dismissed.
                      The text is selectable so the recovery folders it names can be copied. -->
                 <Border x:Name="RecoveryNoticeBar" DockPanel.Dock="Top"

@@ -36,11 +36,19 @@ internal sealed class SetupInstallerServiceFixture : IDisposable
                 return Task.CompletedTask;
             });
 
-    public void NetworkAnswersText(string text) => NetworkAnswers(destination => File.WriteAllText(destination, text));
+    public void NetworkAnswersText(string text)
+    {
+        NetworkAnswers(destination => File.WriteAllText(destination, text));
+        Downloader.Setup(d => d.ReadTextAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>())).ReturnsAsync(text);
+    }
 
-    public void NetworkFails() =>
+    public void NetworkFails()
+    {
         Downloader.Setup(d => d.DownloadFileAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IProgress<double>?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("unreachable"));
+        Downloader.Setup(d => d.ReadTextAsync(It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("unreachable"));
+    }
 
     // The install script ends with the code, after making the dotnet it would have made in the plan's folder.
     public void ScriptEndsWith(int exitCode, SetupInstallPlan plan) =>
