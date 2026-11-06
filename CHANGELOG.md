@@ -3,6 +3,14 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Changed
+
+- A script with a PostgreSQL, SQL Server or SQLite connection runs faster after an edit: the
+  database's context is compiled once, when its schema is read, instead of with every change to the
+  script. Schemas read by an earlier version are read again on the next run.
+
 ## [0.11.5] — 2026-11-05
 
 This release improves how scripts access secrets, adds dedicated database sign-in fields, and

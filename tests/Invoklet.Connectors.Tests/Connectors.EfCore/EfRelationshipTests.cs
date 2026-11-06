@@ -12,12 +12,8 @@ namespace Invoklet.Connectors.Tests.Connectors.EfCore;
 
 // A foreign key on a unique column is a one-to-one relationship: the row on the other side is one row, not a collection, and the
 // generated context says which side holds the key.
-public sealed class EfRelationshipTests : IDisposable
+public sealed class EfRelationshipTests
 {
-    private readonly string _folder = Directory.CreateTempSubdirectory("Invoklet-relationship").FullName;
-
-    public void Dispose() => Directory.Delete(_folder, true);
-
     private sealed class Person
     {
         public int Id { get; set; }
@@ -71,23 +67,7 @@ public sealed class EfRelationshipTests : IDisposable
         Assert.False(Assert.Single(entities["Phone"].ForeignKeys).IsUnique);
     }
 
-    private string Generate(params EfEntity[] entities)
-    {
-        var driver = new SqlServerConnectionDriver();
-        var connection = new MdRunConnection
-        {
-            Name = "shop",
-            Driver = driver.Id,
-            Params = new(StringComparer.Ordinal) { ["connectionString"] = MdRunValue.Of("Server=localhost;Database=shop") },
-        };
-        var drivers = new ConnectionDriverRegistry();
-        drivers.Register(driver);
-        var schemas = new ConnectionSchemas(drivers, _folder, new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
-        schemas.Cache.Put(connection, new ConnectionSchema("x", [], JsonSerializer.Serialize(entities)));
-        var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, driver.Packages.Keys, drivers, schemas.Cache)!;
-        Assert.Empty(generated.Errors);
-        return generated.Source;
-    }
+    private static string Generate(params EfEntity[] entities) => EfContextCode.GenerateContext("Shop", "SQL Server", "Use", entities);
 
     private static EfEntity[] PeopleWith(bool unique) =>
     [
@@ -130,7 +110,7 @@ public sealed class EfRelationshipTests : IDisposable
     [Fact]
     public void TheSchemaVersions_AreRaisedSoThatDescriptionsWithoutTheKeyAreReadAgain()
     {
-        Assert.Equal("3", new SqlServerConnectionDriver().SchemaVersion);
-        Assert.Equal("6", new Invoklet.Connectors.Sqlite.SqliteConnectionDriver().SchemaVersion);
+        Assert.Equal("4", new SqlServerConnectionDriver().SchemaVersion);
+        Assert.Equal("7", new Invoklet.Connectors.Sqlite.SqliteConnectionDriver().SchemaVersion);
     }
 }

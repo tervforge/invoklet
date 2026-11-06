@@ -50,7 +50,7 @@ internal sealed class ProviderCompileFixture : IDisposable
         var drivers = new ConnectionDriverRegistry();
         drivers.Register(driver);
         var schemas = new ConnectionSchemas(drivers, Path.Combine(_folder, "schemas"), DotnetConnectionTools.Default, _ => null);
-        schemas.Cache.Put(connection, new ConnectionSchema("x", [], JsonSerializer.Serialize(Shop())));
+        schemas.Cache.Put(connection, driver.SchemaOf(Shop()));
         var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, driver.Packages.Keys, drivers, schemas.Cache)!;
         if (generated.Errors.Count > 0) throw new InvalidOperationException(string.Join('\n', generated.Errors));
 

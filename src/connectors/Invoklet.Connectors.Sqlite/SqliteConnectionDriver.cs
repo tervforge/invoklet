@@ -29,7 +29,7 @@ public sealed class SqliteConnectionDriver : EfCoreConnectionDriver
     public override string DisplayName => "SQLite";
 
     // The description is the model of EF Core now, not the tables of the file as SQLite lists them.
-    public override string SchemaVersion => "6";
+    public override string SchemaVersion => "7";
 
     protected override string Kind => "SQLite";
 
