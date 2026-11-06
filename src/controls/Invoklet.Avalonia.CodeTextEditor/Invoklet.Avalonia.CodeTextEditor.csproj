@@ -7,6 +7,7 @@
   <ItemGroup>
     <!-- Local fork — was Avalonia.AvaloniaEdit/AvaloniaEdit.TextMate NuGet packages. -->
     <ProjectReference Include="..\AvaloniaEdit\AvaloniaEdit.csproj" />
+    <ProjectReference Include="..\Invoklet.Avalonia.Themes\Invoklet.Avalonia.Themes.csproj" />
     <ProjectReference Include="..\AvaloniaEdit.TextMate\AvaloniaEdit.TextMate.csproj" />
   </ItemGroup>
 

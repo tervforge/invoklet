@@ -14,6 +14,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Metrics.axaml"/>
+                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/ScrollBar.axaml"/>
             </ResourceDictionary.MergedDictionaries>
             <FocusAdornerTemplate x:Key="Invoklet.Focus.Adorner">
                 <Border Name="FocusRingPrimary"
@@ -429,5 +430,10 @@
     <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource Invoklet.ToolTab.SelectedBackgroundBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource Invoklet.ToolTab.SelectedForegroundBrush}"/>
+    </Style>
+
+    <!-- Fluent's filled corner where two scroll bars meet: the bars here are see-through. -->
+    <Style Selector="ScrollViewer /template/ Panel#PART_ScrollBarsSeparator">
+        <Setter Property="IsVisible" Value="False"/>
     </Style>
 </Styles>

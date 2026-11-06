@@ -252,14 +252,14 @@ public partial class EditorsTabItemControl
     }
 
     private TabOutputState CaptureOutput()
-        => new(State.Output.Content, State.HadRunError, new Dictionary<string, string>(State.DumpContainerBlocks));
+        => new(State.Output.Content, _vm.HadRunError, new Dictionary<string, string>(State.DumpContainerBlocks));
 
     private void RestoreOutput(TabOutputState? output)
     {
         if (output is null) return;
         State.Output.Clear();
         State.Output.Append(output.Content);
-        State.HadRunError = output.HadRunError;
+        _vm.HadRunError = output.HadRunError;
         State.DumpContainerBlocks.Clear();
         foreach (var (id, block) in output.DumpContainerBlocks) State.DumpContainerBlocks[id] = block;
     }

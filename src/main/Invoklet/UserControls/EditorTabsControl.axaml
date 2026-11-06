@@ -60,15 +60,13 @@
             </Setter>
         </Style>
 
-        <!-- Fluent's scroll arrows at the strip's ends: the thin bar, the wheel and the list of tabs do their work. -->
-        <Style Selector="ScrollViewer#PART_TabStripScrollViewer /template/ ScrollBar /template/ RepeatButton">
-            <Setter Property="IsVisible" Value="False"/>
-        </Style>
-
-        <Style Selector="ScrollViewer#PART_TabStripScrollViewer /template/ ScrollBar">
+        <Style Selector="ScrollViewer#PART_TabStripScrollViewer /template/ ScrollBar:horizontal">
             <Setter Property="Height" Value="3"/>
             <Setter Property="MinHeight" Value="3"/>
             <Setter Property="VerticalAlignment" Value="Bottom"/>
+        </Style>
+        <Style Selector="ScrollViewer#PART_TabStripScrollViewer /template/ ScrollBar /template/ Thumb">
+            <Setter Property="Padding" Value="0"/>
         </Style>
 
         <Style Selector="TabControl#FileTabControl > TabItem">
@@ -137,6 +135,20 @@
         </Style>
         <Style Selector="TabControl#FileTabControl > TabItem:selected Button.TabClose">
             <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="TabControl#FileTabControl > TabItem:focus-within Button.TabClose">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+
+        <!-- Where the close button shows, the status gives way; the tab's tooltip still tells it. -->
+        <Style Selector="TabControl#FileTabControl > TabItem:selected Panel.TabStatus">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="TabControl#FileTabControl > TabItem:pointerover Panel.TabStatus">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="TabControl#FileTabControl > TabItem:focus-within Panel.TabStatus">
+            <Setter Property="IsVisible" Value="False"/>
         </Style>
 
         <!-- Dirty indicator — the header's TextBlock lives here,

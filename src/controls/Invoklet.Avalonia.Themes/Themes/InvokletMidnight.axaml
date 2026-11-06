@@ -108,8 +108,9 @@
                     <SolidColorBrush x:Key="Invoklet.Margin.DebugArrowBrush"           Color="#F2CC60" />
                     <SolidColorBrush x:Key="Invoklet.Margin.DebugLineBrush"            Color="#336BC46D" />
                     <SolidColorBrush x:Key="Invoklet.Margin.LineNumberBrush"          Color="#5C6370" />
-                    <SolidColorBrush x:Key="Invoklet.Margin.CodeFixErrorBrush"     Color="#E06C75" />
-                    <SolidColorBrush x:Key="Invoklet.Margin.CodeFixWarningBrush"   Color="#E5C07B" />
+                    <SolidColorBrush x:Key="Invoklet.Diagnostic.ErrorBrush" Color="#E06C75" />
+                    <SolidColorBrush x:Key="Invoklet.Diagnostic.WarningBrush" Color="#E5C07B" />
+                    <SolidColorBrush x:Key="Invoklet.Diagnostic.InfoBrush" Color="#61AFEF" />
                     <SolidColorBrush x:Key="Invoklet.Folding.ChevronBrush"            Color="#8E949D" />
                     <SolidColorBrush x:Key="Invoklet.Folding.ChevronHoverBrush"       Color="#D7DAE0" />
                     <SolidColorBrush x:Key="Invoklet.Folding.LineBrush"               Color="#3A404A" />

@@ -104,7 +104,31 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
     public bool IsDirty
     {
         get;
-        internal set => this.RaiseAndSetIfChanged(ref field, value);
+        internal set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            RaiseStatusChanged();
+        }
+    }
+
+    /// <summary>Whether the last run reported an error; cleared when the next run starts.</summary>
+    public bool HadRunError
+    {
+        get;
+        internal set
+        {
+            this.RaiseAndSetIfChanged(ref field, value);
+            RaiseStatusChanged();
+        }
+    }
+
+    public TabStatus Status => TabStatuses.Of(HadRunError, RunState, IsDirty);
+    public string? StatusText => TabStatuses.Describe(Status);
+
+    private void RaiseStatusChanged()
+    {
+        this.RaisePropertyChanged(nameof(Status));
+        this.RaisePropertyChanged(nameof(StatusText));
     }
 
     public ReactiveCommand<Unit, Unit> SaveAsCommand { get; }
@@ -238,6 +262,7 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
             this.RaisePropertyChanged(nameof(IsRunningProgress));
             this.RaisePropertyChanged(nameof(EnableRunOrContinueButton));
             this.RaisePropertyChanged(nameof(TooltipRunOrContinue));
+            RaiseStatusChanged();
         }
     }
 

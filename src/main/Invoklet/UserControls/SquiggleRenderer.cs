@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Rendering;
@@ -44,14 +45,14 @@ internal sealed class SquiggleRenderer : IBackgroundRenderer
             if (start >= end) end = Math.Min(start + 1, docLen);
             if (start >= end) continue;
 
-            var color = d.Severity switch
+            var key = d.Severity switch
             {
-                DiagnosticSeverity.Error => Color.FromRgb(0xF4, 0x4F, 0x4F),
-                DiagnosticSeverity.Warning => Color.FromRgb(0xFF, 0x99, 0x00),
-                _ => Color.FromRgb(0x4F, 0x9A, 0xF4),
+                DiagnosticSeverity.Error => "Invoklet.Diagnostic.ErrorBrush",
+                DiagnosticSeverity.Warning => "Invoklet.Diagnostic.WarningBrush",
+                _ => "Invoklet.Diagnostic.InfoBrush",
             };
-
-            var pen = new Pen(new SolidColorBrush(color), 1.5);
+            var brush = textView.TryFindResource(key, textView.ActualThemeVariant, out var value) && value is IBrush themed ? themed : Brushes.Gray;
+            var pen = new Pen(brush, 1, lineJoin: PenLineJoin.Round, lineCap: PenLineCap.Round);
 
             foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(
                 textView, new TextSegment { StartOffset = start, EndOffset = end }))
@@ -72,9 +73,9 @@ internal sealed class SquiggleRenderer : IBackgroundRenderer
 
         ctx.BeginFigure(new Point(left, y), false);
         var goUp = true;
-        for (var x = left + 2; x <= right; x += 2)
+        for (var x = left + 3; x <= right; x += 3)
         {
-            ctx.LineTo(new Point(x, goUp ? y - 2 : y));
+            ctx.LineTo(new Point(x, goUp ? y - 1.5 : y));
             goUp = !goUp;
         }
         ctx.EndFigure(false);

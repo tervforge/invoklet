@@ -9,11 +9,18 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - Invoklet checks the public GitHub release metadata once a day after startup and shows a quiet
   notification when a newer version is available. It does not download or install updates.
+- A tab that is not chosen shows its state where the chosen tab has its close button: idle (a grey dot),
+  unsaved, running, debugging, paused or failed. Its tooltip names the state.
+- The code editor marks errors, warnings, breakpoints and the current debug line beside the scroll bar.
+  Click a mark to go to its line.
 
 ### Changed
 
 - A script that creates a secret or receives approval to replace or remove one keeps read/write
   access until its file is changed outside Invoklet, so repeated runs no longer show the same prompt.
+- Scroll bars have a short translucent thumb everywhere, without arrows, and lie over the content.
+- The underlines of errors, warnings and information, and the lightbulb of a quick fix, take softer colours
+  from the theme.
 
 ## [0.11.6] — 2026-11-06
 

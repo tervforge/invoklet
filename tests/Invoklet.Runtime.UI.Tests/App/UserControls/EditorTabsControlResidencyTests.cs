@@ -599,7 +599,7 @@ public class EditorTabsControlResidencyTests
             var state = tabs.ControlForTests(vm.Tabs[0])!.State;
 
             Assert.Equal("<div>old run</div>", state.Output.Content);
-            Assert.True(state.HadRunError);
+            Assert.True(vm.Tabs[0].HadRunError);
         }
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }

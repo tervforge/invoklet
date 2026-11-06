@@ -589,7 +589,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 return;
             case RunBlockedByArguments arguments:
                 s.Output.Clear();
-                s.HadRunError = true;
+                _vm.HadRunError = true;
                 s.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(arguments.Message)}</div>");
                 SetStatus("Error", "Invoklet.Status.ErrorBrush");
                 UpdateOutputUi();
@@ -605,7 +605,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _vm.RunState = debug ? RunState.RunDebug : RunState.Run;
         s.Output.Clear();
         s.DumpContainerBlocks.Clear();
-        s.HadRunError = false;
+        _vm.HadRunError = false;
         s.UnhandledDebugException = null;
         _vm.DebugPanel.ClearStop();
         s.ElapsedText = "";
@@ -777,13 +777,13 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
                         _vm.DebugPanel.ClearStop();
                         switch (RunEndDecision.Of(cancelled, s.UnhandledDebugException is not null,
-                                    runResult is { Succeeded: false }, s.HadRunError))
+                                    runResult is { Succeeded: false }, _vm.HadRunError))
                         {
                             case RunEnd.Cancelled:
                                 SetStatus("Cancelled", "Invoklet.Status.CancelledBrush");
                                 break;
                             case RunEnd.UnhandledException:
-                                s.HadRunError = true;
+                                _vm.HadRunError = true;
                                 SetStatus($"Unhandled {DebugPanelViewModel.ShortTypeName(s.UnhandledDebugException!)}", "Invoklet.Status.ErrorBrush");
                                 break;
                             case RunEnd.Failed:
@@ -1455,7 +1455,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private void ReportRunFailure(RunResult result, bool selection, int generation)
     {
         if (_disposed || !_run.IsCurrent(generation)) return;
-        State.HadRunError = true;
+        _vm.HadRunError = true;
         var (message, status) = result.Outcome switch
         {
             // The compiler's own errors are already in the output; for a selection, say why a name
@@ -1502,7 +1502,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void AppendError(Exception ex, string status = "Error")
     {
-        State.HadRunError = true;
+        _vm.HadRunError = true;
         // A message of several lines (what failed, why, where) keeps its lines.
         State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(ex.Message).Replace("\n", "<br>")}</div>");
         if (ex.StackTrace is { } st)
@@ -1576,6 +1576,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private void OnEditorDocumentChanged(object? sender, EventArgs e)
     {
         _squiggleRenderer?.Update(State.Editor.Document, []);
+        State.Editor.UpdateScrollMarkers([]);
         _semanticHighlighter?.Update(State.Editor.Document, []);
         _inlayHintRenderer?.Update(State.Editor.Document, []);
     }
@@ -1932,6 +1933,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 if (_disposed) return;
                 if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
                 squiggleRenderer.Update(editor.Document, diagnostics);
+                editor.UpdateScrollMarkers(DiagnosticScrollMarkers.Of(editor.Document, diagnostics));
                 editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
             });
 

@@ -26,7 +26,7 @@ internal sealed class EditorTabsControlStripFixture : IAsyncDisposable
     public EditorTabsControl? Strip { get; private set; }
     public MainWindowViewModel? ViewModel { get; private set; }
 
-    public async Task<EditorTabsControl> CreateSutAsync(int tabs, double width = 600)
+    public async Task<EditorTabsControl> CreateSutAsync(int tabs, double width = 600, bool applicationTheme = false)
     {
         var prefs = new Mock<IPreferencesService>();
         prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -61,6 +61,7 @@ internal sealed class EditorTabsControlStripFixture : IAsyncDisposable
         // The theme's backgrounds: without one a header has no surface, and a press goes through it.
         _window.Resources["Invoklet.Panel.BackgroundBrush"] = Brushes.DimGray;
         _window.Resources["Invoklet.Editor.BackgroundBrush"] = Brushes.Black;
+        if (applicationTheme) _window.Styles.Add(new InvokletTheme());
         _window.Show();
         Strip.Attach(ViewModel); // opens the first, blank tab
         for (var i = 1; i < tabs; i++) ViewModel.NewMdRunFile();

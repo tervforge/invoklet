@@ -18,6 +18,7 @@ using Invoklet.Avalonia.CodeTextEditor.Folding;
 using Invoklet.Avalonia.CodeTextEditor.Highlighters;
 using Invoklet.Avalonia.CodeTextEditor.Highlighting;
 using Invoklet.Avalonia.CodeTextEditor.Margins;
+using Invoklet.Avalonia.Themes.Scrolling;
 using TextMateSharp.Grammars;
 using static AvaloniaEdit.TextMate.TextMate;
 using FoldingMargin = Invoklet.Avalonia.CodeTextEditor.Margins.FoldingMargin;
@@ -184,6 +185,56 @@ public class CodeTextEditor : TextEditor, IDisposable
     /// <summary>Updates the lightbulb quick-fix gutter (e.g. after a diagnostics pass finds a missing using).</summary>
     public void UpdateCodeFixes(IReadOnlyList<CodeFixEntry> fixes) => _codeFixMargin.Update(fixes);
 
+    /// <summary>The marks beside the scroll bar for what the owner of the editor knows about its lines, such as diagnostics.
+    /// The breakpoints and the current line of a debug run the editor adds itself.</summary>
+    public void UpdateScrollMarkers(IReadOnlyList<ScrollMarker> markers)
+    {
+        _ownerScrollMarkers = markers;
+        RefreshScrollMarkers();
+    }
+
+    private void RefreshScrollMarkers()
+    {
+        _scrollMarkerLineCount = Document?.LineCount ?? 0;
+        _scrollMarkerContentHeight = TextArea.TextView.DocumentHeight;
+        var markers = new List<ScrollMarker>(_ownerScrollMarkers);
+        markers.AddRange(_breakpointStore.Select(b => new ScrollMarker(b.Line, ScrollMarkerKind.Breakpoint)));
+        if (DebugCurrentLine is { } line) markers.Add(new ScrollMarker(line, ScrollMarkerKind.Execution));
+        var view = TextArea.TextView;
+        _scrollMarkers.Update(markers, new ScrollMarkerGeometry(_scrollMarkerLineCount, _scrollMarkerContentHeight, view.DefaultLineHeight, view.GetVisualTopByDocumentLine));
+    }
+
+    // Between the text and the scroll bars, in the viewer's own grid: over the text, under the translucent thumb, and above the
+    // horizontal bar, in the row of the content.
+    private void PlaceScrollMarkers(INameScope scope)
+    {
+        if (scope.Find<Control>("PART_ContentPresenter") is not { Parent: Panel grid } content) return;
+        (_scrollMarkers.Parent as Panel)?.Children.Remove(_scrollMarkers);
+        Grid.SetColumnSpan(_scrollMarkers, 2);
+        grid.Children.Insert(grid.Children.IndexOf(content) + 1, _scrollMarkers);
+    }
+
+    private void RefreshScrollMarkersIfMoved()
+    {
+        if (Document?.LineCount != _scrollMarkerLineCount || TextArea.TextView.DocumentHeight != _scrollMarkerContentHeight)
+            RefreshScrollMarkers();
+    }
+
+    private void GoToScrollMarker(int line)
+    {
+        if (Document is null || line > Document.LineCount) return;
+        TextArea.Caret.Position = new TextViewPosition(line, 1);
+        ScrollToLine(line);
+        TextArea.Focus();
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        if (e.NameScope.Find<ScrollViewer>("PART_ScrollViewer") is { } viewer)
+            viewer.TemplateApplied += (_, applied) => PlaceScrollMarkers(applied.NameScope);
+    }
+
     /// <summary>Test-only observability — same rationale as every other "internal test hook" this
     /// session (e.g. DecompiledViewWindow.Editor): lets a test confirm what UpdateCodeFixes actually
     /// did without simulating a real paint pass.</summary>
@@ -345,6 +396,7 @@ public class CodeTextEditor : TextEditor, IDisposable
             _debugLineHighlighter.CurrentLine = value;
             _breakpointMargin.InvalidateVisual();
             TextArea.TextView.InvalidateLayer(KnownLayer.Background);
+            RefreshScrollMarkers();
             if (value is { } line)
                 ScrollToLine(line);
         }
@@ -352,11 +404,27 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     protected override Type StyleKeyOverride => typeof(TextEditor);
 
+    private readonly ScrollMarkerStrip _scrollMarkers = new();
+    private IReadOnlyList<ScrollMarker> _ownerScrollMarkers = [];
+    private int _scrollMarkerLineCount;
+    private double _scrollMarkerContentHeight;
+
     public CodeTextEditor()
     {
         _breakpointStore = new BreakpointStore();
         _breakpointStore.BreakpointAdded += (_, e) => BreakpointAdded?.Invoke(this, e);
         _breakpointStore.BreakpointRemoved += (_, e) => BreakpointRemoved?.Invoke(this, e);
+        _breakpointStore.BreakpointAdded += (_, _) => RefreshScrollMarkers();
+        _breakpointStore.BreakpointRemoved += (_, _) => RefreshScrollMarkers();
+        _scrollMarkers.LineActivated += GoToScrollMarker;
+        // A little wider than the vertical bar: the marks must read beside the thumb.
+        _scrollMarkers.Width = 16;
+        _scrollMarkers.AttachInput(this);
+        _scrollMarkers.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right;
+        // Lines move when the text grows, and when folding, wrapping or the zoom change the height of the content.
+        TextChanged += (_, _) => RefreshScrollMarkersIfMoved();
+        TextArea.TextView.VisualLinesChanged += (_, _) => RefreshScrollMarkersIfMoved();
+        DocumentChanged += (_, _) => RefreshScrollMarkers();
 
         _breakpointMargin = new BreakPointMargin(this, _breakpointStore);
         _codeFixMargin = new CodeFixMargin(this);
