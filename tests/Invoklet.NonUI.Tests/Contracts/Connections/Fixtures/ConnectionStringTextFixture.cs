@@ -21,7 +21,7 @@ internal sealed class ConnectionStringTextFixture
         Modes =
         [
             new ConnectionAuthMode("Password", ["Host", "Username", "Password"]),
-            new ConnectionAuthMode("pgpass file", ["Host", "Username", "Passfile"]),
+            new ConnectionAuthMode("pgpass file", ["Host", "Username", "Passfile"], Defaults: [new(passfile, "~/.pgpass")]),
             new ConnectionAuthMode("Kerberos", ["Host", "Username"], [new(integrated, "true")]),
         ];
     }

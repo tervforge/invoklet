@@ -68,4 +68,27 @@ public class PostgresConnectionDriverTests
     public void Explain_AnotherFailure_IsReportedAsItIs()
         => Assert.Equal("The database can't be read: boom", PostgresConnectionDriver.Explain("Host=db", new Npgsql.NpgsqlException("boom")));
 
+    // Npgsql takes Passfile as it is written: a file named from the home folder is found under the home of whoever reads it.
+    [Fact]
+    public void ExpandPassfile_AFileUnderTheHomeFolder_IsNamedUnderThatHome()
+    {
+        // Arrange
+        var home = Path.Combine("home", "me");
+
+        // Act
+        var expanded = PostgresConnectionDriver.ExpandPassfile("Host=db;Passfile=~/.pgpass", home);
+
+        // Assert
+        Assert.Equal(Path.Join(home, ".pgpass"), new Npgsql.NpgsqlConnectionStringBuilder(expanded).Passfile);
+    }
+
+    [Fact]
+    public void ExpandPassfile_AFullPath_LeavesTheConnectionStringAlone()
+    {
+        // Act
+        var expanded = PostgresConnectionDriver.ExpandPassfile("Host=db;Passfile=/etc/pg/pass", Path.Combine("home", "me"));
+
+        // Assert
+        Assert.Equal("Host=db;Passfile=/etc/pg/pass", expanded);
+    }
 }

@@ -125,9 +125,11 @@ public sealed class ConnectionStringTextTests
         Assert.Equal(expected, mode!.Label);
     }
 
-    // Choosing a way takes out the fields and settings of the others and writes its own; everything else stays.
+    // Choosing a way takes out the fields and settings of the others and writes its own, and its defaults into its empty fields;
+    // everything else stays.
     [Theory]
-    [InlineData("Host=a;Username=u;Password=x;SSL Mode=Require", "pgpass file", "Host=a;Username=u;SSL Mode=Require")]
+    [InlineData("Host=a;Username=u;Password=x;SSL Mode=Require", "pgpass file", "Host=a;Username=u;SSL Mode=Require;Passfile=~/.pgpass")]
+    [InlineData("Host=a;Passfile=/etc/pg/pass", "pgpass file", "Host=a;Passfile=/etc/pg/pass")]
     [InlineData("Host=a;Username=u;Password=x", "Kerberos", "Host=a;Username=u;Integrated Security=true")]
     [InlineData("Host=a;Integrated Security=true;Passfile=/p", "Password", "Host=a")]
     public void WithMode_AWayOfSigningIn_WritesItsSettingsAndDropsTheOthers(string text, string mode, string expected)

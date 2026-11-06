@@ -122,7 +122,8 @@ public sealed class ConnectionFieldViewModelTests
 
         sut.SelectedAuthMode = sut.AuthModes.Single(m => m.Label == "pgpass file");
 
-        Assert.Equal("Host=db;Username=app", sut.Text);
+        // The usual pgpass file of this system goes into its empty field.
+        Assert.Equal("Host=db;Username=app;Passfile=" + Invoklet.Connectors.Postgres.PostgresConnectionDriver.DefaultPassfile, sut.Text);
         Assert.False(Shown("Password"));
         Assert.True(Shown("Passfile"));
         Assert.True(sut.HasAuthHint);

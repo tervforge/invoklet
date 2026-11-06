@@ -35,6 +35,10 @@ Notable changes in each Invoklet release. Downloads are on the
   database connection without `using Microsoft.EntityFrameworkCore;` in the script, in completion too.
 - Go to Definition (F12) on a typed script argument opens the code generated for the arguments, as it
   does for a connection's classes.
+- Choosing **pgpass file** for a PostgreSQL connection fills in the usual file of your system
+  (`~/.pgpass`, or `~\AppData\Roaming\postgresql\pgpass.conf` on Windows), and `~` in that field now
+  means the home folder of whoever runs the script. Before, `~` was passed to the server's driver as
+  it was written and the file wasn't found.
 - Old builds of a connection's schema no longer pile up in a script's build folder.
 - Invoklet no longer keeps the first `dotnet` it found in its settings: a .NET installed later
   in the usual place is used, and a path stored that way is cleared.
