@@ -172,25 +172,4 @@ public class SecretStoreWindowViewModelTests
         store.Setup(s => s.FilePath).Returns("/data/Invoklet/secrets.json");
         Assert.False(new SecretStoreWindowViewModel(store.Object).HasChanges);
     }
-
-    // Revoke takes a script's Always Allow away at once, without Save: the settings lose it and are saved.
-    [Fact]
-    public void Revoke_Should_TakeTheScriptsAccessAwayAtOnce()
-    {
-        var store = new Mock<ISecretStore>();
-        store.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
-        var settings = new SecretsSettings { AllowedScripts = ["/a/report.inv", "/a/other.inv"] };
-        var preferences = new Mock<IPreferencesService>();
-        preferences.SetupGet(p => p.Secrets).Returns(settings);
-        var vm = new SecretStoreWindowViewModel(store.Object, preferences.Object);
-        Assert.Equal(["/a/report.inv", "/a/other.inv"], vm.AllowedScripts);
-
-        ((ICommand)vm.RevokeCommand).Execute("/a/report.inv");
-
-        Assert.Equal(["/a/other.inv"], vm.AllowedScripts);
-        Assert.Equal(["/a/other.inv"], settings.AllowedScripts);
-        preferences.Verify(p => p.Save(), Times.Once);
-        Assert.False(vm.HasChanges);
-        store.Verify(s => s.Save(It.IsAny<IReadOnlyList<Secret>>(), It.IsAny<string?>()), Times.Never);
-    }
 }

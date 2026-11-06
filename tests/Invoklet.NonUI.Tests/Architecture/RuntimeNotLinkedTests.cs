@@ -10,15 +10,21 @@ public class RuntimeNotLinkedTests
 {
     internal const string Runtime = "Invoklet.Runtime";
 
+    // The app is among the assemblies looked at, so an empty list can't pass for a clean one.
     [Fact]
-    public void NoInvokletAssembly_Should_LinkTheRuntime()
+    public void AssemblyReferences_EveryInvokletAssembly_LeavesOutTheRuntime()
     {
+        // Arrange
         var assemblies = Directory.EnumerateFiles(AppContext.BaseDirectory, "Invoklet*.dll")
             .Where(path => Path.GetFileNameWithoutExtension(path) is var name && name != Runtime && !name.EndsWith(".Tests", StringComparison.Ordinal))
             .ToList();
-        Assert.Contains(assemblies, path => Path.GetFileName(path) == "Invoklet.dll");
 
-        Assert.Empty(assemblies.Where(LinksTheRuntime).Select(Path.GetFileName));
+        // Act
+        var linking = assemblies.Where(LinksTheRuntime).Select(Path.GetFileName).ToList();
+
+        // Assert
+        Assert.Contains(assemblies, path => Path.GetFileName(path) == "Invoklet.dll");
+        Assert.Empty(linking);
     }
 
     internal static bool LinksTheRuntime(string path)

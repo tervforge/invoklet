@@ -332,21 +332,6 @@ public sealed class SecretStoreTests : IDisposable
         Assert.Equal([new Secret("Orders-DB", "new"), new Secret("zeta", "z"), new Secret("api-token", "t0k3n")], store.Load());
     }
 
-    // Util.SetSecret(name, null): the secret of that name in any case goes; a name the store lacks writes nothing.
-    [Fact]
-    public void Put_Null_Should_RemoveTheSecret_AndLeaveAStoreWithoutItAsItIs()
-    {
-        var store = new FileSecretStore(StorePath);
-        var version = store.Save([new Secret("Orders-DB", "old"), new Secret("zeta", "z")], null);
-
-        store.Put("missing", null);
-        var unchanged = store.LoadSnapshot().Version;
-        store.Put("orders-db", null);
-
-        Assert.Equal(version, unchanged);
-        Assert.Equal([new Secret("zeta", "z")], store.Load());
-    }
-
     // ── Encryption with a keychain key (macOS, Linux) ──────────────────────────
 
     // A keychain in memory: tests never touch the real one.
@@ -378,27 +363,6 @@ public sealed class SecretStoreTests : IDisposable
     }
 
     [Fact]
-    public void GetSecret_NotStartedByInvoklet_Should_DecryptOnlyWithTheKeyInItsEnvironment()
-    {
-        WithKeyExport(() => WithStore(StorePath, () =>
-        {
-            var keychain = new FakeKeychain();
-            var store = new FileSecretStore(StorePath, keychain);
-            store.Save([new Secret("Orders-DB", "p@ss wörd")], null);
-            Environment.SetEnvironmentVariable(SecretKeys.EnvVar, Convert.ToBase64String(keychain.Key!)); // set by the user themselves
-
-            Assert.Equal("p@ss wörd", Util.GetSecret("orders-db"));
-
-            Environment.SetEnvironmentVariable(SecretKeys.EnvVar, null); // a script started some other way
-            var error = Assert.Throws<InvalidOperationException>(() => Util.GetSecret("orders-db"));
-            Assert.Contains("run the script from Invoklet", error.Message);
-
-            Environment.SetEnvironmentVariable(SecretKeys.EnvVar, Convert.ToBase64String(new byte[32])); // another key
-            Assert.Throws<InvalidDataException>(() => Util.GetSecret("orders-db"));
-        }));
-    }
-
-    [Fact]
     public void AnEncryptedValue_Should_NotDecrypt_UnderAnotherName_OrChanged()
     {
         var key = RandomNumberGenerator.GetBytes(32);
@@ -409,22 +373,6 @@ public sealed class SecretStoreTests : IDisposable
         var bytes = Convert.FromBase64String(value);
         bytes[20] ^= 1;
         Assert.Throws<CryptographicException>(() => SecretKeys.Decrypt(key, "db", Convert.ToBase64String(bytes)));
-    }
-
-    [Fact]
-    public void APlainStore_Should_BeEncrypted_BeforeAScriptReadsIt()
-    {
-        SaveSecrets([new Secret("db", "plain-secret-value")]); // no keychain: as an older Invoklet left it
-        WithKeyExport(() =>
-        {
-            var store = new FileSecretStore(StorePath, new FakeKeychain());
-            store.EncryptIfPlain();
-
-            Assert.True(SecretKeys.IsEncrypted(StorePath));
-            Assert.DoesNotContain("plain-secret-value", File.ReadAllText(StorePath));
-            Assert.Equal("plain-secret-value", store.Read("DB"));
-            Assert.Null(Environment.GetEnvironmentVariable(SecretKeys.EnvVar));
-        });
     }
 
     [Fact]

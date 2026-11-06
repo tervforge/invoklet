@@ -6,11 +6,28 @@ namespace Invoklet.Cli.Tests;
 public sealed class CliRuntimeNotLinkedTests
 {
     [Fact]
-    public void TheRunner_Should_NotLinkTheRuntime_AndHaveItBesideIt()
+    public void GetReferencedAssemblies_TheRunner_LeavesOutTheRuntime()
     {
+        // Arrange
         var runner = typeof(CliRunner).Assembly;
 
-        Assert.DoesNotContain(runner.GetReferencedAssemblies(), name => name.Name == "Invoklet.Runtime");
-        Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(runner.Location)!, "Invoklet.Runtime.dll")));
+        // Act
+        var references = runner.GetReferencedAssemblies();
+
+        // Assert
+        Assert.DoesNotContain(references, name => name.Name == "Invoklet.Runtime");
+    }
+
+    [Fact]
+    public void BuildOutput_TheRunner_HasTheRuntimeBesideIt()
+    {
+        // Arrange
+        var folder = Path.GetDirectoryName(typeof(CliRunner).Assembly.Location)!;
+
+        // Act
+        var runtimeThere = File.Exists(Path.Combine(folder, "Invoklet.Runtime.dll"));
+
+        // Assert
+        Assert.True(runtimeThere);
     }
 }
