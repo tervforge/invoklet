@@ -192,6 +192,29 @@ public sealed class SecretAccessGateTests
         Assert.Single(fixture.ChangesAsked);
     }
 
+    // Write access allowed once for the old contents, then kept in the settings for the new ones: the kept one counts.
+    [Fact]
+    public async Task MayAccessAsync_AStaleSessionWriteAndAKeptOne_DoesNotAskAboutTheChange()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request("db", isSave: true), CancellationToken.None);
+        fixture.FileContents = "BBBB";
+        var path = Path.GetFullPath(fixture.ScriptPath);
+        fixture.Settings.AllowedScripts.Add(path);
+        fixture.Settings.AllowedScriptHashes[path] = "BBBB";
+        fixture.Settings.WritableScripts.Add(path);
+        fixture.ChangesAsked.Clear();
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Empty(fixture.ChangesAsked);
+    }
+
     [Fact]
     public async Task MayAccessAsync_ARemovalTheUserRefuses_IsNotAllowed()
     {

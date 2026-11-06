@@ -119,8 +119,9 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
         {
             allowedThisSession = _writableThisSession.TryGetValue(script, out allowed);
         }
-        if (allowedThisSession)
-            return script == Unsaved || string.Equals(allowed, _fingerprint(script), StringComparison.OrdinalIgnoreCase);
+        // A session grant for older contents of the file does not hide one kept in the settings for the current contents.
+        if (allowedThisSession && (script == Unsaved || string.Equals(allowed, _fingerprint(script), StringComparison.OrdinalIgnoreCase)))
+            return true;
         return PersistedPermissionKey(script) is { } key
             && preferences.Secrets.WritableScripts.Contains(key, PathComparer);
     }
