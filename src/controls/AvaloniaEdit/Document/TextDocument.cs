@@ -157,7 +157,7 @@ public sealed class TextDocument : IDocument, INotifyPropertyChanged
         }
     }
 
-    private void VerifyAccess()
+    internal void VerifyAccess()
     {
         if (Thread.CurrentThread != ownerThread)
         {

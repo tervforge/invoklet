@@ -16,7 +16,9 @@ control for Avalonia, itself a port of AvalonEdit from the SharpDevelop project.
   completion/insight popups that take the transform of the editor they open from, and
   `TextEditor.ScrollToVerticalOffset`/`ScrollToHorizontalOffset`, which upstream leaves empty,
   a compact full-width search template with inline options and a second replacement row, and
-  parameter info (`OverloadViewer`) that draws its `CornerRadius`.
+  parameter info (`OverloadViewer`) that draws its `CornerRadius`, and thread checks and posts that use the
+  document's owner thread or the control's own dispatcher instead of the static `Dispatcher.UIThread`, which
+  a read from another thread while it is unset would bind to that thread.
   `git log -- src/controls/AvaloniaEdit src/controls/AvaloniaEdit.TextMate` shows every change.
 - **Tests:** the upstream NUnit suite is kept unchanged in
   [`tests/AvaloniaEdit.Tests`](../../../tests/AvaloniaEdit.Tests); Invoklet's own tests for the fork live

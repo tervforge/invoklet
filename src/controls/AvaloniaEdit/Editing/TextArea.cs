@@ -576,7 +576,7 @@ public class TextArea : TemplatedControl, ITextEditorComponent, IRoutedCommandBi
         if (!_ensureSelectionValidRequested && _allowCaretOutsideSelection == 0)
         {
             _ensureSelectionValidRequested = true;
-            Dispatcher.UIThread.Post(EnsureSelectionValid);
+            Dispatcher.Post(EnsureSelectionValid);
         }
     }
 
@@ -695,7 +695,7 @@ public class TextArea : TemplatedControl, ITextEditorComponent, IRoutedCommandBi
 
         ScrollToLine(Caret.Line, 2);
 
-        Dispatcher.UIThread.InvokeAsync(() =>
+        Dispatcher.InvokeAsync(() =>
         {
             (this as ILogicalScrollable).RaiseScrollInvalidated(EventArgs.Empty);
         });

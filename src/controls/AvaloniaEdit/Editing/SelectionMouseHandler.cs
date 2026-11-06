@@ -282,7 +282,7 @@ internal sealed class SelectionMouseHandler : ITextAreaInputHandler
         // swallows exceptions during drag'n'drop or reports them incorrectly, so
         // we re-throw them later to allow the application's unhandled exception handler
         // to catch them
-        Dispatcher.UIThread.Post(
+        TextArea.Dispatcher.Post(
             new Action(delegate
             {
                 throw new DragDropException("Exception during drag'n'drop", ex);
