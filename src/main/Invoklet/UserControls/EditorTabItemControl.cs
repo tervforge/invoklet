@@ -405,6 +405,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var written = _documentWriter.Serialize(State.MdRunDocument, State.Editor.Text, path, _vm.FilePath, _vm.ReferenceAnchorPath);
         // A write that fails leaves the file as it was (and so the tab's idea of it): the ID and the state are taken only after it.
         AtomicFile.WriteAllBytes(path, written.Bytes);
+        ScriptFileWrites.Report(path, written.Bytes);
         if (written.DocumentId is { } id) _writtenId = (path, id);
         _vm.LastWrite = (path, ScriptFileState.Of(written.Bytes));
     }
@@ -1400,8 +1401,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         if (kind is OutputKind.StandardError or OutputKind.StandardErrorPartial)
             State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(data)}</div>");
+        // The compiler's warnings are the editor's to show (they are underlined in the code): in the results they only pushed the
+        // script's own output down. The command line still writes them, to its standard error.
         else if (kind == OutputKind.Diagnostic)
-            State.Output.Append($"\n<div class=\"diagnostic\">{HttpUtility.HtmlEncode(data)}</div>");
+            return;
         else
             State.Output.Append($"\n<div class=\"out\">{HttpUtility.HtmlEncode(data)}</div>");
         UpdateOutputUi();

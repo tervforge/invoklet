@@ -31,6 +31,10 @@ internal sealed record CliArguments
     /// <summary>Read every connection's description (a gRPC server's services) again before the build,
     /// not only those never read or that failed.</summary>
     public bool RefreshConnections { get; init; }
+
+    /// <summary><c>-q</c>, <c>--quiet</c>: no warnings (the compiler's, an SDK that isn't installed) and no stages; errors and the
+    /// script's own output stay.</summary>
+    public bool Quiet { get; init; }
     public bool ShowHelp { get; init; }
     public bool ShowVersion { get; init; }
 
@@ -123,6 +127,8 @@ internal sealed record CliArguments
                 return (current with { CompileOnly = true }, null);
             case "refresh-connections":
                 return (current with { RefreshConnections = true }, null);
+            case "q" or "quiet":
+                return (current with { Quiet = true }, null);
             case "args-set":
                 {
                     if (!TryTakeValue(name, inlineValue, args, ref index, out var value, out var error))

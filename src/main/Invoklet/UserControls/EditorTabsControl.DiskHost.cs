@@ -8,7 +8,8 @@ public partial class EditorTabsControl
 {
     bool ITabDiskHost.IsClosed => _disposed;
 
-    IReadOnlyList<EditorTabItemViewModel> ITabDiskHost.Tabs => _vm?.Tabs ?? [];
+    // A window's strip looks after its own tabs; the others' are their strips'.
+    IReadOnlyList<EditorTabItemViewModel> ITabDiskHost.Tabs => _vm is null ? [] : [.. _vm.Tabs.Where(t => t.WindowId == _windowId)];
 
     bool ITabDiskHost.HasContent(EditorTabItemViewModel tab) => HasControl(tab);
 

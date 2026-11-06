@@ -12,7 +12,8 @@
              ItemsPanel swaps that WrapPanel for a plain non-wrapping horizontal StackPanel, and the
              custom Template below wraps it in a horizontally-scrolling ScrollViewer instead — tabs
              that don't fit are reachable by scrolling (wheel/scrollbar/drag), never clipped or
-             overlapping. -->
+             overlapping. The "+" follows the last tab inside the scrolled strip; the list of all tabs has a column of its own at
+             the right, outside it, so no tab ever slides under it (both used to lie over the strip's right end and hide tabs). -->
         <Style Selector="TabControl#FileTabControl">
             <Setter Property="Background" Value="{DynamicResource Invoklet.Editor.BackgroundBrush}"/>
             <Setter Property="Padding"    Value="0"/>
@@ -25,13 +26,29 @@
                 <ControlTemplate TargetType="TabControl">
                     <Border Background="{TemplateBinding Background}">
                         <DockPanel>
-                            <ScrollViewer Name="PART_TabStripScrollViewer"
-                                          DockPanel.Dock="Top"
-                                          HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollBarVisibility="Disabled">
-                                <ItemsPresenter Name="PART_ItemsPresenter"
-                                                ItemsPanel="{TemplateBinding ItemsPanel}"/>
-                            </ScrollViewer>
+                            <Grid Name="PART_StripRow" DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+                                <!-- The theme's scroll bar, drawn over the headers, hid half of their names: this one is a thin line at their
+                                     foot (style below). The wheel scrolls the strip too, and the tab chosen is brought into view. -->
+                                <ScrollViewer Name="PART_TabStripScrollViewer"
+                                              HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Disabled"
+                                              AllowAutoHide="False">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ItemsPresenter Name="PART_ItemsPresenter"
+                                                        ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                                        <templatedControls:IconButton Name="PART_AddTab"
+                                                                      Width="30" Height="30"
+                                                                      Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"
+                                                                      IconData="{DynamicResource Icon.Plus}"
+                                                                      ToolTip.Tip="New file"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                                <templatedControls:IconButton Name="PART_AllTabs" Grid.Column="1"
+                                                              Width="30" Height="30"
+                                                              Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"
+                                                              IconData="{DynamicResource Icon.ChevronDown}"
+                                                              ToolTip.Tip="Show all open tabs"/>
+                            </Grid>
                             <ContentPresenter Name="PART_SelectedContentHost"
                                               Content="{TemplateBinding SelectedContent}"
                                               ContentTemplate="{TemplateBinding SelectedContentTemplate}"
@@ -41,6 +58,17 @@
                     </Border>
                 </ControlTemplate>
             </Setter>
+        </Style>
+
+        <!-- Fluent's scroll arrows at the strip's ends: the thin bar, the wheel and the list of tabs do their work. -->
+        <Style Selector="ScrollViewer#PART_TabStripScrollViewer /template/ ScrollBar /template/ RepeatButton">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+
+        <Style Selector="ScrollViewer#PART_TabStripScrollViewer /template/ ScrollBar">
+            <Setter Property="Height" Value="3"/>
+            <Setter Property="MinHeight" Value="3"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
         </Style>
 
         <Style Selector="TabControl#FileTabControl > TabItem">
@@ -125,26 +153,6 @@
 
     </UserControl.Styles>
 
-    <Panel>
-        <TabControl Name="FileTabControl" Padding="0"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-            <!-- Horizontal scroll (already wired on the TabControl's own
-                 template above) solves the overlap problem; this is the other half of what the user
-                 originally asked for — quick access to a tab that's scrolled out of view without
-                 having to scroll to find it. -->
-            <templatedControls:IconButton
-                Width="30" Height="30"
-                Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"
-                IconData="{StaticResource Icon.ChevronDown}"
-                Click="ShowAllTabs_Click"
-                ToolTip.Tip="Show all open tabs"/>
-            <templatedControls:IconButton
-                Width="30" Height="30"
-                Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"
-                IconData="{StaticResource Icon.Plus}"
-                Click="AddFile_Click"
-                ToolTip.Tip="New file"/>
-        </StackPanel>
-    </Panel>
+    <TabControl Name="FileTabControl" Padding="0"/>
 
 </UserControl>

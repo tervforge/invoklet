@@ -42,6 +42,109 @@ public sealed class SecretAccessGateTests
         Assert.Equal([("report.inv", "billing", false)], fixture.Asked);
     }
 
+    // A file another program changed (a new download, a replaced copy) is not the file the user allowed.
+    [Fact]
+    public async Task MayAccessAsync_AnAllowedScriptChangedByAnotherProgram_AsksAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+        fixture.FileContents = "BBBB";
+
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.Equal(2, fixture.Asked.Count);
+    }
+
+    // The user's own edits, saved by Invoklet, keep the script allowed.
+    [Fact]
+    public async Task ScriptWritten_AnAllowedScriptSavedByInvoklet_KeepsItAllowed()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+        byte[] saved = [1, 2, 3];
+        fixture.FileContents = SecretAccessGateFixture.HashOf(saved);
+
+        // Act
+        sut.ScriptWritten(fixture.ScriptPath, saved);
+        var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Single(fixture.Asked);
+    }
+
+    // An earlier version kept the path only: such a script is asked about once more, and its contents are kept then.
+    [Fact]
+    public async Task MayAccessAsync_AScriptAllowedWithoutItsContents_AsksAgain()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        fixture.Settings.AllowedScripts.Add(fixture.ScriptPath);
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Assert
+        Assert.Single(fixture.Asked);
+        Assert.Equal("AAAA", fixture.Settings.AllowedScriptHashes[fixture.ScriptPath]);
+    }
+
+    // A script allowed before may still not wipe what another script needs: replacing a kept secret is asked about that once.
+    [Fact]
+    public async Task MayAccessAsync_AnAllowedScriptReplacingAKeptSecret_AsksAboutTheChange()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Equal([("report.inv", "db", false)], fixture.ChangesAsked);
+    }
+
+    [Fact]
+    public async Task MayAccessAsync_ARemovalTheUserRefuses_IsNotAllowed()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always, AllowChange = false };
+        var sut = fixture.CreateSut();
+        await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Remove), CancellationToken.None);
+
+        // Assert
+        Assert.False(allowed);
+        Assert.Equal([("report.inv", "db", true)], fixture.ChangesAsked);
+    }
+
+    // The first question already says the script wants to change the secret: it isn't asked twice in a row.
+    [Fact]
+    public async Task MayAccessAsync_AScriptAskedAboutJustNow_IsNotAskedAboutTheChangeToo()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+
+        // Act
+        var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
+
+        // Assert
+        Assert.True(allowed);
+        Assert.Empty(fixture.ChangesAsked);
+    }
+
     // Always is kept only in the settings: taking it away there (the Secret Store window) makes the next request ask again at once.
     [Fact]
     public async Task MayAccessAsync_AlwaysTakenAwayInTheSettings_AsksAgain()

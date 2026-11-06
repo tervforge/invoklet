@@ -98,6 +98,9 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
     // see EditorsTabItemControl's constructor for why the TextChanged subscription that sets this is
     // attached only after the initial SetDocumentContent call, not before. Cleared back to false by
     // every successful write (SaveIfNeeded, the pre-run save in RunAsync, Save As).
+    /// <summary>The window whose strip shows the tab: 0 is the main window, others were opened by moving a tab out of a strip.</summary>
+    public int WindowId { get; internal set; }
+
     public bool IsDirty
     {
         get;
@@ -127,6 +130,11 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
     public ExampleScript? Example { get; init; }
 
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
+
+    /// <summary>The tab's menu: a window of its own. What it does is the strip's, which shows the tab (<see cref="MoveToNewWindow"/>).</summary>
+    public ReactiveCommand<Unit, Unit> MoveToNewWindowCommand { get; }
+
+    internal Action? MoveToNewWindow { get; set; }
 
     public List<DotnetSdk> AvailableSdks { get; }
 
@@ -318,6 +326,7 @@ public sealed class EditorTabItemViewModel : ReactiveObject, IDisposable
         UntitledTitle = untitledTitle;
 
         CloseCommand = ReactiveCommand.CreateFromTask(() => _actions.CloseAsync(this));
+        MoveToNewWindowCommand = ReactiveCommand.Create(() => MoveToNewWindow?.Invoke());
         SaveAsCommand = ReactiveCommand.CreateFromTask(() => _actions.SaveAsAsync(this));
         DuplicateCommand = ReactiveCommand.Create(() => _actions.Duplicate(this));
         OpenContainingFolderCommand = ReactiveCommand.Create(() => _actions.OpenContainingFolder(this));

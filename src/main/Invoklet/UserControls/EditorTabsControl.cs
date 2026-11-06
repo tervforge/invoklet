@@ -1,7 +1,10 @@
 using System.Collections.Specialized;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
@@ -59,9 +62,10 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
         IPreferencesService prefs,
         IBuildCacheService buildCache, ILogger<EditorsTabItemControl>? runLogger = null,
         ConnectionDriverRegistry? connectionDrivers = null, ConnectionSchemas? connectionSchemas = null,
-        TabLifecycleManager? lifecycle = null, EditorTimings? timings = null)
+        TabLifecycleManager? lifecycle = null, EditorTimings? timings = null, IServiceProvider? services = null)
     {
         InitializeComponent();
+        _services = services;
         _lifecycle = lifecycle;
         _timings = timings;
         _diskSync = new TabDiskSync(windowService);
@@ -74,6 +78,29 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
         _buildCache = buildCache;
         _runLogger = runLogger;
         _themeService.ThemeChanged += OnThemeChanged;
+        WireStrip();
+    }
+
+    // The strip's buttons are parts of the TabControl's template ("+" after the last tab, the list of tabs at the right), and dragging a
+    // tab along the strip moves it.
+    private void WireStrip()
+    {
+        var fileTabControl = this.FindControl<TabControl>("FileTabControl")!;
+        fileTabControl.TemplateApplied += (_, e) =>
+        {
+            _stripRow = e.NameScope.Find<Grid>("PART_StripRow");
+            ShowStripRow();
+            if (e.NameScope.Find<Button>("PART_AddTab") is { } add) add.Click += AddFile_Click;
+            if (e.NameScope.Find<Button>("PART_AllTabs") is { } all) all.Click += ShowAllTabs_Click;
+            if (e.NameScope.Find<ScrollViewer>("PART_TabStripScrollViewer") is { } strip)
+            {
+                _stripScroll = strip;
+                strip.AddHandler(PointerWheelChangedEvent, OnStripWheel, RoutingStrategies.Tunnel);
+            }
+        };
+        AddHandler(PointerMovedEvent, OnTabPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnTabPointerReleased, RoutingStrategies.Tunnel);
+        AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag());
     }
 
     // ── Called by MainWindow after construction ───────────────────────────────
@@ -84,15 +111,25 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
             throw new InvalidOperationException("EditorTabsControl can only be attached once.");
 
         _vm = vm;
+        Strips.Add(this);
 
         var fileTabControl = this.FindControl<TabControl>("FileTabControl")!;
         fileTabControl.SelectionChanged += OnFileTabSelectionChanged;
 
-        _lifecycle?.Attach(() => _vm?.ActiveTab, OnContentNotRestored);
+        if (_windowId == 0) _lifecycle?.Attach(() => Shown, OnContentNotRestored);
+        else _windowWatch = _lifecycle?.WatchWindow(() => Shown);
         vm.Tabs.CollectionChanged += OnTabsCollectionChanged;
         _activeTabSub = vm.WhenAnyValue(x => x.ActiveTab).Subscribe(OnActiveTabChanged);
         vm.DependenciesWindowClosed += OnDependenciesWindowClosed;
         vm.ScriptsFolderChanged += OnScriptsFolderChanged;
+
+        if (_windowId != 0)
+        {
+            // The session and its restore are the main window's.
+            _sessionRestored = true;
+            _workspaceShown.TrySetResult();
+            return;
+        }
 
         // Restores the previous session's open tabs
         // (in order) + active tab instead of always starting from one blank tab.
@@ -118,7 +155,7 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
 
     private void SignalWorkspaceShownIfDone()
     {
-        if (_disposed || _sessionRestored && _vm is not null && _vm.Tabs.All(_tabs.ContainsKey))
+        if (_disposed || _sessionRestored && _vm is not null && _vm.Tabs.Where(t => t.WindowId == _windowId).All(_tabs.ContainsKey))
             _workspaceShown.TrySetResult();
     }
 
@@ -154,10 +191,19 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
     {
         var fileTabControl = this.FindControl<TabControl>("FileTabControl")!;
 
+        // A tab moved along the strip keeps its control: only its header changes place.
+        if (e.Action == NotifyCollectionChangedAction.Move)
+        {
+            foreach (EditorTabItemViewModel moved in e.NewItems ?? Array.Empty<EditorTabItemViewModel>())
+                MoveTabItem(fileTabControl, moved);
+            return;
+        }
+
         if (e.NewItems is not null)
         {
             foreach (EditorTabItemViewModel vm in e.NewItems)
             {
+                if (vm.WindowId != _windowId) continue;
                 // The expensive part (the language's editor services — see CreateIntelliSenseAsync)
                 // runs off the UI thread so opening a script doesn't freeze the app. By the time we
                 // get back here, the tab may already have been closed again (or the whole control
@@ -207,6 +253,8 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
                 // Where vm is among the tabs already shown: the end, unless it took the place of one.
                 var position = _vm!.Tabs.TakeWhile(t => !ReferenceEquals(t, vm)).Count(_tabs.ContainsKey);
                 var tab = AddTabItem(ctrl, vm, fileTabControl, position);
+                WatchDrags(tab);
+                vm.MoveToNewWindow = () => MoveToNewWindow(vm);
                 _tabs[vm] = (tab, ctrl);
                 if (_lifecycle is not null)
                 {
@@ -217,7 +265,7 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
                 // ActiveTab may already have been set to vm (e.g. it's the tab that was just
                 // opened) before this entry existed — OnActiveTabChanged no-ops in that case, so
                 // select it explicitly now if it's still the active one.
-                if (ReferenceEquals(_vm?.ActiveTab, vm))
+                if (ReferenceEquals(_vm?.ActiveTab, vm) || ReferenceEquals(_shown, vm))
                     fileTabControl.SelectedItem = tab;
                 _lifecycle?.Rebalance();
                 SignalWorkspaceShownIfDone();
@@ -241,6 +289,7 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
                 vm.Dispose();
             }
             SignalWorkspaceShownIfDone();
+            RaiseEmptiedIfNoTabs();
         }
     }
 
@@ -248,7 +297,7 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
 
     private void OnFileTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is not TabControl tc || _vm is null) return;
+        if (sender is not TabControl tc || _vm is null || _movingTab) return;
         var selected = _tabs.FirstOrDefault(kv => kv.Value.Tab == tc.SelectedItem as TabItem).Key;
 
         // tc.SelectedItem transiently goes null while Items is being mutated — e.g. OpenTab closing
@@ -258,18 +307,28 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
         // user action; nulling ActiveTab here would strand it permanently, since the code above that
         // would normally re-select the new tab once it finishes loading only does so
         // `if (ReferenceEquals(_vm?.ActiveTab, vm))`.
-        if (selected is null && _vm.Tabs.Count > 0) return;
+        if (selected is not null) _shown = selected;
+        if (selected is null && (_vm.Tabs.Any(t => t.WindowId == _windowId) || _windowId != 0)) return;
+        // A header taken out of a window not in use (its tab moved to another window) selects another one there, not in the workspace.
+        if (AnotherWindowInUse()) return;
 
         _vm.ActiveTab = selected;
     }
 
     private void OnActiveTabChanged(EditorTabItemViewModel? vm)
     {
-        if (vm is null) return;
+        if (vm is null || vm.WindowId != _windowId) return;
+        _shown = vm;
 
         var fileTabControl = this.FindControl<TabControl>("FileTabControl")!;
-        if (_tabs.TryGetValue(vm, out var entry) && fileTabControl.SelectedItem != entry.Tab)
-            fileTabControl.SelectedItem = entry.Tab;
+        // A tab of this window chosen elsewhere (the list of tabs, opening its file again from another window): the window comes forward.
+        if (Strips.Count > 1 && TopLevel.GetTopLevel(this) is Window { IsVisible: true, IsActive: false } window) window.Activate();
+        if (_tabs.TryGetValue(vm, out var entry))
+        {
+            if (fileTabControl.SelectedItem != entry.Tab) fileTabControl.SelectedItem = entry.Tab;
+            // A tab chosen from the list, or opened at the end, may lie past the strip's visible part.
+            Dispatcher.Post(() => entry.Tab.BringIntoView(), DispatcherPriority.Loaded);
+        }
 
         _lifecycle?.Activated(vm);
     }
@@ -278,7 +337,7 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
     private void SyncHighlighting()
     {
         foreach (var (tabVm, (_, ctrl)) in _tabs)
-            ctrl?.SetHighlightingActive(ReferenceEquals(tabVm, _vm?.ActiveTab));
+            ctrl?.SetHighlightingActive(ReferenceEquals(tabVm, Shown));
     }
 
     internal Task IdleForTests() => _lifecycle?.WhenIdleAsync() ?? Task.CompletedTask;
@@ -452,7 +511,9 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
 
         _activeTabSub?.Dispose();
         _closed.Cancel();
-        _lifecycle?.Detach();
+        if (_vm is not null) Strips.Remove(this);
+        if (_windowId == 0) _lifecycle?.Detach();
+        _windowWatch?.Dispose();
         foreach (var creation in _creating.Values.ToArray()) creation.Cancel();
 
         // No save here: unsaved content was already resolved by MainWindow's Closing
@@ -551,6 +612,220 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
             _buildCache!, _runLogger, _connectionDrivers, _connectionSchemas, _timings
         );
     }
+
+    private void MoveTabItem(TabControl tabControl, EditorTabItemViewModel vm)
+    {
+        if (_vm is null || !_tabs.TryGetValue(vm, out var entry)) return;
+        var position = _vm.Tabs.TakeWhile(t => !ReferenceEquals(t, vm)).Count(_tabs.ContainsKey);
+        if (tabControl.Items.IndexOf(entry.Tab) == position) return;
+        var selected = tabControl.SelectedItem;
+        // Taking the selected header out would select another tab for a moment, and with it another script.
+        _movingTab = true;
+        try
+        {
+            tabControl.Items.Remove(entry.Tab);
+            tabControl.Items.Insert(position, entry.Tab);
+            tabControl.SelectedItem = selected;
+        }
+        finally
+        {
+            _movingTab = false;
+        }
+    }
+
+    private bool _movingTab;
+
+    // The wheel scrolls the strip sideways (it has no scroll bar of its own): either direction of a wheel or a trackpad.
+    private static void OnStripWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer strip) return;
+        var delta = Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y) ? e.Delta.X : e.Delta.Y;
+        strip.Offset = strip.Offset.WithX(Math.Clamp(strip.Offset.X - delta * 40, 0, Math.Max(0, strip.Extent.Width - strip.Viewport.Width)));
+        e.Handled = true;
+    }
+
+    // ── Dragging a tab along the strip ─────────────────────────────────────────
+
+    // A press on a header becomes a drag once the pointer has gone this far; less is a click that selects the tab.
+    private const double DragThreshold = 4;
+
+    // How near an end of the strip the pointer scrolls it, and by how much a move.
+    private const double ScrollZone = 32, ScrollStep = 12;
+
+    // How far below the strip a tab dropped goes to a window of its own (less is still a move along the strip).
+    private const double TearOffDistance = 60;
+
+    // A drag in progress: the header pressed and where on it, where the press was in the strip's coordinates, and, once it moves, the
+    // header's picture following the pointer and the mark where the tab will go. Both lie in the window's overlay layer, so the tab can be
+    // carried anywhere over the window.
+    private sealed class TabDrag(TabItem tab, Point grab, Point start)
+    {
+        public TabItem Tab { get; } = tab;
+        public Point Grab { get; } = grab;
+        public Point Start { get; } = start;
+        public Control? Ghost { get; set; }
+        public Control? Mark { get; set; }
+        public int Insert { get; set; } = -1;
+    }
+
+    private TabDrag? _drag;
+
+    // The strip's scrolled part, from the TabControl's template.
+    private ScrollViewer? _stripScroll;
+
+    private void WatchDrags(TabItem tab) => tab.AddHandler(PointerPressedEvent, OnTabPointerPressed, RoutingStrategies.Tunnel);
+
+    private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not TabItem tab || !e.GetCurrentPoint(tab).Properties.IsLeftButtonPressed) return;
+        _drag = new TabDrag(tab, e.GetPosition(tab), e.GetPosition(this));
+    }
+
+    private void OnTabPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_drag is not { } drag || _vm is null) return;
+        var at = e.GetPosition(this);
+        if (drag.Ghost is null)
+        {
+            if (Math.Abs(at.X - drag.Start.X) < DragThreshold && Math.Abs(at.Y - drag.Start.Y) < DragThreshold) return;
+            if (!StartDrag(drag)) return;
+            e.Pointer.Capture(this);
+        }
+        if (global::Avalonia.Controls.Primitives.OverlayLayer.GetOverlayLayer(this) is not { } overlay) return;
+        var inOverlay = e.GetPosition(overlay);
+        Canvas.SetLeft(drag.Ghost!, inOverlay.X - drag.Grab.X);
+        Canvas.SetTop(drag.Ghost!, inOverlay.Y - drag.Grab.Y);
+        ScrollNearEnds(e);
+        ShowMark(drag, overlay, e);
+        e.Handled = true;
+    }
+
+    private void OnTabPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_drag is not { } drag) return;
+        if (drag.Ghost is not null)
+        {
+            e.Handled = true;
+            var tearOff = IsTearOff(e);
+            var screen = TopLevel.GetTopLevel(this) is { } top ? top.PointToScreen(e.GetPosition(top) - drag.Grab) : default;
+            if (_vm is not null && TabOf(drag.Tab) is { } moving)
+            {
+                EndDrag();
+                e.Pointer.Capture(null);
+                if (tearOff) MoveToNewWindow(moving, screen);
+                else if (drag.Insert >= 0) _vm.MoveTab(moving, FinalIndex(moving, drag.Insert));
+                return;
+            }
+        }
+        EndDrag();
+        e.Pointer.Capture(null);
+    }
+
+    // The header's picture under the pointer, the header itself faded where it was, and the pointer showing a move.
+    private bool StartDrag(TabDrag drag)
+    {
+        if (global::Avalonia.Controls.Primitives.OverlayLayer.GetOverlayLayer(this) is not { } overlay || TabOf(drag.Tab) is not { } vm) return false;
+        drag.Ghost = new Border
+        {
+            Width = drag.Tab.Bounds.Width,
+            Height = drag.Tab.Bounds.Height,
+            Opacity = 0.85,
+            IsHitTestVisible = false,
+            Background = ThemeBrush("Invoklet.Editor.BackgroundBrush"),
+            BorderBrush = ThemeBrush("Invoklet.Tab.AccentBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = this.TryFindResource("Invoklet.Radius.Control", ActualThemeVariant, out var radius) && radius is CornerRadius r ? r : default,
+            BoxShadow = new global::Avalonia.Media.BoxShadows(new global::Avalonia.Media.BoxShadow { OffsetY = 4, Blur = 12, Color = global::Avalonia.Media.Color.FromArgb(0x60, 0, 0, 0) }),
+            Child = new TextBlock
+            {
+                Text = vm.FileName,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                Foreground = ThemeBrush("Invoklet.Text.PrimaryBrush"),
+            },
+        };
+        drag.Mark = new Border
+        {
+            Width = 2,
+            Height = drag.Tab.Bounds.Height,
+            IsHitTestVisible = false,
+            IsVisible = false,
+            Background = ThemeBrush("Invoklet.Tab.AccentBrush") ?? global::Avalonia.Media.Brushes.DodgerBlue,
+        };
+        overlay.Children.Add(drag.Mark);
+        overlay.Children.Add(drag.Ghost);
+        drag.Tab.Opacity = 0.35;
+        Cursor = new Cursor(StandardCursorType.DragMove);
+        return true;
+    }
+
+    private void EndDrag()
+    {
+        if (_drag is not { } drag) return;
+        _drag = null;
+        if (global::Avalonia.Controls.Primitives.OverlayLayer.GetOverlayLayer(this) is { } overlay)
+        {
+            if (drag.Ghost is not null) overlay.Children.Remove(drag.Ghost);
+            if (drag.Mark is not null) overlay.Children.Remove(drag.Mark);
+        }
+        drag.Tab.Opacity = 1;
+        Cursor = null;
+    }
+
+    // The mark goes between the two headers the pointer is between, whatever its height: the tab is dropped where it shows.
+    private void ShowMark(TabDrag drag, Visual overlay, PointerEventArgs e)
+    {
+        var others = Headers().Where(t => !ReferenceEquals(t, drag.Tab)).ToList();
+        if (drag.Mark is null) return;
+        // Far below the strip, or out of the window, the tab goes to a window of its own: no place along the strip is shown.
+        if (others.Count == 0 || IsTearOff(e))
+        {
+            drag.Mark.IsVisible = false;
+            drag.Insert = -1;
+            return;
+        }
+        var x = e.GetPosition(others[0].Parent as Visual).X;
+        drag.Insert = others.Count(t => t.Bounds.Left + t.Bounds.Width / 2 < x);
+        var edge = drag.Insert < others.Count ? others[drag.Insert] : others[^1];
+        var origin = edge.TranslatePoint(new Point(drag.Insert < others.Count ? 0 : edge.Bounds.Width, 0), overlay);
+        if (origin is not { } at) return;
+        Canvas.SetLeft(drag.Mark, at.X - 1);
+        Canvas.SetTop(drag.Mark, at.Y);
+        drag.Mark.IsVisible = true;
+    }
+
+    private bool IsTearOff(PointerEventArgs e)
+    {
+        if (_stripScroll is not { } strip || TopLevel.GetTopLevel(this) is not { } top) return false;
+        var inWindow = e.GetPosition(top);
+        var outOfWindow = inWindow.X < 0 || inWindow.Y < 0 || inWindow.X > top.Bounds.Width || inWindow.Y > top.Bounds.Height;
+        return outOfWindow || e.GetPosition(strip).Y > strip.Bounds.Height + TearOffDistance;
+    }
+
+    // Near an end of the strip it scrolls, so a tab can be carried to one out of sight.
+    private void ScrollNearEnds(PointerEventArgs e)
+    {
+        if (_stripScroll is not { } strip) return;
+        var x = e.GetPosition(strip).X;
+        var step = x < ScrollZone ? -ScrollStep : x > strip.Viewport.Width - ScrollZone ? ScrollStep : 0;
+        if (step != 0)
+            strip.Offset = strip.Offset.WithX(Math.Clamp(strip.Offset.X + step, 0, Math.Max(0, strip.Extent.Width - strip.Viewport.Width)));
+    }
+
+    // Where the tab goes among all the tabs, from its place among the headers it was dropped between.
+    private int FinalIndex(EditorTabItemViewModel moving, int insert)
+    {
+        var others = Headers().Where(t => TabOf(t) is { } vm && !ReferenceEquals(vm, moving)).ToList();
+        if (insert >= others.Count) return _vm!.Tabs.Count - 1;
+        var target = _vm!.Tabs.IndexOf(TabOf(others[insert])!);
+        return target > _vm.Tabs.IndexOf(moving) ? target - 1 : target;
+    }
+
+    private List<TabItem> Headers() => [.. this.FindControl<TabControl>("FileTabControl")!.Items.OfType<TabItem>()];
+
+    private global::Avalonia.Media.IBrush? ThemeBrush(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) ? value as global::Avalonia.Media.IBrush : null;
+
+    private EditorTabItemViewModel? TabOf(TabItem tab) => _tabs.FirstOrDefault(kv => ReferenceEquals(kv.Value.Tab, tab)).Key;
 
     private static TabItem AddTabItem(EditorsTabItemControl ctrl, EditorTabItemViewModel vm, TabControl tabControl, int position)
     {

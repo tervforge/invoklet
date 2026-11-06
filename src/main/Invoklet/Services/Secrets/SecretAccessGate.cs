@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Avalonia.Threading;
 using Invoklet.Contracts;
 using Invoklet.Services.Preferences;
@@ -6,11 +7,18 @@ namespace Invoklet.Services.Secrets;
 
 /// <summary>
 /// Whether a running script may use the Secret Store: the first time a script asks, the user is asked. Always Allow is kept in the
-/// settings by the script's full path; Allow Once and a script not saved yet (one answer for all of them) last until Invoklet closes.
-/// A no is not remembered: the next run asks again.
+/// settings by the script's full path and the contents of its file, which Invoklet's own saves keep up to date: a file another program
+/// changed is asked about again. Allow Once and a script not saved yet (one answer for all of them) last until Invoklet closes. A no is
+/// not remembered: the next run asks again.
 /// </summary>
-public sealed class SecretAccessGate(IPreferencesService preferences, Func<string, string, bool, CancellationToken, Task<SecretAccessChoice>> ask)
+/// <param name="confirmChange">Whether an allowed script may replace (or, <c>true</c>, remove) a secret already kept: script name, secret,
+/// removes. Without it, an allowed script changes secrets unasked.</param>
+/// <param name="fingerprint">The SHA-256 (hex) of a file, or null when it can't be read; by default read from the disk.</param>
+public sealed class SecretAccessGate(IPreferencesService preferences, Func<string, string, bool, CancellationToken, Task<SecretAccessChoice>> ask,
+    Func<string, string?>? fingerprint = null, Func<string, string, bool, CancellationToken, Task<bool>>? confirmChange = null)
 {
+    private readonly Func<string, string?> _fingerprint = fingerprint ?? FileFingerprint;
+
     // Paths are compared as the file system does: letter case aside on Windows and macOS.
     private static readonly StringComparer PathComparer = OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
 
@@ -35,18 +43,25 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     public async Task<bool> MayAccessAsync(SecretAccess access, CancellationToken cancellationToken)
     {
         var script = access.ScriptPath is { Length: > 0 } path ? Path.GetFullPath(path) : Unsaved;
-        if (IsAllowed(script)) return true;
+        var changes = access.IsSave && access.Change != SecretChange.None && confirmChange is not null;
+        if (IsAllowed(script) && !changes) return true;
         await _asking.WaitAsync(cancellationToken);
         try
         {
-            if (IsAllowed(script)) return true;
             var name = script == Unsaved ? "an unsaved script" : Path.GetFileName(script);
+            // An allowed script replacing or removing a kept secret is asked about that one change. A script asked about just now was told
+            // it wants to change the secret, and isn't asked twice.
+            if (IsAllowed(script))
+                return !changes || (await confirmChange!(name, access.Name, access.Change == SecretChange.Remove, cancellationToken)
+                    && !cancellationToken.IsCancellationRequested);
             var choice = await ask(name, access.Name, access.IsSave, cancellationToken);
             if (choice == SecretAccessChoice.Deny || cancellationToken.IsCancellationRequested) return false;
             // Always is kept only in the settings, so taking it away there (the Secret Store window) works at once.
-            if (choice == SecretAccessChoice.Always && script != Unsaved)
+            if (choice == SecretAccessChoice.Always && script != Unsaved && _fingerprint(script) is { } contents)
             {
-                preferences.Secrets.AllowedScripts.Add(script);
+                var settings = preferences.Secrets;
+                if (!settings.AllowedScripts.Contains(script, PathComparer)) settings.AllowedScripts.Add(script);
+                settings.AllowedScriptHashes[script] = contents;
                 preferences.Save();
             }
             else
@@ -61,10 +76,33 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
         }
     }
 
+    /// <summary>
+    /// Invoklet saved <paramref name="path"/> with these <paramref name="bytes"/>: an allowed script stays allowed with its new contents.
+    /// </summary>
+    public void ScriptWritten(string path, byte[] bytes)
+    {
+        if (preferences.Secrets is not { } settings || !settings.AllowedScripts.Contains(path, PathComparer)) return;
+        settings.AllowedScriptHashes[Stored(settings, path) ?? path] = Convert.ToHexString(SHA256.HashData(bytes));
+        preferences.Save();
+    }
+
     private bool IsAllowed(string script)
     {
         lock (_allowedThisSession)
             if (_allowedThisSession.Contains(script)) return true;
-        return script != Unsaved && preferences.Secrets?.AllowedScripts.Contains(script, PathComparer) == true;
+        if (script == Unsaved || preferences.Secrets is not { } settings || !settings.AllowedScripts.Contains(script, PathComparer)) return false;
+        // Allowed as it was: a file changed since by another program, or allowed by a version that kept no contents, is asked about again.
+        return Stored(settings, script) is { } key && settings.AllowedScriptHashes.TryGetValue(key, out var allowed)
+            && string.Equals(allowed, _fingerprint(script), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The key the settings keep the script's contents under, written as it was allowed.
+    private static string? Stored(SecretsSettings settings, string path) =>
+        settings.AllowedScriptHashes.Keys.FirstOrDefault(k => PathComparer.Equals(k, path)) ?? (settings.AllowedScripts.Contains(path, PathComparer) ? path : null);
+
+    private static string? FileFingerprint(string path)
+    {
+        try { return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 }

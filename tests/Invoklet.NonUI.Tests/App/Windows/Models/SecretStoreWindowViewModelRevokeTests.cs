@@ -36,6 +36,7 @@ public sealed class SecretStoreWindowViewModelRevokeTests
         // Assert
         Assert.Equal(["/a/other.inv"], sut.AllowedScripts);
         Assert.Equal(["/a/other.inv"], fixture.Settings.AllowedScripts);
+        Assert.False(fixture.Settings.AllowedScriptHashes.ContainsKey("/a/report.inv"));
         fixture.Preferences.Verify(p => p.Save(), Times.Once);
     }
 

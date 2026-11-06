@@ -131,6 +131,12 @@ public interface IWindowService
     /// no window to show it on, or the run ending (<paramref name="cancellationToken"/>, which closes the dialog) is <see cref="SecretAccessChoice.Deny"/>.
     /// </summary>
     Task<SecretAccessChoice> ConfirmSecretAccessAsync(string scriptName, string secretName, bool isSave, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks whether a script allowed to use the secrets may replace (or, <paramref name="remove"/>, remove) one already kept. Closing the
+    /// dialog, no window to show it on, or the run ending is a no.
+    /// </summary>
+    Task<bool> ConfirmSecretChangeAsync(string scriptName, string secretName, bool remove, CancellationToken cancellationToken = default);
 }
 
 /// <summary>What the user let a script do with the secrets.</summary>

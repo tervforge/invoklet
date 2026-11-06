@@ -12,7 +12,11 @@ internal sealed class SecretStoreWindowViewModelRevokeFixture
 
     public Mock<IPreferencesService> Preferences { get; } = new();
 
-    public SecretsSettings Settings { get; } = new() { AllowedScripts = ["/a/report.inv", "/a/other.inv"] };
+    public SecretsSettings Settings { get; } = new()
+    {
+        AllowedScripts = ["/a/report.inv", "/a/other.inv"],
+        AllowedScriptHashes = new() { ["/a/report.inv"] = "AAAA", ["/a/other.inv"] = "BBBB" },
+    };
 
     public SecretStoreWindowViewModelRevokeFixture()
     {

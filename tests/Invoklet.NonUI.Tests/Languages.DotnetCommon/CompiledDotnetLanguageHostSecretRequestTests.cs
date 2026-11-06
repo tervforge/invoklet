@@ -143,6 +143,52 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         // Assert
         Assert.Equal("3\n", answer);
         Assert.Empty(fixture.Saved);
-        Assert.Equal([new SecretAccess(null, "db", true)], fixture.Asked);
+        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.Replace)], fixture.Asked);
+    }
+
+    // A secret already kept is replaced only with the user's say: the request tells the approver so.
+    [Fact]
+    public async Task RunAsync_ASaveRequestForAKeptSecret_TellsTheApproverItReplacesIt()
+    {
+        // Arrange
+        await using var fixture = new CompiledDotnetLanguageHostSecretRequestFixture();
+        var sut = fixture.CreateSut(CompiledDotnetLanguageHostSecretRequestFixture.Request(SaveRequest));
+
+        // Act
+        _ = sut.RunAsync("int x = 1;", (_, _) => { }, TestContext.Current.CancellationToken);
+        await fixture.AnswerAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.Replace)], fixture.Asked);
+    }
+
+    [Fact]
+    public async Task RunAsync_ARemoveRequestForAKeptSecret_TellsTheApproverItRemovesIt()
+    {
+        // Arrange
+        await using var fixture = new CompiledDotnetLanguageHostSecretRequestFixture();
+        var sut = fixture.CreateSut(CompiledDotnetLanguageHostSecretRequestFixture.Request(RemoveRequest));
+
+        // Act
+        _ = sut.RunAsync("int x = 1;", (_, _) => { }, TestContext.Current.CancellationToken);
+        await fixture.AnswerAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.Remove)], fixture.Asked);
+    }
+
+    [Fact]
+    public async Task RunAsync_ASaveRequestForANewSecret_TellsTheApproverNothingIsReplaced()
+    {
+        // Arrange
+        await using var fixture = new CompiledDotnetLanguageHostSecretRequestFixture { Store = () => null };
+        var sut = fixture.CreateSut(CompiledDotnetLanguageHostSecretRequestFixture.Request(SaveRequest));
+
+        // Act
+        _ = sut.RunAsync("int x = 1;", (_, _) => { }, TestContext.Current.CancellationToken);
+        await fixture.AnswerAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.None)], fixture.Asked);
     }
 }

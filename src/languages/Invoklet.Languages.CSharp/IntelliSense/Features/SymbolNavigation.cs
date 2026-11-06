@@ -311,6 +311,8 @@ internal sealed class SymbolNavigation(
         // The caret of a request can be past the end of the text it is asked with (the text changed meanwhile): nothing is there.
         if (position < 0 || position > code.Length) return null;
         var pos = _layout.ToDocumentOffset(code, position);
+        // The tree may be of an older text than the layout's offsets (another sync went in meanwhile): past its end there is nothing.
+        if (pos > root.FullSpan.End) return null;
         if (SourcePositions.IsInsideComment(root, pos) || SourcePositions.IsInsideStringOrCharLiteral(root, pos)) return null;
 
         var token = root.FindToken(pos);

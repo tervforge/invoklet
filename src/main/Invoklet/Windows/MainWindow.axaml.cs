@@ -103,7 +103,11 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
         // Coming back to Invoklet from another program is when its files were most likely changed
         // there; scripts outside the watched scripts folder are only noticed this way.
-        Activated += (_, _) => _ = editorTabsCtrl.CheckFilesChangedOnDiskAsync();
+        Activated += (_, _) =>
+        {
+            editorTabsCtrl.WindowActivated();
+            _ = editorTabsCtrl.CheckFilesChangedOnDiskAsync();
+        };
 
         Closing += OnClosing;
         // The window owns the per-window view model and controls. Dispose them on every
@@ -130,6 +134,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        // The tabs of the other windows are asked about here with the rest, so they come back first and their windows close.
+        _editorTabs.GatherOtherWindows();
         // Runs up to its first wait here, so that e.Cancel is set before this returns; an error is raised here as it was when this did the work itself.
         var closing = ClosingAsync(e);
         ClosingTask = closing;

@@ -44,6 +44,21 @@ Notable changes in each Invoklet release. Downloads are on the
   in the usual place is used, and a path stored that way is cleared.
 - Highlighting the occurrences of a symbol no longer logs an error when the caret is past the end
   of the text, after characters were deleted.
+- Tabs can be reordered by dragging: the tab follows the pointer anywhere over the window, a mark
+  shows where it will go, and the strip scrolls near its ends. The order is kept for the next start.
+  The **+** button follows the last tab, the list of all tabs stays at the right edge, where tabs no
+  longer slide under the buttons, and the strip's scroll bar is a thin line under the tabs.
+- A tab can be moved to a window of its own: drop it well below the strip or outside the window, or
+  use **Move to New Window** in its context menu. The window has its own tabs, editor and results.
+- Typing a value into an argument set no longer takes the focus off the field after each key.
+- The compiler's warnings are no longer added to the Results: the editor already underlines them.
+  The `invoklet` command still writes them to standard error, and `--quiet` (`-q`) leaves them out.
+- **Always Allow** for the secrets holds for the file as you allowed and saved it: a script another
+  program changed (a new download, a copy put in its place) is asked about again.
+- A script allowed to use the secrets asks before it replaces or removes a secret already in the
+  store (`Util.SetSecret`).
+- The warning about a secret written to the output also covers a connection string with a
+  `${secret:…}` in it, `Console.Error`, `Debug.Write*` and `Trace.Write*`.
 - Messages about a file that couldn't be saved, opened, moved or deleted name the file once, say why
   in plain words and show its folder on a line of its own, instead of repeating the whole path; the
   confirmation for adding a connection lists its NuGet packages one to a line.

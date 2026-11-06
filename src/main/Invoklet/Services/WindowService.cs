@@ -75,6 +75,14 @@ public sealed class WindowService : IWindowService
         return await dialog.ShowDialog<SecretAccessChoice?>(owner) ?? SecretAccessChoice.Deny;
     }
 
+    public async Task<bool> ConfirmSecretChangeAsync(string scriptName, string secretName, bool remove, CancellationToken cancellationToken = default)
+    {
+        if (MainWindow is not { } owner || cancellationToken.IsCancellationRequested) return false;
+        var dialog = new SecretChangeDialog(scriptName, secretName, remove);
+        await using var stopped = cancellationToken.Register(() => dialog.Dispatcher.Post(() => dialog.Close()));
+        return await dialog.ShowDialog<bool?>(owner) == true;
+    }
+
     public Task ShowPreferencesAsync()
         => ShowDialogAsync(_preferencesWindowFactory());
 

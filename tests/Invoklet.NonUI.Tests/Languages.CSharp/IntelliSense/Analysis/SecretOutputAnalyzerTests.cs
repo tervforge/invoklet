@@ -14,6 +14,9 @@ public sealed class SecretOutputAnalyzerTests
     [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.WriteLine($\"token {t}\");\n", "Console.WriteLine")]
     [InlineData("var t = Util.GetSecret(\"billing\");\nvar u = t;\n(\"Bearer \" + u).Dump(\"auth\");\n", ".Dump()")]
     [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.Write(\"{0}\", t ?? \"none\");\n", "Console.Write")]
+    [InlineData("var t = Util.GetSecret(\"billing\");\nConsole.Error.WriteLine(t);\n", "Console.Error.WriteLine")]
+    [InlineData("var t = Util.GetSecret(\"billing\");\nSystem.Diagnostics.Debug.WriteLine(t);\n", "Debug.WriteLine")]
+    [InlineData("var t = Util.GetSecret(\"billing\");\nSystem.Diagnostics.Trace.TraceInformation(t);\n", "Trace.TraceInformation")]
     public async Task NotifyTextChanged_ASecretWrittenToTheOutput_WarnsNamingTheSecretAndTheOutput(string code, string sink)
     {
         // Arrange
@@ -29,6 +32,24 @@ public sealed class SecretOutputAnalyzerTests
         Assert.Equal(DiagnosticSeverity.Warning, warning.Severity);
         Assert.Contains("'billing'", warning.Message);
         Assert.Contains(sink, warning.Message);
+    }
+
+    // A connection string built from a ${secret:…} holds the secret.
+    [Fact]
+    public async Task NotifyTextChanged_AConnectionStringWithASecretWritten_WarnsNamingTheConnectionsSecret()
+    {
+        // Arrange
+        using var sut = new SecretOutputAnalyzerFixture().CreateSut();
+        sut.UpdateExecutionContext(SecretOutputAnalyzerFixture.WithSecretConnection());
+        const string code = "Connections.Shop.ConnectionString.Dump();\n";
+        var warnings = SecretOutputAnalyzerFixture.SecretWarnings(sut, code);
+
+        // Act
+        sut.NotifyTextChanged(code);
+        var reported = await warnings.WaitAsync(SecretOutputAnalyzerFixture.Timeout, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Contains("'shop-db'", Assert.Single(reported).Message);
     }
 
     // What is computed from a secret is not the secret; output that never holds it says nothing about it.

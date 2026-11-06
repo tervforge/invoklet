@@ -126,7 +126,7 @@ public static class CliRunner
             stderr.WriteLine("No .NET SDK found (checked `dotnet --list-sdks`).");
             return NotRunExitCode;
         }
-        if (TargetSdkResolver.Warning(document.FrontMatter.TargetSdk, platform) is { } sdkWarning)
+        if (!cli.Quiet && TargetSdkResolver.Warning(document.FrontMatter.TargetSdk, platform) is { } sdkWarning)
             stderr.WriteLine("warning: " + sdkWarning);
 
         if (services.BuildsFolder is { } builds) CliBuildFolder.PruneStale(builds, BuildFolderMaxAge);
@@ -136,7 +136,7 @@ public static class CliRunner
         // or all of them again with --refresh-connections.
         // What takes a while before the script starts (packages, schemas) is told in a terminal, so a first run doesn't look stuck;
         // redirected, stderr stays the script's and the compiler's alone.
-        var tellStages = !Console.IsErrorRedirected;
+        var tellStages = !Console.IsErrorRedirected && !cli.Quiet;
         if (services.ConnectionSchemas is { } schemas && document.FrontMatter.Connections.Count > 0)
         {
             if (tellStages) stderr.WriteLine("Reading connection schemas: " + string.Join(", ", document.FrontMatter.Connections.Select(c => c.Name)));
@@ -167,6 +167,7 @@ public static class CliRunner
             var compilation = await host.CompileAsync(document.RunCode, cancellationToken);
             foreach (var diagnostic in compilation.Diagnostics)
             {
+                if (cli.Quiet && diagnostic.Severity != DiagnosticSeverity.Error) continue;
                 stderr.WriteLine(FormatDiagnostic(diagnostic));
             }
             return compilation.Success ? 0 : NotRunExitCode;
@@ -195,7 +196,7 @@ public static class CliRunner
                     break;
                 // Compiler warnings are not script output: stdout carries only what the script wrote.
                 case OutputKind.Diagnostic:
-                    stderr.WriteLine(data);
+                    if (!cli.Quiet) stderr.WriteLine(data);
                     break;
                 case OutputKind.DumpHtml:
                     var html = Encoding.UTF8.GetString(Convert.FromBase64String(data));
@@ -253,6 +254,7 @@ public static class CliRunner
         console.WriteLine("  -s, --sdk <version>               The .NET SDK to run on, such as 9 or net9.0");
         console.WriteLine("  -compileonly, --compile-only      Compile the script without running it");
         console.WriteLine("  --refresh-connections             Read the connections' descriptions (gRPC services) again");
+        console.WriteLine("  -q, --quiet                       Show no warnings, only errors and the script's output");
         console.WriteLine("  --args-set <name>                 Run with the script's argument set of that name");
         console.WriteLine("  -h, --help                        Show this help");
         console.WriteLine("  --version                         Show the version");

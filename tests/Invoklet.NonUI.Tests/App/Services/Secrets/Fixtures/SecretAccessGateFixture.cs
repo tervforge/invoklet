@@ -23,12 +23,20 @@ internal sealed class SecretAccessGateFixture
     // The run is stopped while the question is open, before the user answers.
     public CancellationTokenSource? StoppedWhileAsking { get; set; }
 
-    public string ScriptPath { get; } = Path.Combine(Path.GetTempPath(), "report.inv");
+    // The user's answer to a change of a kept secret, and the changes asked about (script, secret, removes).
+    public bool AllowChange { get; set; } = true;
+
+    public List<(string Script, string Secret, bool Remove)> ChangesAsked { get; } = [];
+
+    public string ScriptPath { get; } = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "report.inv"));
+
+    // What the script's file holds, as its SHA-256: changed by the test as another program would; nothing is read from the disk.
+    public string? FileContents { get; set; } = "AAAA";
 
     public SecretAccessGateFixture() => Preferences.SetupGet(p => p.Secrets).Returns(Settings);
 
-    public SecretAccess Request(string secret = "billing", bool isSave = false, bool unsaved = false) =>
-        new(unsaved ? null : ScriptPath, secret, isSave);
+    public SecretAccess Request(string secret = "billing", bool isSave = false, bool unsaved = false, SecretChange change = SecretChange.None) =>
+        new(unsaved ? null : ScriptPath, secret, isSave, change);
 
     public SecretAccessGate CreateSut() => new(Preferences.Object, (script, secret, isSave, token) =>
     {
@@ -36,5 +44,12 @@ internal sealed class SecretAccessGateFixture
         StoppedWhileAsking?.Cancel();
         if (OpenQuestion is { } open) return open.Task;
         return Task.FromResult(token.IsCancellationRequested ? SecretAccessChoice.Deny : Answer);
+    }, _ => FileContents, (script, secret, remove, _) =>
+    {
+        ChangesAsked.Add((script, secret, remove));
+        return Task.FromResult(AllowChange);
     });
+
+    /// <summary>The SHA-256 (hex) of <paramref name="bytes"/>, as the gate keeps a file's contents.</summary>
+    public static string HashOf(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
 }
