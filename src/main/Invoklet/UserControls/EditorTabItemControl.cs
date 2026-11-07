@@ -34,6 +34,7 @@ using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
 using Invoklet.Services.Recovery;
 using Invoklet.Services.Scaling;
+using Invoklet.Services.Tabs;
 using Invoklet.UserControls.Healpers;
 using Invoklet.UserControls.Models;
 using Microsoft.Extensions.Logging;
@@ -2045,55 +2046,15 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void SetDocumentContent(CodeTextEditor editor, string? filePath)
     {
-        string content;
-        MdRunDocument? rpad = null;
-
-        if (_vm.RestoredRecovery is { } recovered)
-        {
-            rpad = recovered.Document is null ? null : MdRunDocument.FromSnapshot(recovered.Document);
-            content = recovered.EditorText;
-            State.DocumentParseError = recovered.ParseError;
-            _vm.DiskState = recovered.BaselineKnown ? new ScriptFileState(recovered.DiskHash?.ToArray()) : null;
-            _vm.RequiresBaselineConfirmation = !recovered.BaselineKnown;
-            if (filePath is not null)
-                State.OutputDirectory = _buildCache.EnsureOutputDirectory(filePath, EnsureWorkDirectory());
-        }
-        else if (filePath is null && _vm.Example is { } example)
-        {
-            // An example: an untitled, editable copy of its whole document — the code, its front
-            // matter and the Markdown around it, which Save As writes out — never the original.
-            var parsed = MdRunParser.Parse(example.Text);
-            rpad = parsed.Document;
-            content = rpad?.RunCode ?? "";
-        }
-        else if (filePath is null)
-        {
-            // Deferred creation ("tab lifecycle") — a brand-new tab is genuinely
-            // empty, not the old "Hello, RPad!" sample, and stays in-memory only until the user does
-            // Save/Save As. It still gets a real (in-memory) MdRunDocument built from the language/kind
-            // chosen in NewFileKindDialog (_vm.NewFileLanguage/NewFileKind) rather than staying null —
-            // that's what lets the toolbar's kind combobox, IntelliSense's kind-aware analysis, and
-            // Run/Debug all already behave correctly for the chosen language/kind before the first
-            // save, the same as they do for a file freshly loaded from disk.
-            // Empty, except that a Program starts with its Main skeleton.
-            content = _registry.NewScriptCode(_vm.NewFileLanguage, _vm.NewFileKind, _prefs.Editor.IndentationUnit);
-            rpad = MdRunParser.TryParse(MdRunWriter.NewFile(
-                "", title: "Untitled", language: _vm.NewFileLanguage, kind: _vm.NewFileKind));
-        }
-        else if (File.Exists(filePath))
-        {
-            (content, rpad) = ReadScript(File.ReadAllBytes(filePath));
-
-            // Allocate/reuse this file's persistent build directory now, at open time, rather than
-            // lazily on first Run — see EnsureWorkDirectory/BuildRunOptions for how it's consumed.
+        var opened = ScriptOpening.Open(_vm.RestoredRecovery, filePath, _vm.Example, _vm.NewFileLanguage, _vm.NewFileKind,
+            () => _registry.NewScriptCode(_vm.NewFileLanguage, _vm.NewFileKind, _prefs.Editor.IndentationUnit),
+            File.Exists, File.ReadAllBytes);
+        TakeScript(opened);
+        // The build folder of a script with a file is allocated at open time rather than on the first run (see EnsureWorkDirectory).
+        if (filePath is not null && opened.Source is ScriptSource.Recovered or ScriptSource.File)
             State.OutputDirectory = _buildCache.EnsureOutputDirectory(filePath, EnsureWorkDirectory());
-        }
-        else
-        {
-            content = "";
-            // A file that appears later was made by someone else: saving must not replace it unasked.
-            if (filePath is not null) _vm.DiskState = ScriptFileState.Absent;
-        }
+        var content = opened.Text;
+        var rpad = opened.Document;
 
         ApplyDocument(rpad);
 
@@ -2134,31 +2095,19 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         UpdateProjectInfoBlock();
     }
 
-    // The script in a file's exact bytes, which become what later saves compare the file with. An
-    // invalid document comes back as the whole file and no MdRunDocument, and says why in the output.
-    private (string Content, MdRunDocument? Document) ReadScript(byte[] bytes)
+    // What the tab holds of its script besides the text: why it is no valid document, shown in the output when it is a file just
+    // read, and what is known of the file on disk.
+    private void TakeScript(OpenedScript script)
     {
-        _vm.DiskState = ScriptFileState.Of(bytes);
-        _vm.RequiresBaselineConfirmation = false;
-        var raw = DecodeScript(bytes);
-        var parsed = MdRunParser.Parse(raw);
-        // Invalid document: show the whole file as-is instead of default metadata —
-        // WriteFile's no-MdRunDocument branch then saves it back verbatim, and RunAsync refuses it.
-        State.DocumentParseError = parsed.Error;
-        if (parsed.Error is { } error)
+        State.DocumentParseError = script.ParseError;
+        _vm.DiskState = script.DiskState;
+        _vm.RequiresBaselineConfirmation = script.RequiresBaselineConfirmation;
+        if (script.Source == ScriptSource.File && script.ParseError is { } error)
         {
             State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(InvalidDocumentMessage(error))}</div>");
             SetStatus("Invalid document", "Invoklet.Status.ErrorBrush");
             UpdateOutputUi();
         }
-        return (parsed.Document?.RunCode ?? raw, parsed.Document);
-    }
-
-    // Decoded as File.ReadAllText does.
-    private static string DecodeScript(byte[] bytes)
-    {
-        using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
     }
 
     // Makes rpad the tab's document: the toolbar, IntelliSense and the baseline that tells a
@@ -2240,12 +2189,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // This tab's editor services, grammar and snippets are its language's; a script that is now
         // in another language needs a tab of its own.
         var language = State.MdRunDocument?.FrontMatter.Language ?? MdRunLanguage.CSharp;
-        if (MdRunParser.TryParse(DecodeScript(bytes))?.FrontMatter.Language is { } newLanguage && newLanguage != language)
+        var read = ScriptOpening.Read(bytes);
+        if (read.Document?.FrontMatter.Language is { } newLanguage && newLanguage != language)
             return DiskReload.OtherLanguage;
 
-        var (content, rpad) = ReadScript(bytes);
+        TakeScript(read);
+        var content = read.Text;
         _vm.DeclinedDiskState = null;
-        ApplyDocument(rpad);
+        ApplyDocument(read.Document);
         // Usings that are gone from the header must leave IntelliSense too.
         RefreshIntelliSenseUsings();
 
