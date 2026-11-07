@@ -1,0 +1,25 @@
+---
+version: "1.0"
+language: vb
+targetSdk: latest
+kind: Statements
+---
+
+# Visual Basic quick start
+
+The same first script in Visual Basic. With `kind: Statements` you write the statements only;
+Invoklet puts them inside a `Module` with a `Sub Main` for you.
+
+Press **Run** (F5) and look at the **Results** tab under the editor.
+
+```vb run
+Dim languages = {"C#", "Visual Basic"}
+Console.WriteLine($"Hello from Invoklet! {languages.Length} languages are supported.")
+
+languages.
+    Select(Function(name, index) New With {.Position = index + 1, .Name = name, .Letters = name.Length}).
+    Dump("Supported languages")
+```
+
+`.Dump()` works the same in both languages: it renders any value, here a collection of
+anonymous objects, as a table.

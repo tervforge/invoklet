@@ -5,6 +5,10 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ## [Unreleased]
 
+### Added
+
+- Two Visual Basic samples under Getting started: a quick start and a program.
+
 ### Fixed
 
 - The close button of a tab closes it again.

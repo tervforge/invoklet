@@ -1,0 +1,53 @@
+---
+version: "1.0"
+language: vb
+targetSdk: latest
+kind: Program
+---
+
+# Visual Basic program
+
+With `kind: Program` a Visual Basic script is a whole module: a `Sub Main` and any functions,
+classes and structures it needs. Invoklet compiles it as written and starts `Main`.
+
+```vb run
+Module Program
+    Sub Main()
+        Dim inventory As New Inventory()
+        inventory.Add("Keyboard", 3)
+        inventory.Add("Mouse", 5)
+        inventory.Add("Keyboard", 2)
+
+        inventory.Lines().Dump("Inventory")
+        Console.WriteLine($"Total items: {Total(inventory)}")
+    End Sub
+
+    Function Total(inventory As Inventory) As Integer
+        Return inventory.Lines().Sum(Function(line) line.Quantity)
+    End Function
+End Module
+
+Class Inventory
+    Private ReadOnly _counts As New Dictionary(Of String, Integer)
+
+    Public Sub Add(name As String, quantity As Integer)
+        Dim current As Integer
+        _counts.TryGetValue(name, current)
+        _counts(name) = current + quantity
+    End Sub
+
+    Public Function Lines() As IEnumerable(Of StockLine)
+        Return _counts.OrderBy(Function(pair) pair.Key).Select(Function(pair) New StockLine(pair.Key, pair.Value))
+    End Function
+End Class
+
+Class StockLine
+    Public Sub New(name As String, quantity As Integer)
+        Me.Name = name
+        Me.Quantity = quantity
+    End Sub
+
+    Public ReadOnly Property Name As String
+    Public ReadOnly Property Quantity As Integer
+End Class
+```

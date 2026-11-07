@@ -21,33 +21,35 @@ public class ExampleScriptsTests
         var examples = ExampleScripts.All;
 
         Assert.Equal(
-            ["quick-start.inv", "expression-kind.inv", "program-kind.inv", "products-overview.inv",
-             "live-output.inv", "debugging-loop.inv"],
+            ["quick-start.inv", "expression-kind.inv", "program-kind.inv", "vb-quick-start.inv", "vb-program-kind.inv",
+             "products-overview.inv", "live-output.inv", "debugging-loop.inv"],
             examples.Select(e => e.Id));
         Assert.Equal(
-            ["Quick start", "Expression kind", "Program kind", "Products overview", "Live output", "Debugging loop"],
+            ["Quick start", "Expression kind", "Program kind", "Visual Basic quick start", "Visual Basic program",
+             "Products overview", "Live output", "Debugging loop"],
             examples.Select(e => e.Title));
         // Each in its Samples folder, whatever separator the build kept in the resource name.
         Assert.Equal(
-            ["getting-started", "getting-started", "getting-started", "output", "output", "debugging"],
+            ["getting-started", "getting-started", "getting-started", "getting-started", "getting-started", "output", "output", "debugging"],
             examples.Select(e => e.Folder));
         Assert.DoesNotContain(examples, e => e.Id.Contains("analyzer", StringComparison.Ordinal)); // the broken-on-purpose demo
     }
 
     [Fact]
-    public void EveryExample_Should_BeAValidCSharpScript_OfItsDeclaredKind()
+    public void EveryExample_Should_BeAValidScript_OfItsDeclaredLanguageAndKind()
     {
         foreach (var example in ExampleScripts.All)
         {
             var parsed = MdRunParser.Parse(example.Text);
             Assert.Null(parsed.Error);
             var document = Assert.IsType<MdRunDocument>(parsed.Document);
-            Assert.Equal(MdRunLanguage.CSharp, example.Language);
+            Assert.Equal(document.FrontMatter.Language, example.Language);
             Assert.Equal(document.FrontMatter.Kind, example.Kind);
             Assert.False(string.IsNullOrWhiteSpace(document.RunCode), example.Id);
         }
         Assert.Contains(ExampleScripts.All, e => e.Kind == MdRunKind.Expression);
         Assert.Contains(ExampleScripts.All, e => e.Kind == MdRunKind.Program);
+        Assert.Contains(ExampleScripts.All, e => e.Language == MdRunLanguage.Vb);
     }
 
     // An assembly without example resources (or with unreadable ones) gives an empty list, not an error.
@@ -90,7 +92,7 @@ public class ExampleScriptsTests
         var (vm, fileSystem, folder) = CreateViewModel();
         try
         {
-            var example = vm.Examples.Single(e => e.Kind == MdRunKind.Program);
+            var example = vm.Examples.Single(e => e.Id == "program-kind.inv");
 
             vm.OpenExample(example);
 
