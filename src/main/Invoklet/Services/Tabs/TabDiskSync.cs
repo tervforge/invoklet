@@ -26,14 +26,16 @@ internal interface ITabDiskHost
 /// <summary>How the state of a script's file is read; replaced in tests.</summary>
 internal interface IScriptFileReader
 {
-    ScriptFileState Read(string path);
+    /// <summary>Reads and hashes the file away from the caller's thread: a script folder can be on a slow drive.</summary>
+    Task<ScriptFileState> ReadAsync(string path, CancellationToken cancellationToken);
 
     bool Exists(string path);
 }
 
 internal sealed class DiskScriptFileReader : IScriptFileReader
 {
-    public ScriptFileState Read(string path) => ScriptFileState.Read(path);
+    public Task<ScriptFileState> ReadAsync(string path, CancellationToken cancellationToken) =>
+        Task.Run(() => ScriptFileState.Read(path), cancellationToken);
 
     public bool Exists(string path) => File.Exists(path);
 }
@@ -121,16 +123,21 @@ internal sealed class TabDiskSync(IWindowService windows, IScriptFileReader? rea
             .ToList();
         if (candidates.Count == 0) return;
 
-        // Reading and hashing the files stays off the UI thread: a script folder can be on a slow drive.
-        var reading = Task.Run(() => candidates.Select(c =>
+        var states = new List<ScriptFileState?>(candidates.Count);
+        foreach (var (_, path, _) in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            try { return _reader.Read(c.Path); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
-        }).ToList());
-        // A read that has started cannot be interrupted, and on a network drive it can last long: when the
-        // strip goes away the check stops waiting for it and the read ends on its own.
-        var states = await reading.WaitAsync(cancellationToken);
+            try
+            {
+                // A read that has started cannot be interrupted, and on a network drive it can last long: when the
+                // strip goes away the check stops waiting for it and the read ends on its own.
+                states.Add(await _reader.ReadAsync(path, cancellationToken).WaitAsync(cancellationToken));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                states.Add(null);
+            }
+        }
 
         for (var i = 0; i < candidates.Count; i++)
         {

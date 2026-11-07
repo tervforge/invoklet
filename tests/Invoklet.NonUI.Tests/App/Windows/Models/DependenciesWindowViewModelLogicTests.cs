@@ -571,12 +571,12 @@ public class DependenciesWindowViewModelLogicTests
     public async Task Search_Should_RunOffTheCallingThread_SoASlowClientNeverBlocksTyping()
     {
         using var gate = new ManualResetEventSlim();
-        using var started = new ManualResetEventSlim();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var search = new Mock<IPackageSearchService>();
         search.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<PackageSearchOptions>(), It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
-                started.Set();
+                started.TrySetResult();
                 gate.Wait(TimeSpan.FromSeconds(10)); // blocking, like the client's synchronous start
                 return Task.FromResult(Page(new PackageSearchResult("Json.Package", "1.0.0", "", 0)));
             });
@@ -589,7 +589,7 @@ public class DependenciesWindowViewModelLogicTests
         watch.Stop();
 
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"setting the text blocked for {watch.Elapsed}");
-        Assert.True(started.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.True(vm.IsSearching);
         gate.Set();
         await vm.PendingSearch;
