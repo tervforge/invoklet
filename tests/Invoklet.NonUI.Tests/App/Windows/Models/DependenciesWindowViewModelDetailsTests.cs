@@ -114,7 +114,7 @@ public class DependenciesWindowViewModelDetailsTests
         Assert.Equal("Couldn't load the package details: The package source could not be reached.", vm.DetailsError);
         Assert.False(vm.IsLoadingDetails);
         Assert.False(vm.HasDetailsDependencies);
-        Assert.True(vm.AddPackageCommand.CanExecute.FirstAsync().GetAwaiter().GetResult());
+        Assert.True(await vm.AddPackageCommand.CanExecute.FirstAsync());
         vm.AddPackageCommand.Execute().Subscribe();
         Assert.True(vm.ApplyChanges());
     }

@@ -26,14 +26,23 @@ internal interface ITabDiskHost
 /// <summary>How the state of a script's file is read; replaced in tests.</summary>
 internal interface IScriptFileReader
 {
-    ScriptFileState Read(string path);
+    /// <summary>
+    /// Reads and hashes the file away from the caller's thread: a script folder can be on a slow drive. A drive that does not
+    /// answer in time is a <see cref="TimeoutException"/>; a cancelled read an <see cref="OperationCanceledException"/>.
+    /// </summary>
+    Task<ScriptFileState> ReadAsync(string path, CancellationToken cancellationToken);
 
     bool Exists(string path);
 }
 
-internal sealed class DiskScriptFileReader : IScriptFileReader
+internal sealed class DiskScriptFileReader(TimeSpan? timeout = null) : IScriptFileReader
 {
-    public ScriptFileState Read(string path) => ScriptFileState.Read(path);
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+
+    // A read that has started cannot be interrupted, and on a network drive it can last long: past the timeout, or when the
+    // check is cancelled, the caller stops waiting for it and the read ends on its own.
+    public Task<ScriptFileState> ReadAsync(string path, CancellationToken cancellationToken) =>
+        Task.Run(() => ScriptFileState.Read(path), cancellationToken).WaitAsync(timeout ?? DefaultTimeout, cancellationToken);
 
     public bool Exists(string path) => File.Exists(path);
 }
@@ -121,16 +130,20 @@ internal sealed class TabDiskSync(IWindowService windows, IScriptFileReader? rea
             .ToList();
         if (candidates.Count == 0) return;
 
-        // Reading and hashing the files stays off the UI thread: a script folder can be on a slow drive.
-        var reading = Task.Run(() => candidates.Select(c =>
+        var states = new List<ScriptFileState?>(candidates.Count);
+        foreach (var (_, path, _) in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            try { return _reader.Read(c.Path); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
-        }).ToList());
-        // A read that has started cannot be interrupted, and on a network drive it can last long: when the
-        // strip goes away the check stops waiting for it and the read ends on its own.
-        var states = await reading.WaitAsync(cancellationToken);
+            try
+            {
+                states.Add(await _reader.ReadAsync(path, cancellationToken));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TimeoutException)
+            {
+                // Unreadable or not answering now: the next check looks again.
+                states.Add(null);
+            }
+        }
 
         for (var i = 0; i < candidates.Count; i++)
         {

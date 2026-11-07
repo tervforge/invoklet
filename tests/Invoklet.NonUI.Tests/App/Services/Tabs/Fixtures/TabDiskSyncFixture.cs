@@ -36,6 +36,9 @@ internal sealed class TabDiskSyncFixture
 
     public EditorTabItemViewModel? ActiveTab { get; set; }
 
+    /// <summary>How long a test waits for what should happen at once before it fails instead of hanging.</summary>
+    public static TimeSpan Limit { get; } = TimeSpan.FromSeconds(5);
+
     public static ScriptFileState State(byte b) => new([b]);
 
     /// <summary>
@@ -56,7 +59,7 @@ internal sealed class TabDiskSyncFixture
             DiskState = State(1),
             IsDirty = dirty,
         };
-        Reader.Setup(r => r.Read(path)).Returns(State(onDisk));
+        SetDiskState(path, onDisk);
         Reader.Setup(r => r.Exists(path)).Returns(exists);
         Tabs.Add(tab);
         return tab;
@@ -65,7 +68,18 @@ internal sealed class TabDiskSyncFixture
     /// <summary>The tab no longer holds its text (closed, or its content is on disk).</summary>
     public void RemoveContent(EditorTabItemViewModel tab) => _withoutContent.Add(tab);
 
-    public void SetDiskState(EditorTabItemViewModel tab, byte onDisk) => Reader.Setup(r => r.Read(tab.FilePath!)).Returns(State(onDisk));
+    public void SetDiskState(EditorTabItemViewModel tab, byte onDisk) => SetDiskState(tab.FilePath!, onDisk);
+
+    private void SetDiskState(string path, byte onDisk) =>
+        Reader.Setup(r => r.ReadAsync(path, It.IsAny<CancellationToken>())).ReturnsAsync(State(onDisk));
+
+    /// <summary>Every read of a file goes to <paramref name="read"/>.</summary>
+    public void ReadWith(Func<Task<ScriptFileState>> read) =>
+        Reader.Setup(r => r.ReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(read);
+
+    /// <summary>Reading the tab's file fails as a drive does: locked, denied, or not answering in time.</summary>
+    public void FailReading(EditorTabItemViewModel tab, Exception failure) =>
+        Reader.Setup(r => r.ReadAsync(tab.FilePath!, It.IsAny<CancellationToken>())).ThrowsAsync(failure);
 
     public TabDiskSync CreateSut() => new(Windows.Object, Reader.Object);
 }
