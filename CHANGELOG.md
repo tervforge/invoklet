@@ -3,6 +3,12 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- The close button of a tab closes it again.
+
 ## [0.11.8] — 2026-11-07
 
 ### Changed

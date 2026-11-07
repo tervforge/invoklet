@@ -716,9 +716,10 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
                 else if (drag.Insert >= 0) _vm.MoveTab(moving, FinalIndex(moving, drag.Insert));
                 return;
             }
+            e.Pointer.Capture(null);
         }
+        // A click, not a drag: the pointer is left to the button under it, which loses its press, and the click, with its capture.
         EndDrag();
-        e.Pointer.Capture(null);
     }
 
     // The header's picture under the pointer, the header itself faded where it was, and the pointer showing a move.

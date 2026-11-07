@@ -4,7 +4,9 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Invoklet.Runtime.UI.Tests.App.UserControls.Fixtures;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.App.UserControls;
@@ -64,6 +66,28 @@ public sealed class EditorTabsControlStripTests
         var strip = fixture.InWindow(fixture.Part<ScrollViewer>("PART_TabStripScrollViewer"));
         var last = fixture.InWindow(fixture.Headers[^1]);
         Assert.True(last.Left >= strip.Left && last.Right <= strip.Right + 1, $"the tab lies at {last}, the strip at {strip}");
+    }
+
+    // The strip watches every press on a header for a drag; a plain click must still reach the header's close button.
+    [AvaloniaFact]
+    public async Task Click_TheCloseButtonOfATab_ClosesIt()
+    {
+        // Arrange
+        await using var fixture = new EditorTabsControlStripFixture();
+        await fixture.CreateSutAsync(tabs: 2);
+        var vm = fixture.ViewModel!;
+        var closing = vm.Tabs[1];
+        var button = fixture.Headers[1].GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("TabClose"));
+        var at = fixture.InWindow(button).Center;
+
+        // Act
+        fixture.Window.MouseMove(at);
+        fixture.Window.MouseDown(at, MouseButton.Left);
+        fixture.Window.MouseUp(at, MouseButton.Left);
+        await TestWait.WhileAsync(() => vm.Tabs.Contains(closing));
+
+        // Assert
+        Assert.DoesNotContain(closing, vm.Tabs);
     }
 
     [AvaloniaFact]
