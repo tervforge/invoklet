@@ -22,7 +22,7 @@ control for Avalonia, itself a port of AvalonEdit from the SharpDevelop project.
   parameters' defaults were also dropped from calls, here and in the upstream tests (a code-style cleanup that
   changes no behavior).
   `git log -- src/controls/AvaloniaEdit src/controls/AvaloniaEdit.TextMate` shows every change.
-- **Tests:** the upstream NUnit suite is kept, apart from that cleanup, in
+- **Tests:** the upstream NUnit suite, held to Invoklet's test standards (fixed seeds for its randomized tests, real assertions), is in
   [`tests/AvaloniaEdit.Tests`](../../../tests/AvaloniaEdit.Tests); Invoklet's own tests for the fork live
   in `tests/Invoklet.Runtime.UI.Tests`.
 

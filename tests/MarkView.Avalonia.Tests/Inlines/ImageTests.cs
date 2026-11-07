@@ -103,7 +103,11 @@ public class ImageTests : RenderTestBase
         renderer.ImageLoaders.Add(loader);
         pipeline.Setup(renderer);
         renderer.Render(document);
-        // No assertion beyond "doesn't throw"
+
+        // The image is still there, for the HTTP path to load once it is shown.
+        var image = FindFirst<Image>(renderer.RootPanel);
+        Assert.NotNull(image);
+        Assert.Equal("https://example.com/image.png", image!.Tag);
     }
 
     private sealed class FakeBitmapLoader(string url, IImage image) : IImageLoader
@@ -237,30 +241,30 @@ public class ImageTests : RenderTestBase
         Assert.Equal(450, image.Bounds.Height, 0);
     }
 
-    [AvaloniaFact]
-    public void Explicit_size_never_upscales_past_native_resolution_regardless_of_mode()
+    [AvaloniaTheory]
+    [InlineData(ImageResizeMode.ScaleDownToFit)]
+    [InlineData(ImageResizeMode.Fill)]
+    [InlineData(ImageResizeMode.Natural)]
+    public void Explicit_size_never_upscales_past_native_resolution_regardless_of_mode(ImageResizeMode mode)
     {
-        foreach (var mode in new[] { ImageResizeMode.ScaleDownToFit, ImageResizeMode.Fill, ImageResizeMode.Natural })
-        {
-            var nativeImage = new FakeImage(400, 300);
-            var loader = new FakeBitmapLoader("fake://native.png", nativeImage);
-            // Explicit request (800x600) is larger than native (400x300).
-            var renderer = RenderDocument("![img](fake://native.png \"=800x600\")", mode, loader);
-            var image = FindFirst<Image>(renderer.RootPanel);
-            Assert.NotNull(image);
-            Assert.Equal(800.0, image!.MaxWidth);
-            Assert.Equal(600.0, image.MaxHeight);
-            Assert.Equal(Stretch.Uniform, image.Stretch);
-            Assert.Equal(StretchDirection.DownOnly, image.StretchDirection);
+        var nativeImage = new FakeImage(400, 300);
+        var loader = new FakeBitmapLoader("fake://native.png", nativeImage);
+        // Explicit request (800x600) is larger than native (400x300).
+        var renderer = RenderDocument("![img](fake://native.png \"=800x600\")", mode, loader);
+        var image = FindFirst<Image>(renderer.RootPanel);
+        Assert.NotNull(image);
+        Assert.Equal(800.0, image!.MaxWidth);
+        Assert.Equal(600.0, image.MaxHeight);
+        Assert.Equal(Stretch.Uniform, image.Stretch);
+        Assert.Equal(StretchDirection.DownOnly, image.StretchDirection);
 
-            var window = new Window { Width = 1000, Height = 800, Content = renderer.RootPanel };
-            window.Show();
-            LayOut(window);
+        var window = new Window { Width = 1000, Height = 800, Content = renderer.RootPanel };
+        window.Show();
+        LayOut(window);
 
-            // Capped at native resolution — never upscaled to the requested 800x600.
-            Assert.Equal(400, image.Bounds.Width, 0);
-            Assert.Equal(300, image.Bounds.Height, 0);
-        }
+        // Capped at native resolution — never upscaled to the requested 800x600.
+        Assert.Equal(400, image.Bounds.Width, 0);
+        Assert.Equal(300, image.Bounds.Height, 0);
     }
 
     [AvaloniaFact]

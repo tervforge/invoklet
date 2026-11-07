@@ -35,7 +35,8 @@ public class RandomizedLineManagerTest
     [OneTimeSetUp]
     public void FixtureSetup()
     {
-        int seed = Environment.TickCount;
+        // Fixed: with the time as the seed a failure could not be run again; another seed is another test.
+        const int seed = 2027;
         Console.WriteLine("RandomizedLineManagerTest Seed: " + seed);
         rnd = new Random(seed);
     }
