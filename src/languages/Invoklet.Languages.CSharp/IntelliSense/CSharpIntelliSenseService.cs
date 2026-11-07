@@ -65,13 +65,13 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     internal SourceText? LastSyncedSourceTextForTests => _session.LastSyncedSourceText;
 
     // Test-only: called by a completion once it holds its document snapshot, before it reads it.
-    internal Action? AnalysisSnapshotTakenForTests
+    internal Func<Task>? AnalysisSnapshotTakenForTests
     {
         get => _analysis.SnapshotTakenForTests;
         set => _analysis.SnapshotTakenForTests = value;
     }
 
-    internal Action? CompletionSnapshotTakenForTests
+    internal Func<Task>? CompletionSnapshotTakenForTests
     {
         get => _completion.SnapshotTakenForTests;
         set => _completion.SnapshotTakenForTests = value;
@@ -255,10 +255,10 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     /// <summary>Updates the typed <c>Arguments</c> members offered by completion.</summary>
     public void UpdateArgumentContract(MdRunArgumentContract? contract) => _context.UpdateArgumentContract(contract);
 
-    public void UpdateExecutionContext(ExecutionRequest request) => _context.UpdateExecutionContext(request);
+    public Task UpdateExecutionContextAsync(ExecutionRequest request) => _context.UpdateExecutionContextAsync(request);
 
-    public void ApplyExecutionContext(ExecutionRequest request, CancellationToken cancellationToken)
-        => _context.ApplyExecutionContext(request, cancellationToken);
+    public Task ApplyExecutionContextAsync(ExecutionRequest request, CancellationToken cancellationToken)
+        => _context.ApplyExecutionContextAsync(request, cancellationToken);
 
     // Without a build context: the runtime IntelliSense itself runs on, the user's NuGet settings.
     public void UpdatePackageReferences(IReadOnlyDictionary<string, Package> packages) => _context.UpdatePackageReferences(packages);
@@ -266,7 +266,7 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     public void UpdatePackageReferences(IReadOnlyDictionary<string, Package> packages, PackageReferenceContext context)
         => _context.UpdatePackageReferences(packages, context);
 
-    internal Action<ExecutionRequest>? ExecutionContextResolvedForTests
+    internal Func<ExecutionRequest, Task>? ExecutionContextResolvedForTests
     {
         get => _context.ExecutionContextResolvedForTests;
         set => _context.ExecutionContextResolvedForTests = value;
@@ -301,33 +301,22 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
         }
     }
 
-    // Cancel() alone only *requests* cooperative cancellation — NotifyTextChanged's Task.Run body can
-    // still be mid-flight (e.g. deep inside RoslynCodeFixEngine.ComputeFixesAsync, which doesn't poll
-    // the token between individual CodeFixProviders) when this method would otherwise return
-    // immediately, racing _session.Workspace.Dispose() right below and continuing to burn CPU on a ThreadPool
-    // thread after this service is considered "gone" by its caller. Observed as a same-process,
-    // cross-test CPU-starvation flake in CI (background analysis from an earlier, already-disposed
-    // test's service still running while a later test's own NotifyTextChanged competes for ThreadPool
-    // capacity) — worse on Windows CI's weaker/more contended runners, but a real bug regardless of
-    // platform: any caller that disposes right after only DiagnosticsChanged fires (which happens
-    // *before* the codefix half of the same background pass, see ComputeDiagnosticsAndCodeFixesAsync)
-    // was already at risk of this. Bounded, not unbounded — a pathological provider that truly never
-    // checks its token shouldn't be able to hang Dispose (or, in production, a tab close) forever.
+    // Cancelling only asks the pass in flight to stop: it can be deep inside a code fix provider that does not poll its token. The
+    // workspace is disposed only after it has ended, not under it, and within a bound, so a provider that never checks its token
+    // cannot keep the service's end waiting for ever.
     public void Dispose()
     {
         // Once: a second call (a tab that disposes what the creation also disposes) finds nothing left to do.
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        try
-        {
-            _analysis.Stop();
-            _scheduler.Stop();
-        }
-        finally
-        {
-            // The workspace goes even if stopping a pass threw.
-            _session.Dispose();
-        }
+        // Nothing is published from here on; the workspace goes once the pass in flight has ended (or the scheduler stopped waiting
+        // for it), without holding the caller, which is the UI thread closing a tab.
+        _analysis.Stop();
+        Disposal = _scheduler.StopAsync().ContinueWith(_ => _session.Dispose(), CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
+
+    /// <summary>Complete once the service is disposed through and through: its last pass has ended and its workspace is gone.</summary>
+    internal Task Disposal { get; private set; } = Task.CompletedTask;
 
     private int _disposed;
 

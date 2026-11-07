@@ -92,7 +92,7 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
 
             schemas.Cache.Put(other, new ConnectionSchema("1 service", [], ""));
             ui.RunPosted();
-            intelliSense.Verify(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+            intelliSense.Verify(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
 
             var previous = tab.ContextRefreshTask;
             schemas.Cache.Put(listed, new ConnectionSchema("2 services", [], ""));
@@ -101,14 +101,14 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
             Assert.NotSame(previous, tab.ContextRefreshTask);
             // The text is analysed again once the new classes are in, which happens off the UI thread.
             await tab.ContextRefreshTask;
-            intelliSense.Verify(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+            intelliSense.Verify(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Once);
             intelliSense.Verify(s => s.NotifyTextChanged(It.IsAny<string>()), Times.Once);
 
             tab.Dispose();
             intelliSense.Invocations.Clear();
             schemas.Cache.Put(listed, new ConnectionSchema("3 services", [], ""));
             ui.RunPosted();
-            Assert.DoesNotContain(intelliSense.Invocations, i => i.Method.Name == nameof(IIntelliSenseService.ApplyExecutionContext));
+            Assert.DoesNotContain(intelliSense.Invocations, i => i.Method.Name == nameof(IIntelliSenseService.ApplyExecutionContextAsync));
         }
         finally { host.Close(); }
     }

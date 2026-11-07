@@ -111,7 +111,7 @@ public sealed class ConnectionClientTests : IDisposable
         var referenceService = new CSharpReferenceService();
         using var service = new CSharpIntelliSenseService(
             referenceService.GetDefault().Append(referenceService.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance);
-        service.UpdateExecutionContext(new ExecutionRequest
+        await service.UpdateExecutionContextAsync(new ExecutionRequest
         {
             Connections = GeneratedConnections.For([Billing()], MdRunLanguage.CSharp, [], Drivers()),
         });
@@ -124,7 +124,7 @@ public sealed class ConnectionClientTests : IDisposable
         Assert.Contains(connections!.Items, i => i.DisplayText == "BillingApi");
 
         // Removing the connection removes the class again.
-        service.UpdateExecutionContext(new ExecutionRequest());
+        await service.UpdateExecutionContextAsync(new ExecutionRequest());
         var none = await service.GetCompletionsAsync(root, root.Length, ct: TestContext.Current.CancellationToken);
         Assert.DoesNotContain(none?.Items ?? [], i => i.DisplayText == "BillingApi");
     }
@@ -145,7 +145,7 @@ public sealed class ConnectionClientTests : IDisposable
         // its offsets would also fall inside the script's text (padded below to match).
         var schemaFile = "// " + new string('x', 3000) + "\nnamespace Schema;\nclass Stock\n{\n    private int _count = 0;\n"
             + "    void Print() => System.Console.WriteLine(_count);\n}\n";
-        service.UpdateExecutionContext(new ExecutionRequest
+        await service.UpdateExecutionContextAsync(new ExecutionRequest
         {
             Connections = GeneratedConnections.For([Billing()], MdRunLanguage.CSharp, [], Drivers())! with
             {

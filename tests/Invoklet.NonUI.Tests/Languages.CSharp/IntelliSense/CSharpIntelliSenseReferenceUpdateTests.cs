@@ -64,20 +64,19 @@ public sealed class CSharpIntelliSenseReferenceUpdateTests
         using var service = new CSharpIntelliSenseFixture().CreateSut(resolver: new FixedReferenceResolver(
             CSharpIntelliSenseFixture.Framework, packages => packages.ContainsKey("extra") ? [Extra] : []));
         var olderHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         service.ExecutionContextResolvedForTests = request =>
         {
-            if (!request.Packages.ContainsKey("extra")) return;
+            if (!request.Packages.ContainsKey("extra")) return Task.CompletedTask;
             olderHeld.TrySetResult();
-            Assert.True(release.Wait(Patience));
+            return release.Task;
         };
 
         // Act: the older one is held after its search and before it applies anything; the newer one is applied whole; then the older one goes on.
-        var older = Task.Run(() => service.UpdateExecutionContext(new ExecutionRequest { Packages = new Dictionary<string, string> { ["extra"] = "1.0.0" } }),
-            TestContext.Current.CancellationToken);
+        var older = service.UpdateExecutionContextAsync(new ExecutionRequest { Packages = new Dictionary<string, string> { ["extra"] = "1.0.0" } });
         await olderHeld.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
-        service.UpdateExecutionContext(new ExecutionRequest());
-        release.Set();
+        await service.UpdateExecutionContextAsync(new ExecutionRequest());
+        release.TrySetResult();
         await older.WaitAsync(Patience, TestContext.Current.CancellationToken);
 
         // Assert: the references are the newer request's (none), not the older one's.

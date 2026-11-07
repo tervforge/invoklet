@@ -2175,7 +2175,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 var generated = frontMatter is null ? null
                     : GeneratedConnections.For(connections, language, packageIds, _connectionDrivers, _connectionSchemas?.Cache, scriptDirectory);
                 token.ThrowIfCancellationRequested();
-                intelliSense.ApplyExecutionContext(baseRequest with { Connections = generated }, token);
+                await intelliSense.ApplyExecutionContextAsync(baseRequest with { Connections = generated }, token);
                 if (shouldReanalyze)
                     await Dispatcher.InvokeAsync(() =>
                     {

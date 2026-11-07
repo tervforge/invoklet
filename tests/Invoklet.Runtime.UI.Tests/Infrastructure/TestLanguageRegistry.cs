@@ -24,14 +24,14 @@ internal static class TestLanguageRegistry
     // (DotnetPackageReferenceContext), so a test can check the references and target it ends up with.
     public static Mock<IIntelliSenseService> ForwardingExecutionContext(this Mock<IIntelliSenseService> service)
     {
-        service.Setup(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>())).Callback<ExecutionRequest, CancellationToken>((request, _) =>
+        service.Setup(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>())).Callback<ExecutionRequest, CancellationToken>((request, _) =>
         {
             var packages = request.Packages.ToDictionary(p => p.Key, p => new Package(p.Value));
             if (DotnetPackageReferenceContext.For(request) is { } context)
                 service.Object.UpdatePackageReferences(packages, context);
             else
                 service.Object.UpdatePackageReferences(packages);
-        });
+        }).Returns(Task.CompletedTask);
         return service;
     }
 

@@ -44,12 +44,12 @@ public sealed class CSharpIntelliSenseContextUpdateTests
     public async Task ACancelledRequest_Should_ChangeNothing()
     {
         using var service = Create();
-        service.UpdateExecutionContext(Connection("Stock"));
+        await service.UpdateExecutionContextAsync(Connection("Stock"));
         Assert.True(await OffersAsync(service, "Stock"));
 
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
-        Assert.Throws<OperationCanceledException>(() => service.ApplyExecutionContext(Connection("Audit"), cancelled.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.ApplyExecutionContextAsync(Connection("Audit"), cancelled.Token));
 
         Assert.True(await OffersAsync(service, "Stock"));
         Assert.False(await OffersAsync(service, "Audit"));
@@ -72,22 +72,22 @@ public sealed class CSharpIntelliSenseContextUpdateTests
         };
 
         var snapshotTaken = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var proceed = new ManualResetEventSlim();
+        var proceed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         service.AnalysisSnapshotTakenForTests = () =>
         {
-            if (Interlocked.Increment(ref calls) != 1) return;
+            if (Interlocked.Increment(ref calls) != 1) return Task.CompletedTask;
             snapshotTaken.TrySetResult();
-            Assert.True(proceed.Wait(TimeSpan.FromSeconds(30)));
+            return proceed.Task;
         };
 
         service.NotifyTextChanged(code);
         await snapshotTaken.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
-        service.UpdateExecutionContext(new ExecutionRequest
+        await service.UpdateExecutionContextAsync(new ExecutionRequest
         {
             Connections = new GeneratedConnections("public static partial class Connections { public static int Stock => 1; }", [], []),
         });
-        proceed.Set();
+        proceed.TrySetResult();
 
         await current.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.All(published, tokens => Assert.True(IsClassColoured(tokens), "an obsolete analysis was published"));
@@ -102,18 +102,18 @@ public sealed class CSharpIntelliSenseContextUpdateTests
     {
         using var service = Create();
         var olderHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         service.ExecutionContextResolvedForTests = request =>
         {
-            if (request.Connections?.Source.Contains("Stock", StringComparison.Ordinal) != true) return;
+            if (request.Connections?.Source.Contains("Stock", StringComparison.Ordinal) != true) return Task.CompletedTask;
             olderHeld.TrySetResult();
-            Assert.True(release.Wait(Patience));
+            return release.Task;
         };
 
-        var older = Task.Run(() => service.UpdateExecutionContext(Connection("Stock")), TestContext.Current.CancellationToken);
+        var older = service.UpdateExecutionContextAsync(Connection("Stock"));
         await olderHeld.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
-        service.UpdateExecutionContext(Connection("Audit"));
-        release.Set();
+        await service.UpdateExecutionContextAsync(Connection("Audit"));
+        release.TrySetResult();
         await older.WaitAsync(Patience, TestContext.Current.CancellationToken);
 
         Assert.True(await OffersAsync(service, "Audit"));
@@ -126,16 +126,16 @@ public sealed class CSharpIntelliSenseContextUpdateTests
     public async Task ASlowContextRequest_Should_NotBlockCompletion()
     {
         using var service = Create();
-        service.UpdateExecutionContext(Connection("Stock"));
+        await service.UpdateExecutionContextAsync(Connection("Stock"));
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         service.ExecutionContextResolvedForTests = _ =>
         {
             held.TrySetResult();
-            Assert.True(release.Wait(Patience));
+            return release.Task;
         };
 
-        var slow = Task.Run(() => service.UpdateExecutionContext(Connection("Audit")), TestContext.Current.CancellationToken);
+        var slow = service.UpdateExecutionContextAsync(Connection("Audit"));
         try
         {
             await held.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
@@ -143,7 +143,7 @@ public sealed class CSharpIntelliSenseContextUpdateTests
         }
         finally
         {
-            release.Set();
+            release.TrySetResult();
         }
         await slow.WaitAsync(Patience, TestContext.Current.CancellationToken);
         Assert.True(await OffersAsync(service, "Audit"));
@@ -155,21 +155,21 @@ public sealed class CSharpIntelliSenseContextUpdateTests
     public async Task ACompletionOvertakenByANewContext_Should_ListTheNewestMembers()
     {
         using var service = Create();
-        service.UpdateExecutionContext(Connection("Stock"));
+        await service.UpdateExecutionContextAsync(Connection("Stock"));
         var snapshotTaken = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var proceed = new ManualResetEventSlim();
+        var proceed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         service.CompletionSnapshotTakenForTests = () =>
         {
-            if (Interlocked.Increment(ref calls) != 1) return;
+            if (Interlocked.Increment(ref calls) != 1) return Task.CompletedTask;
             snapshotTaken.TrySetResult();
-            Assert.True(proceed.Wait(Patience));
+            return proceed.Task;
         };
 
         var completion = OffersAndAvoidsAsync(service, "Audit", "Stock");
         await snapshotTaken.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
-        service.UpdateExecutionContext(Connection("Audit"));
-        proceed.Set();
+        await service.UpdateExecutionContextAsync(Connection("Audit"));
+        proceed.TrySetResult();
 
         Assert.True(await completion.WaitAsync(Patience, TestContext.Current.CancellationToken));
     }
@@ -200,20 +200,20 @@ public sealed class CSharpIntelliSenseContextUpdateTests
         };
 
         var snapshotTaken = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var proceed = new ManualResetEventSlim();
+        var proceed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         service.AnalysisSnapshotTakenForTests = () =>
         {
-            if (Interlocked.Increment(ref calls) != 1) return;
+            if (Interlocked.Increment(ref calls) != 1) return Task.CompletedTask;
             snapshotTaken.TrySetResult();
-            Assert.True(proceed.Wait(Patience));
+            return proceed.Task;
         };
 
         service.NotifyTextChanged(first);
         await snapshotTaken.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
         foreach (var text in new[] { "var ", "var x = 1; Conn", last }) service.NotifyTextChanged(text);
-        service.UpdateExecutionContext(Connection("Stock"));
-        proceed.Set();
+        await service.UpdateExecutionContextAsync(Connection("Stock"));
+        proceed.TrySetResult();
 
         await current.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
         Assert.DoesNotContain(published, tokens => tokens.Any(t => t is { StartOffset: 0, Length: 11, Kind: SemanticTokenKind.ClassName }));

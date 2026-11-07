@@ -63,6 +63,7 @@ public sealed class CompletionServiceTests
         sut.SnapshotTakenForTests = () =>
         {
             if (++snapshots == 1) fixture.Session.ContextChanged();
+            return Task.CompletedTask;
         };
 
         // Act

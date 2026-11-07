@@ -40,7 +40,7 @@ public sealed class SecretOutputAnalyzerTests
     {
         // Arrange
         using var sut = new SecretOutputAnalyzerFixture().CreateSut();
-        sut.UpdateExecutionContext(SecretOutputAnalyzerFixture.WithSecretConnection());
+        await sut.UpdateExecutionContextAsync(SecretOutputAnalyzerFixture.WithSecretConnection());
         const string code = "Connections.Shop.ConnectionString.Dump();\n";
         var warnings = SecretOutputAnalyzerFixture.SecretWarnings(sut, code);
 

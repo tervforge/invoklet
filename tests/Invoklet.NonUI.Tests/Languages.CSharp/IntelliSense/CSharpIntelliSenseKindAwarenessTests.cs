@@ -244,7 +244,7 @@ public class CSharpIntelliSenseKindAwarenessTests
         }
         using var on = new CSharpIntelliSenseFixture().CreateSut();
         on.UpdateKind(MdRunKind.Program);
-        on.UpdateExecutionContext(new Invoklet.Contracts.Models.ExecutionRequest { AllowUnsafe = true });
+        await on.UpdateExecutionContextAsync(new Invoklet.Contracts.Models.ExecutionRequest { AllowUnsafe = true });
         Assert.DoesNotContain(await WaitForDiagnosticsAsync(on, code), d => d.Severity == DiagnosticSeverity.Error);
     }
 

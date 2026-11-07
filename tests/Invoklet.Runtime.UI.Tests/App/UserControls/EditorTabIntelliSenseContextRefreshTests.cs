@@ -62,7 +62,7 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
     private sealed class SlowService
     {
         public readonly Mock<IIntelliSenseService> Mock = new();
-        public readonly ManualResetEventSlim Gate = new(true);
+        public readonly AsyncGate Gate = new(open: true);
         public readonly ConcurrentQueue<CancellationToken> Tokens = new();
         public readonly ConcurrentQueue<ExecutionRequest> Applied = new();
         public TaskCompletionSource<ExecutionRequest> AppliedSignal { get; private set; } = NewSignal<ExecutionRequest>();
@@ -89,16 +89,16 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
         public SlowService()
         {
             // The overload without a token is the one a UI-thread caller would use: it blocks too.
-            Mock.Setup(s => s.UpdateExecutionContext(It.IsAny<ExecutionRequest>()))
-                .Callback<ExecutionRequest>(_ => Gate.Wait(TimeSpan.FromSeconds(10)));
-            Mock.Setup(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()))
-                .Callback<ExecutionRequest, CancellationToken>((request, token) =>
+            Mock.Setup(s => s.UpdateExecutionContextAsync(It.IsAny<ExecutionRequest>()))
+                .Returns(() => Gate.WaitAsync());
+            Mock.Setup(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(async (ExecutionRequest request, CancellationToken token) =>
                 {
                     Tokens.Enqueue(token);
                     Interlocked.Increment(ref _entered);
                     try
                     {
-                        Gate.Wait(TimeSpan.FromSeconds(10));
+                        await Gate.WaitAsync();
                         token.ThrowIfCancellationRequested();
                         Applied.Enqueue(request);
                         AppliedSignal.TrySetResult(request);

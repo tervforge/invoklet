@@ -40,7 +40,7 @@ internal sealed class CompletionService(
     }
 
     // Test-only: called once a completion holds its document snapshot, before it reads it.
-    internal Action? SnapshotTakenForTests { get; set; }
+    internal Func<Task>? SnapshotTakenForTests { get; set; }
 
     internal Task<ICompletionList?> GetCompletionsAsync(
         string code, int position, CompletionTrigger trigger = default, CancellationToken ct = default)
@@ -75,7 +75,7 @@ internal sealed class CompletionService(
                 document = _syncDocument(code);
                 contextVersion.Value = _session.ContextVersion;
             }
-            SnapshotTakenForTests?.Invoke();
+            if (SnapshotTakenForTests is { } snapshotTaken) await snapshotTaken();
             var model = await document.GetSemanticModelAsync(ct);
             if (model == null) return null;
 

@@ -52,7 +52,7 @@ internal sealed class BackgroundAnalysis(
     internal void Stop() => _stopped = true;
 
     // Test-only: called once a pass holds its document snapshot, before it analyses it, so a test can change the context at exactly that point.
-    internal Action? SnapshotTakenForTests { get; set; }
+    internal Func<Task>? SnapshotTakenForTests { get; set; }
 
     public event Action<string, IReadOnlyList<IDiagnosticInfo>>? DiagnosticsChanged;
     public event Action<string, IReadOnlyList<ISemanticToken>>? SemanticTokensChanged;
@@ -71,7 +71,7 @@ internal sealed class BackgroundAnalysis(
             document = _syncDocument(code);
             version = _session.ContextVersion;
         }
-        SnapshotTakenForTests?.Invoke();
+        if (SnapshotTakenForTests is { } snapshotTaken) await snapshotTaken();
         await Task.WhenAll(
             ComputeDiagnosticsAndCodeFixesAsync(code, document, version, ct),
             ComputeSemanticTokensAsync(code, document, version, ct),

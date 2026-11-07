@@ -113,7 +113,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     public async Task GetCompletionsAsync_BeforeABuild_OffersTheServices()
     {
         // Arrange
-        using var editor = grpc.Editor();
+        using var editor = await grpc.EditorAsync();
         const string code = "Connections.Inventory.";
 
         // Act
@@ -129,7 +129,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     public async Task GetDefinitionAsync_ASymbolOnlyInTheGeneratedDocument_OpensItAtTheDeclaration()
     {
         // Arrange
-        using var editor = grpc.Editor();
+        using var editor = await grpc.EditorAsync();
         const string code = "Connections.Inventory.Stock";
 
         // Act
@@ -147,7 +147,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     {
         Assert.SkipWhen(grpc.Sdk is null, "No .NET SDK is installed.");
         // Arrange
-        using var editor = grpc.Editor(grpc.BuiltDirectory);
+        using var editor = await grpc.EditorAsync(grpc.BuiltDirectory);
         const string code = "Connections.Inventory.Stock.";
 
         // Act
@@ -162,7 +162,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     {
         Assert.SkipWhen(grpc.Sdk is null, "No .NET SDK is installed.");
         // Arrange
-        using var editor = grpc.Editor(grpc.BuiltDirectory);
+        using var editor = await grpc.EditorAsync(grpc.BuiltDirectory);
 
         // Act
         var definition = await editor.GetDefinitionAsync(MessageType, MessagePosition, TestContext.Current.CancellationToken);
@@ -176,7 +176,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     {
         Assert.SkipWhen(grpc.Sdk is null, "No .NET SDK is installed.");
         // Arrange
-        using var editor = grpc.Editor(grpc.BuiltDirectory);
+        using var editor = await grpc.EditorAsync(grpc.BuiltDirectory);
         var definition = await editor.GetDefinitionAsync(MessageType, MessagePosition, TestContext.Current.CancellationToken);
 
         // Act
@@ -192,7 +192,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     {
         Assert.SkipWhen(grpc.Sdk is null, "No .NET SDK is installed.");
         // Arrange
-        using var editor = grpc.Editor(grpc.BuiltDirectory);
+        using var editor = await grpc.EditorAsync(grpc.BuiltDirectory);
 
         // Act
         var definition = await editor.GetDefinitionAsync(PartialScript, PartialScript.IndexOf("CustomValue", StringComparison.Ordinal) + 2,
@@ -207,7 +207,7 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
     {
         Assert.SkipWhen(grpc.Sdk is null, "No .NET SDK is installed.");
         // Arrange
-        using var editor = grpc.Editor(grpc.BuiltDirectory, withConnection: false);
+        using var editor = await grpc.EditorAsync(grpc.BuiltDirectory, withConnection: false);
 
         // Act
         var definition = await editor.GetDefinitionAsync(MessageType, MessagePosition, TestContext.Current.CancellationToken);
