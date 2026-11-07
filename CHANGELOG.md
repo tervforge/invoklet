@@ -3,6 +3,21 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Changed
+
+- The results use the same kind of code font as the editor, instead of Courier New on macOS and Linux.
+- Copying a string from the results copies its value, without the quotes shown around it, and the cells of a
+  table are separated by tabs, so they stay in their columns when pasted into a spreadsheet.
+- Text in the results is drawn evenly: long lines wrap between words, and only a token too long for a line is broken.
+
+### Fixed
+
+- Selecting text in the results starts where the button went down, takes the letter it starts on, and can
+  start or end in the empty part of the panel. Pressing on selected text starts a new selection instead of
+  dragging it. New output from a running script no longer takes the selection away or scrolls from it.
+
 ## [0.11.7] — 2026-11-07
 
 ### Added

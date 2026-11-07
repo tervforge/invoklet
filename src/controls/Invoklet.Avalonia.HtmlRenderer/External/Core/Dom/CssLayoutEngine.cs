@@ -238,6 +238,26 @@ internal static class CssLayoutEngine
     /// <param name="cury">Current y coordinate that will be the top of the next word</param>
     /// <param name="maxRight">Maximum right reached so far</param>
     /// <param name="maxbottom">Maximum bottom reached so far</param>
+    // word-break:break-all, as a token that fits a line is drawn whole, with its letters shaped together: only what is wider than a line is broken, where the line ends.
+    private static CssRect BreakToFit(RGraphics g, CssBox box, int index, double lineWidth)
+    {
+        var word = box.Words[index];
+        g.MeasureString(word.AsString, box.ActualFont, Math.Max(0, lineWidth), out var fit, out _);
+        fit = Math.Clamp(fit, 1, word.Text.Length - 1);
+
+        var head = new CssRectWord(box, word.Text.Slice(0, fit), word.HasSpaceBefore, false);
+        var tail = new CssRectWord(box, word.Text.Slice(fit), false, word.HasSpaceAfter);
+        foreach (var part in new[] { head, tail })
+        {
+            part.Line = g.FormatLine(part.Text, box.ActualFont);
+            part.Width = part.Line.Size.Width;
+            part.Height = part.Line.Size.Height;
+        }
+        box.Words[index] = head;
+        box.Words.Insert(index + 1, tail);
+        return head;
+    }
+
     private static void FlowBox(RGraphics g, CssBox blockbox, CssBox box, double limitRight, double linespacing, double startx, ref CssLineBox line, ref double curx, ref double cury, ref double maxRight, ref double maxbottom)
     {
         var startX = curx;
@@ -272,8 +292,14 @@ internal static class CssLayoutEngine
                 if (DomUtils.IsBoxHasWhitespace(b))
                     curx += box.ActualWordSpacing;
 
-                foreach (var word in b.Words)
+                // By index: a token too long for a line becomes two words here.
+                for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
                 {
+                    var word = b.Words[wordIndex];
+                    var lineWidth = limitRight - startx - rightspacing - box.ActualMarginLeft - box.ActualBorderLeftWidth - box.ActualPaddingLeft;
+                    if (b.WordBreak == CssConstants.BreakAll && word.Width > lineWidth && word.Text.Length > 1 && !word.IsSpaces && !word.IsLineBreak && !word.IsImage)
+                        word = BreakToFit(g, b, wordIndex, lineWidth);
+
                     if (maxbottom - cury < box.ActualLineHeight)
                         maxbottom += box.ActualLineHeight - (maxbottom - cury);
 

@@ -113,7 +113,16 @@ public partial class OutputHtmlView : UserControl
         if (_boundModel is not { } vm) return;
 
         ApplyCount++;
-        _scrollToEndPending = true;
+        // New output does not take the reader away from what they are selecting.
+        if (!string.IsNullOrEmpty(OutputHtml.SelectedText))
+        {
+            var offset = OutputHtml.Container.ScrollOffset;
+            _scrollToRestore = new Point(-offset.X, -offset.Y);
+        }
+        else
+        {
+            _scrollToEndPending = true;
+        }
         OutputHtml.Text = PageOf(vm);
     }
 

@@ -45,7 +45,7 @@ public static class HtmlThemeStylesheet
         var lines = wrapLongLines ? "white-space:pre-wrap; word-break:break-all;" : "white-space:pre;";
 
         return $$"""
-            body        { background-color:{{bg}}; color:{{fg}}; font-family:Consolas,monospace; font-size:13px; margin:8px; }
+            body        { background-color:{{bg}}; color:{{fg}}; font-family:Menlo,Cascadia Mono,Consolas,DejaVu Sans Mono,Liberation Mono,Noto Sans Mono,monospace; font-size:13px; margin:8px; }
             pre         { background-color:{{panel}}; color:{{fg}}; padding:4px 8px; margin:4px 0;{{preWrap}} }
             .out        { {{lines}} }
             .secondary  { color:{{fgSec}}; }

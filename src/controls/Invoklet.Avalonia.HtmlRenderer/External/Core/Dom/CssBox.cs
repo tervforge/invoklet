@@ -579,10 +579,10 @@ internal class CssBox : CssBoxProperties, IDisposable
                 else
                 {
                     endIdx = startIdx;
-                    while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-' && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharecter(text[endIdx]))
+                    while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-' && !CommonUtils.IsAsianCharecter(text[endIdx]))
                         endIdx++;
 
-                    if (endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharecter(text[endIdx])))
+                    if (endIdx < text.Length && (text[endIdx] == '-' || CommonUtils.IsAsianCharecter(text[endIdx])))
                         endIdx++;
 
                     if (endIdx > startIdx)
