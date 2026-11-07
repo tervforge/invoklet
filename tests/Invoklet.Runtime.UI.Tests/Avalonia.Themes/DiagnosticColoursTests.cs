@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -28,6 +29,53 @@ public sealed class DiagnosticColoursTests
     {
         var (light, dark) = (Math.Max(Luminance(a), Luminance(b)), Math.Min(Luminance(a), Luminance(b)));
         return (light + 0.05) / (dark + 0.05);
+    }
+
+    // Every table, at any depth: a blue title strip and border, grey column headers, each with text that reads on it.
+    [AvaloniaTheory]
+    [MemberData(nameof(Themes))]
+    public void TableColours_OfATheme_AreABlueStripAndGreyColumnHeaders(string themeName)
+    {
+        // Arrange
+        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
+        var theme = new InvokletTheme();
+
+        // Act
+        var strip = ColourOf(theme, variant, "Invoklet.Dump.TableHeaderBrush");
+        var column = ColourOf(theme, variant, "Invoklet.Dump.ColumnHeaderBrush");
+        var columnText = ColourOf(theme, variant, "Invoklet.Dump.ColumnHeaderForegroundBrush");
+
+        // Assert
+        Assert.True(strip.B > strip.R, $"{themeName}: {strip} is not blue");
+        Assert.True(Math.Max(column.R, Math.Max(column.G, column.B)) - Math.Min(column.R, Math.Min(column.G, column.B)) <= 16, $"{themeName}: {column} is not grey");
+        Assert.True(Contrast(columnText, column) >= 4.5, $"{themeName}: {columnText} on {column}");
+    }
+
+    // The sheet the panel reads: column headers take the grey, title strips and borders the blue.
+    [AvaloniaFact]
+    public void Stylesheet_OfATable_ColoursItsPartsFromTheirOwnBrushes()
+    {
+        // Arrange
+        var variant = InvokletThemeVariants.RiderDark;
+        var app = Application.Current!;
+        var theme = new InvokletTheme();
+        var requested = app.RequestedThemeVariant;
+        app.Styles.Add(theme);
+        app.RequestedThemeVariant = variant;
+
+        // Act
+        string css;
+        try { css = HtmlThemeStylesheet.Generate(variant, isDark: true); }
+        finally
+        {
+            app.Styles.Remove(theme);
+            app.RequestedThemeVariant = requested;
+        }
+
+        // Assert
+        Assert.Contains(".dp-th      { background-color:#43454A;", css);
+        Assert.Contains(".dp-boxed      { border:2px solid #2D5FAD;", css);
+        Assert.Contains(".dp-boxstrip   { padding:0; background-color:#2D5FAD;", css);
     }
 
     [AvaloniaTheory]

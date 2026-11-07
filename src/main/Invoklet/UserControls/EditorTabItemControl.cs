@@ -185,6 +185,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (e.PropertyName == nameof(OutputHtmlViewModel.Content)) Interlocked.Increment(ref _outputVersion);
         };
         ResultsOutput.SaveHtmlRequested += () => _ = ExportResultsAsync();
+        ResultsOutput.ShowGeneratedLabels = prefs.Editor.ResultsShowGeneratedLabels;
+        ResultsOutput.ExportBoxRequested += box => _ = _resultsExporter?.ExportBoxCsvAsync(box);
         ResultsOutput.ExportTableRequested += table => _ = _resultsExporter?.ExportTableCsvAsync(table);
         _resultsWordWrap = prefs.Editor.ResultsWordWrap;
         State.Output.Css = HtmlThemeStylesheet.Generate(themeService.CurrentTheme.Interface.Variant,
@@ -192,6 +194,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // Results wrapping is set in the output's own settings menu, not in Preferences.
         ResultsWrapCheckBox.IsChecked = _resultsWordWrap;
         ResultsWrapCheckBox.IsCheckedChanged += OnResultsWrapCheckBoxChanged;
+        ResultsLabelsCheckBox.IsChecked = prefs.Editor.ResultsShowGeneratedLabels;
+        ResultsLabelsCheckBox.IsCheckedChanged += OnResultsLabelsCheckBoxChanged;
+        ResultsKeepCheckBox.IsChecked = prefs.Editor.ResultsKeepOutput;
+        ResultsKeepCheckBox.IsCheckedChanged += OnResultsKeepCheckBoxChanged;
         OutputSettingsButton.Flyout!.Opened += OnOutputSettingsFlyoutOpened;
 
         _viewScale = ViewScale.For(prefs);
@@ -827,6 +833,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             _editorAttachedHandler = null;
         }
         ResultsWrapCheckBox.IsCheckedChanged -= OnResultsWrapCheckBoxChanged;
+        ResultsLabelsCheckBox.IsCheckedChanged -= OnResultsLabelsCheckBoxChanged;
+        ResultsKeepCheckBox.IsCheckedChanged -= OnResultsKeepCheckBoxChanged;
         OutputSettingsButton.Flyout!.Opened -= OnOutputSettingsFlyoutOpened;
         IlOutput.AttachedToVisualTree -= OnIlOutputAttachedToVisualTree;
         _editorInteractionSubscriptions?.Dispose();
@@ -1568,7 +1576,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         => StatusLine.Text = $"Line {State.Editor.TextArea.Caret.Line}  Col {State.Editor.TextArea.Caret.Column}";
 
     private void OnOutputSettingsFlyoutOpened(object? sender, EventArgs e)
-        => ResultsWrapCheckBox.IsChecked = _prefs.Editor.ResultsWordWrap;
+    {
+        ResultsWrapCheckBox.IsChecked = _prefs.Editor.ResultsWordWrap;
+        ResultsLabelsCheckBox.IsChecked = _prefs.Editor.ResultsShowGeneratedLabels;
+        ResultsKeepCheckBox.IsChecked = _prefs.Editor.ResultsKeepOutput;
+    }
 
     private void OnIlOutputAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         => EnsureIlHighlighting();
@@ -1759,6 +1771,24 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         ApplyResultsWordWrap(wrap);
     }
 
+    private void OnResultsLabelsCheckBoxChanged(object? sender, RoutedEventArgs e)
+    {
+        var show = ResultsLabelsCheckBox.IsChecked == true;
+        ResultsOutput.ShowGeneratedLabels = show;
+        if (show == _prefs.Editor.ResultsShowGeneratedLabels) return;
+        _prefs.Editor.ResultsShowGeneratedLabels = show;
+        _prefs.Save();
+    }
+
+    // What the tab shows stays; only what is kept on disk changes, at the next run or opening of the script.
+    private void OnResultsKeepCheckBoxChanged(object? sender, RoutedEventArgs e)
+    {
+        var keep = ResultsKeepCheckBox.IsChecked == true;
+        if (keep == _prefs.Editor.ResultsKeepOutput) return;
+        _prefs.Editor.ResultsKeepOutput = keep;
+        _prefs.Save();
+    }
+
     // Only a changed value regenerates the stylesheet, so unrelated settings don't reload the results view.
     private void ApplyResultsWordWrap(bool wrap)
     {
@@ -1778,6 +1808,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (_disposed) return;
             EditorSettingsApplier.ApplyEditorSettings(State.Editor, _prefs.Editor, _viewScale.CodeZoom);
             ApplyResultsWordWrap(_prefs.Editor.ResultsWordWrap);
+            ResultsOutput.ShowGeneratedLabels = _prefs.Editor.ResultsShowGeneratedLabels;
 
             _intelliSense?.UpdateIndentation(_prefs.Editor.UseTabs, _prefs.Editor.IndentationSize);
             _prefs.Keyboard.ApplyTo(State.Editor);

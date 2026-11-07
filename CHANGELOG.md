@@ -9,6 +9,11 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - Invoklet checks the public GitHub release metadata once a day after startup and shows a quiet
   notification when a newer version is available. It does not download or install updates.
+- The first row of each table and object in the results has its type, an arrow to fold it and a menu with Export to
+  CSV. Objects inside a table start folded and open in place; the CSV holds what is folded. The gear menu of
+  the results can stop keeping the last output on disk for after a restart.
+- `x.Dump()` is no longer headed "x" by default; the gear menu of the results can turn that back on. A heading
+  passed to `Dump` always shows. A collection is titled `String[2]` or `List<Int32> (2 items)`.
 - A tab that is not chosen shows its state where the chosen tab has its close button: idle (a grey dot),
   unsaved, running, debugging, paused or failed. Its tooltip names the state.
 - The code editor marks errors, warnings, breakpoints and the current debug line beside the scroll bar.

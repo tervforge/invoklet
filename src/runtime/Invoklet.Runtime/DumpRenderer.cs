@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 
 namespace Invoklet.Runtime;
 
@@ -15,7 +16,8 @@ internal static class DumpRenderer
     public static string Render(object? value, string? label, int? maxDepth = null, int? maxRows = null)
         => Render(value, label, new DumpOptions { MaxDepth = maxDepth, MaxRows = maxRows });
 
-    public static string Render(object? value, string? label, DumpOptions options)
+    // A label the script gave, or one made from its source text: the window can leave out the second kind.
+    public static string Render(object? value, string? label, DumpOptions options, string? generatedLabel = null)
     {
         // Every .Dump() call starts from the process-wide defaults (LINQPad-compatible
         // Util.DumpDefaults/DumpOptions.Default) with this specific call's own options layered on top
@@ -25,6 +27,8 @@ internal static class DumpRenderer
         var sb = new StringBuilder();
         if (label != null)
             sb.Append("<div class=\"dp-label\">").Append(Encode(label)).Append("</div>");
+        else if (generatedLabel != null)
+            sb.Append("<div class=\"dp-label dp-label-generated\">").Append(Encode(generatedLabel)).Append("</div>");
         RenderValue(sb, value, 0, effective);
         return sb.ToString();
     }
@@ -32,9 +36,9 @@ internal static class DumpRenderer
     private static IFormatProvider NumberFormat(DumpOptions options) =>
         options.UseInvariantCultureForNumbers == true ? CultureInfo.InvariantCulture : CultureInfo.CurrentCulture;
 
-    // ForceExpansion always wins; otherwise collapse once depth passes CollapseTo (if set).
+    // ForceExpansion always wins; otherwise only the first level is open, unless CollapseTo says how many.
     private static bool ShouldCollapse(DumpOptions options, int depth) =>
-        !options.ForceExpansion && options.CollapseTo is { } n && depth >= n;
+        !options.ForceExpansion && depth >= (options.CollapseTo ?? 1);
 
     // ── Value dispatch ────────────────────────────────────────────────────────
 
@@ -121,22 +125,19 @@ internal static class DumpRenderer
         sb.Append('>').Append(html).Append("</").Append(tag).Append('>');
     }
 
-    // void, not string — every call site invokes this as a statement, and materializing outer's
-    // entire accumulated buffer via ToString() on every nesting level (as the old signature required)
-    // meant O(n^2) allocations for a deep/wide dump.
-    private static void RenderCollapsible(StringBuilder outer, int depth, DumpOptions options, Action<StringBuilder> renderInner)
+    // A table or an object as a box the window can fold: everything down to the depth limit is written now, while the script is alive to
+    // answer; what is folded only is not shown yet. A title (dp-type or dp-count) comes first inside it. The node's name starts with one for
+    // the process, so that what a window remembers about a box of an earlier run does not apply to a box of this one.
+    private static readonly string NodePrefix = Guid.NewGuid().ToString("N").Substring(0, 8);
+    private static int _lastNode;
+
+    private static void RenderBox(StringBuilder sb, int depth, DumpOptions options, Action<StringBuilder> renderInner)
     {
-        var inner = new StringBuilder();
-        renderInner(inner);
-        if (ShouldCollapse(options, depth))
-        {
-            outer.Append("<details class=\"dp-collapse\"><summary>(click to expand)</summary>")
-                 .Append(inner).Append("</details>");
-        }
-        else
-        {
-            outer.Append(inner);
-        }
+        sb.Append("<div class=\"dp-box\" data-dp-node=\"").Append(NodePrefix).Append('-').Append(Interlocked.Increment(ref _lastNode)).Append('"');
+        if (ShouldCollapse(options, depth)) sb.Append(" data-dp-collapsed=\"1\"");
+        sb.Append('>');
+        renderInner(sb);
+        sb.Append("</div>");
     }
 
     // ── Primitives ────────────────────────────────────────────────────────────
@@ -233,7 +234,7 @@ internal static class DumpRenderer
         var values = provider.GetValues().ToArray();
         var count = Math.Min(names.Length, values.Length);
 
-        RenderCollapsible(sb, depth, options, inner =>
+        RenderBox(sb, depth, options, inner =>
         {
             inner.Append("<table class=\"dp-table\"><thead><tr>")
                  .Append("<th class=\"dp-th\">Name</th><th class=\"dp-th\">Value</th>")
@@ -260,11 +261,11 @@ internal static class DumpRenderer
     private static void RenderDictionary(StringBuilder sb, IDictionary dict, int depth, DumpOptions options)
     {
         var count = dict.Count;
-        if (!options.NoTotals)
-            sb.Append("<div class=\"dp-count\">").Append(count).Append(' ').Append(Plural(count, "item")).Append("</div>");
-
-        RenderCollapsible(sb, depth, options, inner =>
+        RenderBox(sb, depth, options, inner =>
         {
+            if (!options.NoTotals)
+                inner.Append("<div class=\"dp-count\">").Append(Encode(CollectionTitle(dict.GetType(), count, false))).Append("</div>");
+
             inner.Append("<table class=\"dp-table\"><thead><tr>")
                  .Append("<th class=\"dp-th\">Key</th><th class=\"dp-th\">Value</th>")
                  .Append("</tr></thead><tbody>");
@@ -304,22 +305,18 @@ internal static class DumpRenderer
         var shownCount = Math.Min(items.Count, maxRows);
         var hasMore = items.Count > maxRows;
 
-        if (!options.NoTotals)
-        {
-            sb.Append("<div class=\"dp-count\">")
-              .Append(Encode(FriendlyName(collectionType)))
-              .Append(" &mdash; ").Append(shownCount)
-              .Append(hasMore ? "+" : "")
-              .Append(' ').Append(Plural(shownCount, "item")).Append("</div>");
-        }
-
-        if (shownCount == 0) { sb.Append("<span class=\"dp-truncated\">empty</span>"); return; }
-
         var firstNonNull = items.Take(shownCount).FirstOrDefault(x => x != null);
         bool isPrimitive = firstNonNull == null || IsPrimitiveLike(firstNonNull.GetType());
 
-        RenderCollapsible(sb, depth, options, inner =>
+        RenderBox(sb, depth, options, inner =>
         {
+            if (!options.NoTotals)
+            {
+                inner.Append("<div class=\"dp-count\">").Append(Encode(CollectionTitle(collectionType, shownCount, hasMore))).Append("</div>");
+            }
+
+            if (shownCount == 0) { inner.Append("<span class=\"dp-truncated\">empty</span>"); return; }
+
             if (isPrimitive)
             {
                 inner.Append("<table class=\"dp-table\"><thead><tr>")
@@ -406,9 +403,9 @@ internal static class DumpRenderer
             return;
         }
 
-        sb.Append("<div class=\"dp-type\">").Append(Encode(FriendlyName(type))).Append("</div>");
-        RenderCollapsible(sb, depth, options, inner =>
+        RenderBox(sb, depth, options, inner =>
         {
+            inner.Append("<div class=\"dp-type\">").Append(Encode(FriendlyName(type))).Append("</div>");
             inner.Append("<table class=\"dp-table\"><thead><tr>")
                  .Append("<th class=\"dp-th\">Property</th><th class=\"dp-th\">Value</th>")
                  .Append("</tr></thead><tbody>");
@@ -476,8 +473,29 @@ internal static class DumpRenderer
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    // The first row of a collection's table: String[2], List<String> (2 items), (0 items), List<String> (First 1000 items). A query's own iterator class
+    // is no use to the reader: it is an IEnumerable<T>.
+    private static string CollectionTitle(Type type, int count, bool hasMore)
+    {
+        if (count == 0) return "(0 items)";
+        if (hasMore) return $"{CollectionName(type)} (First {count} {Plural(count, "item")})";
+        if (type.IsArray && type.GetArrayRank() == 1) return $"{FriendlyName(type.GetElementType()!)}[{count}]";
+        return $"{CollectionName(type)} ({count} {Plural(count, "item")})";
+    }
+
+    private static string CollectionName(Type type)
+    {
+        var hidden = !type.IsArray && !(type.IsPublic || type.IsNestedPublic);
+        var sequence = hidden
+            ? type.GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            : null;
+        return FriendlyName(sequence ?? type);
+    }
+
     private static string FriendlyName(Type type)
     {
+        if (type.IsArray) return FriendlyName(type.GetElementType()!) + "[]";
+        if (type.Name.Contains("AnonymousType")) return "\u00F8"; // as LINQPad: the compiler's name says nothing
         if (!type.IsGenericType) return type.Name;
         var idx = type.Name.IndexOf('`');
         var baseName = idx >= 0 ? type.Name.Substring(0, idx) : type.Name;

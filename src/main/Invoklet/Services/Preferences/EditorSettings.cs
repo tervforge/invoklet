@@ -33,6 +33,12 @@ public sealed class EditorSettings
     // settings files written before this existed simply get the default.
     public bool ResultsWordWrap { get; set; } = true;
 
+    /// <summary>Whether the output of a script's last run stays on disk and comes back when the script is opened again. A run always starts empty.</summary>
+    public bool ResultsKeepOutput { get; set; } = true;
+
+    /// <summary>Whether <c>x.Dump()</c> is headed with its source text, "x". A heading given to Dump always shows, and so does the type in a table's first row.</summary>
+    public bool ResultsShowGeneratedLabels { get; set; }
+
     // Live user report ("font and spacing are too big", LINQPad 4 shown as a
     // denser reference) — 14 was the one outlier default nobody had touched; 12 is what testing it
     // live actually settled on.

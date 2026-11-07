@@ -30,6 +30,63 @@ public class OutputHtmlViewTests
         Assert.Contains("<body><div>hi</div></body>", view.RenderedHtml);
     }
 
+    private const string BoxedTable = """<div class="dp-label">Team</div><div class="dp-box" data-dp-node="a"><div class="dp-count">P[]</div><table class="dp-table"><thead><tr><th class="dp-th">Name</th></tr></thead><tbody><tr><td class="dp-td">Ann</td></tr></tbody></table></div>""";
+
+    [AvaloniaFact]
+    public async Task Binding_ABox_ShowsItsStripAndNoMenuOfAnOlderTable()
+    {
+        var view = new OutputHtmlView();
+        var vm = new OutputHtmlViewModel();
+        vm.Append(BoxedTable);
+
+        view.DataContext = vm;
+        await FlushPendingApply();
+
+        Assert.Contains("href=\"invoklet-box:a\"", view.RenderedHtml);
+        Assert.Contains(">Team<", view.RenderedHtml);
+        Assert.Contains(">P[]<", view.RenderedHtml);
+        Assert.DoesNotContain("invoklet-table:", view.RenderedHtml);
+        Assert.Equal(BoxedTable, vm.Content);
+    }
+
+    [AvaloniaFact]
+    public async Task ShowGeneratedLabels_TurnedOff_TakesTheExpressionOutAtOnceAndKeepsTheRest()
+    {
+        var view = new OutputHtmlView();
+        var vm = new OutputHtmlViewModel();
+        var html = """<div class="dp-label dp-label-generated">people</div>""" + BoxedTable;
+        vm.Append(html);
+        view.ShowGeneratedLabels = true;
+        view.DataContext = vm;
+        await FlushPendingApply();
+        Assert.Contains(">people<", view.RenderedHtml);
+
+        view.ShowGeneratedLabels = false;
+
+        Assert.DoesNotContain(">people<", view.RenderedHtml);
+        Assert.Contains(">Team<", view.RenderedHtml);
+        Assert.Contains(">P[]<", view.RenderedHtml);
+        Assert.Equal(html, vm.Content);
+    }
+
+    // A dump of a plain value has no box, and the setting reaches it too.
+    [AvaloniaFact]
+    public async Task ShowGeneratedLabels_TurnedOff_ReachesADumpWithoutABox()
+    {
+        var view = new OutputHtmlView();
+        var vm = new OutputHtmlViewModel();
+        vm.Append("""<div class="dp-dump"><div class="dp-label dp-label-generated">answer</div><span>42</span></div>""");
+        view.ShowGeneratedLabels = true;
+        view.DataContext = vm;
+        await FlushPendingApply();
+
+        view.ShowGeneratedLabels = false;
+
+        Assert.DoesNotContain("answer", view.RenderedHtml);
+        Assert.DoesNotContain("class=\"dp-dump\"", view.RenderedHtml);
+        Assert.Contains("42", view.RenderedHtml);
+    }
+
     // The "…" above a table is added to the page the panel shows, not to the content: the saved HTML and the
     // tables to export are read from the content, so both count the same tables.
     [AvaloniaFact]

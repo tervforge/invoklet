@@ -315,7 +315,7 @@ public class HtmlPanel : HtmlControl
     /// <summary>
     /// Set the control scroll offset to the given values.
     /// </summary>
-    private void ScrollToPoint(double x, double y)
+    public void ScrollToPoint(double x, double y)
     {
         _horizontalScrollBar.Value = x;
         _verticalScrollBar.Value = y;

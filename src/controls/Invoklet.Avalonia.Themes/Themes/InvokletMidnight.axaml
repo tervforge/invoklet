@@ -120,6 +120,8 @@
                     <SolidColorBrush x:Key="Invoklet.Editor.ActiveScopeGuideBrush"     Color="#8E6BB8" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableHeaderBrush"           Color="#355A9A" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableHeaderForegroundBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="Invoklet.Dump.ColumnHeaderBrush" Color="#3A3F48" />
+                    <SolidColorBrush x:Key="Invoklet.Dump.ColumnHeaderForegroundBrush" Color="#E4E7EC" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableBorderBrush"           Color="#353B46" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableEvenRowBrush"          Color="#1E2228" />
                     <SolidColorBrush x:Key="Invoklet.Dump.StringBrush"                Color="#D19A66" />

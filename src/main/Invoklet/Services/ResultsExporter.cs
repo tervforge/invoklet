@@ -60,6 +60,21 @@ internal sealed class ResultsExporter(
         await WriteAsync(path, () => _writeCsv(path, ResultsCsv.Build(tables[table]), ct));
     }
 
+    /// <summary>The table of one box of the results, what is folded in it included, as a CSV file (see <see cref="ResultsBoxes"/>).</summary>
+    public async Task ExportBoxCsvAsync(string box, CancellationToken ct = default)
+    {
+        if (ResultsBoxes.TableOf(content(), box) is not { } table)
+        {
+            await windows.ShowErrorAsync("Export Table", "This table is no longer in the results.");
+            return;
+        }
+
+        var (name, folder) = Target();
+        var path = await windows.ShowSaveCsvFileDialogAsync(name + ".csv", folder);
+        if (path is null) return;
+        await WriteAsync(path, () => _writeCsv(path, ResultsCsv.Build(table), ct));
+    }
+
     // The script's name and folder, which the dialog offers; "Results" in the start folder for a script not saved yet.
     private (string Name, string Folder) Target()
     {

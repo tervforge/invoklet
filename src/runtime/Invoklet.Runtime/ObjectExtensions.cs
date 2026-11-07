@@ -44,7 +44,7 @@ public static class ObjectExtensions
     public static T Dump<T>(this T o,
         string? label = null,
         [CallerArgumentExpression(nameof(o))] string? expression = null)
-        => DumpCore(o, label ?? expression, new DumpOptions());
+        => DumpCore(o, label, new DumpOptions(), generatedLabel: label is null ? expression : null);
 
     /// <summary>
     /// LINQPad-compatible <c>x.Dump(3)</c>/<c>x.Dump(3, 1)</c> — expands nested objects/collections
@@ -108,9 +108,9 @@ public static class ObjectExtensions
 
     // Shared by every overload above: renders to HTML and writes it out as the sentinel-prefixed
     // line CSharpLanguageHost/EditorTabItemControl scan stdout for (see DumpLinePrefixChar).
-    private static T DumpCore<T>(T o, string? label, DumpOptions options)
+    private static T DumpCore<T>(T o, string? label, DumpOptions options, string? generatedLabel = null)
     {
-        var html = DumpRenderer.Render(o, label, options);
+        var html = DumpRenderer.Render(o, label, options, generatedLabel);
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(html));
         Console.WriteLine(DumpLinePrefixChar + encoded);
         return o;

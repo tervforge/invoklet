@@ -524,6 +524,28 @@ public class EditorTabsControlResidencyTests
         finally { tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
+    // Not keeping the output: what an earlier run left in the folder goes at the end of a run, and what the tab shows stays.
+    [AvaloniaFact]
+    public async Task ARunEndingWithoutKeepingTheOutput_Should_TakeItOffTheDiskAndLeaveItOnScreen()
+    {
+        var folder = Directory.CreateTempSubdirectory("Invoklet-residency-test").FullName;
+        var output = Path.Combine(folder, "output");
+        var cache = new Mock<IBuildCacheService>();
+        cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(output);
+        var (_, tabs, _, _, control) = await OpenSavedTabWithOutputAsync(folder, cache);
+        try
+        {
+            RunOutputFile.Save(output, new TabOutputState("<div>old</div>", false, new Dictionary<string, string>()));
+            control.ResultsKeepCheckBox.IsChecked = false;
+
+            await control.SaveRunOutputForTests();
+
+            Assert.Null(RunOutputFile.TryLoad(output));
+            Assert.Contains("old", control.State.Output.Content);
+        }
+        finally { tabs.Dispose(); Directory.Delete(folder, true); }
+    }
+
     // The index changed after the run ended (the other instance entered its folder): the release, with no new run and no Save As, writes the output
     // where the index says, so that opening the script again finds it.
     [AvaloniaFact]
