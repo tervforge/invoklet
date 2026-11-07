@@ -153,11 +153,12 @@ public class KeyboardFocusTests
         Assert.False(FocusFrames.IsShown(start));
 
         var seen = new List<Control>();
-        for (var i = 0; i < 20; i++)
+        while (true)
         {
             Tab(window);
             var focused = (Control)window.FocusManager!.GetFocusedElement()!;
             if (focused is global::AvaloniaEdit.Editing.TextArea) break; // the editor keeps Tab for indenting
+            Assert.DoesNotContain(focused, seen); // the route must reach the editor rather than cycle
             seen.Add(focused);
             Assert.True(FocusFrames.IsShown(focused), $"{focused.GetType().Name} has no keyboard-focus frame");
             Assert.Single(FocusFrames.Of(focused));
