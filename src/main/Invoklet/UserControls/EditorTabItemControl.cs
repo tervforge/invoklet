@@ -57,8 +57,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private readonly IWindowService _windowService;
     internal readonly EditorTabState State;
     private EditorAnalysisView? _analysis;
-    private CancellationTokenSource? _debugTooltipCloseCts;
-    private CancellationTokenSource? _quickInfoCts;
+    private EditorHover? _hover;
     private CancellationTokenSource? _navigationCts;
     private RefactoringRequests? _refactoringRequests;
     private EventHandler? _refactoringCaretHandler;
@@ -67,15 +66,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private EventHandler<TextInputEventArgs>? _textEnteredHandler;
     private EventHandler? _intelliSenseTextChangedHandler;
     private EventHandler<VisualTreeAttachmentEventArgs>? _editorAttachedHandler;
-    private EventHandler<PointerEventArgs>? _quickInfoPointerMovedHandler;
-    private EventHandler<PointerEventArgs>? _quickInfoPointerExitedHandler;
-    private bool _debugTooltipInside;
-    private long _tooltipGeneration;
     // The symbol whose debugger value tip is open; null when no value tip is shown.
-    private (int Start, int Length)? _debugTooltipSpan;
     // A popup, not a ToolTip: Avalonia closes a ToolTip on any mouse press, its own content
     // included, so the value tip's expand buttons could never be clicked.
-    private Popup? _debugValuePopup;
     private IIntelliSenseService? _intelliSense;
     private EditorInteractionSubscriptions? _editorInteractionSubscriptions;
     internal IIntelliSenseService? IntelliSenseForTests => _intelliSense;
@@ -105,7 +98,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private IDisposable? _selectedArgumentSetSub;
     private bool _syncingArgumentSet;
     private bool _disposed;
-    private readonly DebugHoverController _debugHover = new();
 
     // The stage the current run reached, which names the stage that failed: written as the host reports it, on whichever thread
     // that is, so it is already current when the run ends even if the status update posted for it has not been processed yet.
@@ -853,10 +845,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _formatting = null;
         if (_intelliSenseTextChangedHandler is { } intelliSenseTextChanged)
             State.Editor.TextChanged -= intelliSenseTextChanged;
-        if (_quickInfoPointerMovedHandler is { } quickInfoMoved)
-            State.Editor.TextArea.TextView.PointerMoved -= quickInfoMoved;
-        if (_quickInfoPointerExitedHandler is { } quickInfoExited)
-            State.Editor.TextArea.TextView.PointerExited -= quickInfoExited;
+        _hover?.Dispose();
+        _hover = null;
         _refactoringRequests?.Cancel();
         _analysis?.Dispose();
         _analysis = null;
@@ -873,18 +863,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         contextRefreshCts?.Cancel();
         var schemaWarmupCts = Interlocked.Exchange(ref _connectionSchemaWarmupCts, null);
         schemaWarmupCts?.Cancel();
-        _quickInfoCts?.Cancel();
         _navigationCts?.Cancel();
-        _debugTooltipCloseCts?.Cancel();
-        if (_debugValuePopup is { } debugValuePopup)
-        {
-            debugValuePopup.IsOpen = false;
-            ((ISetLogicalParent)debugValuePopup).SetParent(null);
-        }
         DisposePreview();
         Cancel();
         CancelAllWatchEvaluations();
-        _debugHover.Dispose();
         // The run owns its CTS until its asynchronous cleanup has finished.
         if (!_run.InProgress) State.RunCts?.Dispose();
         _breakpointDialog?.Close();
@@ -1289,8 +1271,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    // A new navigation request replaces the one still running, as does closing the tab. Not disposed, like
-    // _quickInfoCts: the replaced request may still be reading its token.
+    // A new navigation request replaces the one still running, as does closing the tab. Not disposed: the replaced
+    // request may still be reading its token.
     private CancellationToken BeginNavigation()
     {
         _navigationCts?.Cancel();
@@ -1988,218 +1970,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         };
         editor.TextChanged += _intelliSenseTextChangedHandler;
 
-        // ── Quick Info tooltips on hover ──────────────────────────────────────
-        ToolTip.SetShowDelay(editor.TextArea.TextView, 0);
-        _quickInfoCts = new CancellationTokenSource();
-        var hoverResolver = new HoverResolver(_debugHover, intelliSense);
-
-        _quickInfoPointerMovedHandler = (_, e) =>
-        {
-            // An open value tip stays while the pointer is over its symbol, and is not replaced while
-            // the pointer crosses other text on its way into the tip: it closes after the grace period
-            // unless the pointer gets into it or back onto the symbol.
-            if (_debugTooltipSpan is { } span)
-            {
-                var hovered = editor.GetOffsetFromPoint(e.GetPosition(editor));
-                if (hovered >= span.Start && hovered < span.Start + span.Length)
-                    _debugTooltipCloseCts?.Cancel();
-                else if (_debugTooltipCloseCts is null || _debugTooltipCloseCts.IsCancellationRequested)
-                    ScheduleDebugTooltipClose(editor);
-                return;
-            }
-
-            // Not disposed here — a superseded hover's background Task.Run may still be mid-flight
-            // past this point, and registering/reading against an already-disposed
-            // CancellationTokenSource throws ObjectDisposedException. A
-            // CancellationTokenSource whose WaitHandle is never touched holds no unmanaged
-            // resources, so leaving the old one for the GC is safe.
-            _quickInfoCts?.Cancel();
-            _quickInfoCts = new CancellationTokenSource();
-            _debugTooltipCloseCts?.Cancel();
-            _debugTooltipInside = false;
-            _tooltipGeneration++;
-            var ct = _quickInfoCts.Token;
-            _debugTooltipCloseCts?.Cancel();
-            var (debugGeneration, debugToken) = _debugHover.Begin();
-            var pos = e.GetPosition(editor);
-
-            _ = Task.Run(async () =>
-            {
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, debugToken);
-                var requestCt = linked.Token;
-                try
-                {
-                    await Task.Delay(_timings.QuickInfoHoverDelay, requestCt);
-                    var (request, debugContext) = await Dispatcher.InvokeAsync(() =>
-                    {
-                        var context = State.CurrentDebugCtx;
-                        return (new HoverRequest(editor.Text, editor.GetOffsetFromPoint(pos), editor.IdentifierChars, context,
-                            DebugHoverController.Capture(context),
-                            analysis.Diagnostics.Select(HoverDiagnostic.Of).ToArray(),
-                            () => ReferenceEquals(context, State.CurrentDebugCtx)), context);
-                    });
-                    if (request.Offset < 0 || ct.IsCancellationRequested) return;
-
-                    var hover = await hoverResolver.ResolveAsync(request, requestCt);
-
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        if (_disposed || ct.IsCancellationRequested || !_debugHover.IsCurrent(debugGeneration) ||
-                            !ReferenceEquals(debugContext, State.CurrentDebugCtx)) return;
-
-                        if (hover is DebugValueHover value)
-                        {
-                            _debugTooltipSpan = (value.SymbolStart, value.Symbol.Length);
-                            editor.SetHoverTokenHighlight(value.SymbolStart, value.Symbol.Length,
-                                ThemeBrush("Invoklet.Editor.HoverHighlightBrush", new SolidColorBrush(Color.FromArgb(55, 90, 140, 210))));
-                            ToolTip.SetTip(editor.TextArea.TextView, null);
-                            ShowDebugValuePopup(editor, value.SymbolStart,
-                                BuildDebugHoverContent(value.Value, debugContext, debugToken, value.Symbol));
-                            return;
-                        }
-
-                        // Built here, not in the resolver — DisplaySegmentRenderer creates Avalonia controls,
-                        // which must happen on the UI thread, unlike the rest of this background task.
-                        object? content = hover switch
-                        {
-                            DiagnosticHover diagnostic => diagnostic.Message,
-                            QuickInfoHover quickInfo => DisplaySegmentRenderer.BuildWithSummary(
-                                quickInfo.Info.Signature, quickInfo.Info.Summary, _themeService.CurrentTheme.Editor.IsDark),
-                            _ => null,
-                        };
-                        ToolTip.SetTip(editor.TextArea.TextView, content);
-                    });
-                }
-                catch (OperationCanceledException)
-                {
-                }
-            });
-        };
-        editor.TextArea.TextView.PointerMoved += _quickInfoPointerMovedHandler;
-
-        _quickInfoPointerExitedHandler = (_, _) =>
-        {
-            _quickInfoCts?.Cancel();
-            ScheduleDebugTooltipClose(editor);
-        };
-        editor.TextArea.TextView.PointerExited += _quickInfoPointerExitedHandler;
+        // ── Quick Info and debugger values on hover ───────────────────────────
+        _hover = new EditorHover(editor, intelliSense, _timings, () => State.CurrentDebugCtx, () => analysis.Diagnostics,
+            () => _themeService.CurrentTheme.Editor.IsDark);
     }
 
-    private void InvalidateHoverTooltip()
-    {
-        _debugTooltipInside = false;
-        _debugTooltipSpan = null;
-        _tooltipGeneration++;
-        _debugHover.Cancel();
-        State.Editor.ClearHoverTokenHighlight();
-        ToolTip.SetTip(State.Editor.TextArea.TextView, null);
-        if (_debugValuePopup is { } popup)
-        {
-            popup.IsOpen = false;
-            ((ISetLogicalParent)popup).SetParent(null);
-            _debugValuePopup = null;
-        }
-    }
-
-    // Just below the hovered symbol's line, like the completion window.
-    private void ShowDebugValuePopup(CodeTextEditor editor, int symbolStart, Control content)
-    {
-        if (_debugValuePopup is { } previous)
-        {
-            previous.IsOpen = false;
-            ((ISetLogicalParent)previous).SetParent(null);
-        }
-        var textView = editor.TextArea.TextView;
-        var location = editor.Document.GetLocation(symbolStart);
-        var position = textView.GetVisualPosition(new TextViewPosition(location), VisualYPosition.LineBottom)
-            - textView.ScrollOffset;
-        var popup = _debugValuePopup = new Popup
-        {
-            PlacementTarget = textView,
-            InheritsTransform = true,
-            Placement = PlacementMode.AnchorAndGravity,
-            PlacementAnchor = PopupAnchor.TopLeft,
-            PlacementGravity = PopupGravity.BottomRight,
-            HorizontalOffset = position.X,
-            VerticalOffset = position.Y,
-            IsLightDismissEnabled = false,
-            Focusable = false,
-            Child = content,
-        };
-        ((ISetLogicalParent)popup).SetParent(TopLevel.GetTopLevel(editor));
-        popup.IsOpen = true;
-    }
-
-    private void ScheduleDebugTooltipClose(CodeTextEditor editor)
-    {
-        _debugTooltipCloseCts?.Cancel();
-        var cts = _debugTooltipCloseCts = new CancellationTokenSource();
-        _ = CloseAfterGraceAsync(editor, cts.Token, _tooltipGeneration, State.CurrentDebugCtx);
-    }
-
-    private async Task CloseAfterGraceAsync(CodeTextEditor editor, CancellationToken token,
-        long generation, IBreakpointHitContext? context)
-    {
-        try
-        {
-            await Task.Delay(_timings.DebugTooltipCloseGrace, token);
-            if (_disposed || token.IsCancellationRequested) return;
-            await Dispatcher.InvokeAsync(() =>
-            {
-                if (_disposed || token.IsCancellationRequested || _debugTooltipInside ||
-                    generation != _tooltipGeneration || !ReferenceEquals(context, State.CurrentDebugCtx)) return;
-                InvalidateHoverTooltip();
-            });
-        }
-        catch (OperationCanceledException) { }
-    }
-
-    private Control BuildDebugHoverContent(IVariableInfo root, IBreakpointHitContext? context,
-        CancellationToken token, string symbol)
-    {
-        var tip = new DebugValueTip(CreateDebugHoverLocal(root, context, token, symbol));
-        tip.PointerEntered += OnDebugTooltipPointerEntered;
-        tip.PointerExited += OnDebugTooltipPointerExited;
-        return tip;
-    }
-
-    // Like the Locals panel's rows (CreateDebugLocal), but members are fetched only while this tip's
-    // stop is current, at most MaxChildren of them and within the child timeout.
-    private DebugLocal CreateDebugHoverLocal(IVariableInfo variable, IBreakpointHitContext? context,
-        CancellationToken token, string? name = null)
-    {
-        Func<Task<IReadOnlyList<DebugLocal>>>? loader = variable.HasChildren && context is not null
-            ? async () =>
-            {
-                if (!ReferenceEquals(context, State.CurrentDebugCtx)) return [];
-                var children = await _debugHover.LoadChildrenAsync(context, variable, token);
-                return children.Select(c => CreateDebugHoverLocal(c, context, token)).ToList();
-            }
-        : null;
-        return new DebugLocal(string.IsNullOrEmpty(variable.Name) ? name ?? "" : variable.Name,
-            variable.Value, variable.TypeName, loader is not null, loader);
-    }
-
-    private void OnDebugTooltipPointerEntered(object? sender, PointerEventArgs e)
-    {
-        if (_disposed) return;
-        _debugTooltipInside = true;
-        _debugTooltipCloseCts?.Cancel();
-    }
-
-    private void OnDebugTooltipPointerExited(object? sender, PointerEventArgs e)
-    {
-        if (_disposed) return;
-        _debugTooltipInside = false;
-        ScheduleDebugTooltipClose(State.Editor);
-    }
-
-    private static IBrush ThemeBrush(string key, IBrush fallback)
-    {
-        var app = Application.Current;
-        return app?.TryGetResource(key, app.ActualThemeVariant, out var value) == true
-            && value is IBrush brush ? brush : fallback;
-    }
+    private void InvalidateHoverTooltip() => _hover?.Invalidate();
 
     // Applies a language's lexical/syntactic conventions (ILanguageHostFactory.EditorProfile) to the
     // language-agnostic CodeTextEditor — triggers/identifier chars/brace pairs/indentation used to be
