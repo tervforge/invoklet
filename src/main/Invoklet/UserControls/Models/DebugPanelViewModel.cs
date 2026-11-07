@@ -51,6 +51,37 @@ public sealed class DebugPanelViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref field, value);
     }
 
+    /// <summary>Shows a stop of the debugger: its threads, locals and call stack, and what it reported about the stop.</summary>
+    public void ShowHit(IBreakpointHitContext context)
+    {
+        DebugThreads.Clear();
+        foreach (var thread in context.Threads)
+            DebugThreads.Add(new DebugThread(thread.Id, thread.Name));
+
+        DebugLocals.Clear();
+        foreach (var variable in context.LocalVariables)
+            DebugLocals.Add(CreateLocal(variable, context));
+
+        DebugCallStack.Clear();
+        foreach (var frame in context.CallStack)
+            DebugCallStack.Add(new DebugFrame(frame.MethodName, Path.GetFileName(frame.FileName), frame.Line));
+
+        ShowStop(context);
+    }
+
+    // A local's members are fetched from the debugger when its row is expanded.
+    private static DebugLocal CreateLocal(IVariableInfo variable, IBreakpointHitContext context)
+    {
+        Func<Task<IReadOnlyList<DebugLocal>>>? loader = variable.HasChildren
+            ? async () =>
+            {
+                var children = await context.GetChildrenAsync(variable.VariablesReference);
+                return children.Select(c => CreateLocal(c, context)).ToList();
+            }
+        : null;
+        return new DebugLocal(variable.Name, variable.Value, variable.TypeName, variable.HasChildren, loader);
+    }
+
     /// <summary>Shows what the debugger reported about this stop (exception and rejected resume, if any).</summary>
     public void ShowStop(IBreakpointHitContext context)
     {

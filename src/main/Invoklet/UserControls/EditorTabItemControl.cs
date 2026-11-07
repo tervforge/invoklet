@@ -59,6 +59,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     internal readonly EditorTabState State;
     private EditorAnalysisView? _analysis;
     private EditorHover? _hover;
+    private EditorBreakpoints _breakpoints = null!;
     private CancellationTokenSource? _navigationCts;
     private RefactoringRequests? _refactoringRequests;
     private EventHandler? _refactoringCaretHandler;
@@ -240,10 +241,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // ordering for the same fact), which would otherwise flag a just-opened, untouched tab as
         // dirty on its very first frame — including a brand-new empty tab, which has nothing
         // unsaved yet until the user actually types something.
+        _breakpoints = new EditorBreakpoints(editor, () => State.RunningHost, () => State.SourceFilePath);
         _editorInteractionSubscriptions = new EditorInteractionSubscriptions(
             editor, OnEditorTextChanged, OnEditorCaretPositionChanged, OnEditorDocumentChanged,
             OnRenameSymbolRequested, OnFindReferencesRequested, OnGoToDefinitionRequested,
-            OnFixApplyRequested, OnGutterBreakpointAdded, OnGutterBreakpointRemoved,
+            OnFixApplyRequested, _breakpoints.OnAdded, _breakpoints.OnRemoved,
             OnBreakpointRightClicked);
         _editorInteractionSubscriptions.Attach();
 
@@ -695,33 +697,24 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (selection is not null) request = request with { Kind = MdRunKind.Statements };
             var script = selection ?? s.Editor.Text;
             // Read on the UI thread; they name the host's source file once it exists (see below).
-            // Disabled breakpoints stay in the gutter but never reach the debugger.
-            var enabledBreakpoints = BreakpointHostBridge.Enabled(s.Editor.Breakpoints);
-            // Reset to Pending — stale Verified/Unverified color from a previous run shouldn't linger
-            // in the margin until the new session's setBreakpoints response arrives.
-            foreach (var bp in s.Editor.Breakpoints)
-            {
-                bp.VerificationState = BreakpointVerificationState.Pending;
-            }
-
-            s.Editor.InvalidateBreakpoints();
+            var enabledBreakpoints = _breakpoints.StartRun();
 
             await Task.Run(async () =>
             {
                 await using var host = _registry.Create(ResolveLanguageId(), request);
                 runHost = host;
                 s.RunningHost = host;
-                // The file the host compiles and its debugger reports (see ScriptBreakpoint).
+                // The file the host compiles and its debugger reports breakpoints in.
                 var sourceFilePath = host.SourceFilePath ?? "";
                 s.SourceFilePath = sourceFilePath;
                 if (debug && host.Supports(LanguageHostCapabilities.Debug))
                 {
                     foreach (var (line, condition, hitCondition) in enabledBreakpoints)
-                        host.AddBreakpoint(new ScriptBreakpoint(sourceFilePath, line, condition, hitCondition));
+                        BreakpointHostBridge.Add(host, sourceFilePath, line, condition, hitCondition);
                     host.BreakpointHit += ctx =>
                         PostRun(() => OnBreakpointHit(ctx), host);
                     host.BreakpointVerified += (bp, verified, message) =>
-                        PostRun(() => OnBreakpointVerified(bp, verified, message), host);
+                        PostRun(() => _breakpoints.Verified(bp, verified, message), host);
                     var hostResult = await HostExecutionAdapter.DebugAsync(host, script, @event => HandleHostEvent(host, @event), runCts.Token);
                     if (hostResult.Error is not null) ExceptionDispatchInfo.Capture(hostResult.Error).Throw();
                     cancelled = hostResult.Cancelled;
@@ -993,30 +986,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     }
 
     internal void ApplyBreakpointOptions(int line, string? condition, string? hitCondition, bool enabled)
-    {
-        condition = string.IsNullOrWhiteSpace(condition) ? null : condition.Trim();
-        hitCondition = string.IsNullOrWhiteSpace(hitCondition) ? null : hitCondition.Trim();
-        var bp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == line);
-        if (bp is null)
-        {
-            // Set all options before publishing the new breakpoint to the running host.
-            State.Editor.BreakpointAdded -= OnGutterBreakpointAdded;
-            try { State.Editor.AddBreakpoint(line); }
-            finally { State.Editor.BreakpointAdded += OnGutterBreakpointAdded; }
-            bp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == line);
-        }
-        if (bp is null) return;
-        bp.Condition = condition;
-        bp.HitCondition = hitCondition;
-        bp.IsEnabled = enabled;
-        State.Editor.InvalidateBreakpoints();
-        if (State.RunningHost is { } host && host.Supports(LanguageHostCapabilities.Breakpoints)
-            && State.SourceFilePath is { } path)
-        {
-            BreakpointHostBridge.Remove(host, path, line);
-            if (enabled) BreakpointHostBridge.Add(host, path, line, condition, hitCondition);
-        }
-    }
+        => _breakpoints.Apply(line, condition, hitCondition, enabled);
 
     // ── Format / navigation ────────────────────────────────────────────────────
 
@@ -1481,20 +1451,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         UpdateOutputUi();
     }
 
-    // Maps the DAP-facing breakpoint (the ScriptBreakpoint passed to host.AddBreakpoint) back to the
-    // editor-side gutter breakpoint by line, so BreakPointMargin can color it red/green/yellow.
-    private void OnBreakpointVerified(IBreakpoint bp, bool verified, string? message)
-    {
-        var editorBp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == bp.Line);
-        if (editorBp is null) return;
-
-        editorBp.VerificationState = verified
-            ? BreakpointVerificationState.Verified
-            : BreakpointVerificationState.Unverified;
-        editorBp.VerificationMessage = message;
-        State.Editor.InvalidateBreakpoints();
-    }
-
     // Runs on the ILanguageHost.Compiled event, itself raised on the RunAsync's own Task.Run
     // background thread (not the UI thread) — so the disassembly work below happens off-UI already;
     // only the resulting string needs to be marshalled back for display.
@@ -1643,24 +1599,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             && ReferenceEquals(host, State.RunningHost);
     }
 
-    // Forwards gutter breakpoint edits to the running debug session, if there is one — otherwise
-    // they only take effect the next time RunAsync reads State.Editor.Breakpoints at run start.
-    private void OnGutterBreakpointAdded(object? sender, BreakpointEventArgs e)
-    {
-        if (State.RunningHost is not { } host || !host.Supports(LanguageHostCapabilities.Breakpoints)) return;
-        if (State.SourceFilePath is not { } path) return;
-        var editorBp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == e.Line);
-        if (editorBp?.IsEnabled != false)
-            BreakpointHostBridge.Add(host, path, e.Line, editorBp?.Condition, editorBp?.HitCondition);
-    }
-
-    private void OnGutterBreakpointRemoved(object? sender, BreakpointEventArgs e)
-    {
-        if (State.RunningHost is not { } host || !host.Supports(LanguageHostCapabilities.Breakpoints)) return;
-        if (State.SourceFilePath is not { } path) return;
-        BreakpointHostBridge.Remove(host, path, e.Line);
-    }
-
     internal void OnBreakpointHit(IBreakpointHitContext context)
     {
         var s = State;
@@ -1672,27 +1610,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             ? context.CallStack[0].Line
             : context.Breakpoint.Line;
 
-        // ToDo: move all of this into DebugPanel
         // Switch to Debugger tab so the user sees variables immediately
         if (_outputTabsControl is { } tc) tc.SelectedIndex = 1;
-
-        _vm.DebugPanel.DebugThreads.Clear();
-        foreach (var t in context.Threads)
-            _vm.DebugPanel.DebugThreads.Add(new DebugThread(t.Id, t.Name));
-
-        _vm.DebugPanel.DebugLocals.Clear();
-        foreach (var v in context.LocalVariables)
-            _vm.DebugPanel.DebugLocals.Add(CreateDebugLocal(v, context));
-
-        _vm.DebugPanel.DebugCallStack.Clear();
-        foreach (var f in context.CallStack)
-            _vm.DebugPanel.DebugCallStack.Add(new DebugFrame(f.MethodName, Path.GetFileName(f.FileName), f.Line));
+        _vm.DebugPanel.ShowHit(context);
 
         // Watch expressions are evaluated against whichever frame/scope is current, so refresh them
         // for the new stop — stale values from the previous breakpoint hit would be misleading.
         foreach (var w in _vm.DebugPanel.WatchExpressions) _ = EvaluateWatchAsync(w);
 
-        _vm.DebugPanel.ShowStop(context);
         if (context.StopReason == DebugStopReason.Exception)
         {
             if (context.Exception is { IsUnhandled: true } unhandled)
@@ -1705,18 +1630,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         }
 
         UpdateOutputUi();
-    }
-
-    private static DebugLocal CreateDebugLocal(IVariableInfo v, IBreakpointHitContext context)
-    {
-        Func<Task<IReadOnlyList<DebugLocal>>>? loader = v.HasChildren
-            ? async () =>
-            {
-                var children = await context.GetChildrenAsync(v.VariablesReference);
-                return children.Select(c => CreateDebugLocal(c, context)).ToList();
-            }
-        : null;
-        return new DebugLocal(v.Name, v.Value, v.TypeName, v.HasChildren, loader);
     }
 
     // ── Editor preferences ────────────────────────────────────────────────────
@@ -2655,19 +2568,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         frontMatter is null ? null
             : GeneratedConnections.For(frontMatter.Connections, frontMatter.Language, frontMatter.Packages.Keys, _connectionDrivers,
                 _connectionSchemas?.Cache, ScriptDirectory, readSchemaFromDisk: false);
-
-    private sealed class ScriptBreakpoint(
-        string fileName,
-        int line,
-        string? condition,
-        string? hitCondition = null)
-        : IBreakpoint
-    {
-        public string FileName { get; } = fileName;
-        public int Line { get; set; } = line;
-        public string? Condition { get; } = condition;
-        public string? HitCondition { get; } = hitCondition;
-    }
 }
 
 /// <summary>How <see cref="EditorsTabItemControl.ReloadFromDisk"/> ended.</summary>
