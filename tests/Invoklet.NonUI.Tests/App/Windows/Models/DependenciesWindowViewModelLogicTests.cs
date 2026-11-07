@@ -570,29 +570,25 @@ public class DependenciesWindowViewModelLogicTests
     [Fact]
     public async Task Search_Should_RunOffTheCallingThread_SoASlowClientNeverBlocksTyping()
     {
-        using var gate = new ManualResetEventSlim();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callingThread = Environment.CurrentManagedThreadId;
+        var searchedOn = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var search = new Mock<IPackageSearchService>();
         search.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<PackageSearchOptions>(), It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
-                started.TrySetResult();
-                gate.Wait(TimeSpan.FromSeconds(10)); // blocking, like the client's synchronous start
+                // Whatever the client does before its first await happens on this thread.
+                searchedOn.TrySetResult(Environment.CurrentManagedThreadId);
                 return Task.FromResult(Page(new PackageSearchResult("Json.Package", "1.0.0", "", 0)));
             });
         var cache = new Mock<ILocalPackageCacheService>();
         cache.Setup(c => c.GetCachedPackages()).Returns([]);
         var vm = new DependenciesWindowViewModel(search.Object, cache.Object, SourceStore().Object, TimeSpan.Zero);
 
-        var watch = System.Diagnostics.Stopwatch.StartNew();
         vm.SearchText = "json";
-        watch.Stop();
-
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"setting the text blocked for {watch.Elapsed}");
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-        Assert.True(vm.IsSearching);
-        gate.Set();
+        var searchThread = await searchedOn.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         await vm.PendingSearch;
+
+        Assert.NotEqual(callingThread, searchThread);
         Assert.Equal(["Json.Package"], vm.OnlinePackages.Select(p => p.Id));
         vm.Dispose();
     }

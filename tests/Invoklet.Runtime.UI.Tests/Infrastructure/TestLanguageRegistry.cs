@@ -14,8 +14,13 @@ internal static class TestLanguageRegistry
     // C# tabs get what create returns; tabs in any other language get none, as with the real modules.
     // C# tabs are highlighted as C#, with an otherwise empty editor profile.
     public static ILanguageHostRegistry WithCSharpIntelliSense(this Mock<ILanguageHostRegistry> registry, Func<IIntelliSenseService> create)
+        => registry.WithCSharpIntelliSense(() => Task.FromResult(create()));
+
+    // The same, for services that come when a task the test holds completes: a slow start-up without a thread waiting for it.
+    public static ILanguageHostRegistry WithCSharpIntelliSense(this Mock<ILanguageHostRegistry> registry, Func<Task<IIntelliSenseService>> create)
     {
-        registry.Setup(r => r.CreateIntelliSense("csharp", It.IsAny<CancellationToken>())).Returns(create);
+        registry.Setup(r => r.CreateIntelliSenseAsync("csharp", It.IsAny<CancellationToken>()))
+            .Returns(async (string _, CancellationToken _) => (IIntelliSenseService?)await create());
         registry.Setup(r => r.GetEditorProfile("csharp")).Returns(new EditorLanguageProfile { SourceFileExtension = ".cs" });
         return registry.Object;
     }

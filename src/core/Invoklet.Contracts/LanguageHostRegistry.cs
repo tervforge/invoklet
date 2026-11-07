@@ -51,8 +51,8 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
     public string? GetCodeForKind(string language, string code, MdRunKind kind, string indent = "    ") =>
         _factories.TryGetValue(language, out var factory) ? factory.CodeForKind(code, kind, indent) : null;
 
-    public IIntelliSenseService? CreateIntelliSense(string language, CancellationToken cancellationToken) =>
-        _factories.TryGetValue(language, out var factory) ? factory.CreateIntelliSense(cancellationToken) : null;
+    public Task<IIntelliSenseService?> CreateIntelliSenseAsync(string language, CancellationToken cancellationToken) =>
+        _factories.TryGetValue(language, out var factory) ? factory.CreateIntelliSenseAsync(cancellationToken) : Task.FromResult<IIntelliSenseService?>(null);
 
     public void WarmUpIntelliSense()
     {

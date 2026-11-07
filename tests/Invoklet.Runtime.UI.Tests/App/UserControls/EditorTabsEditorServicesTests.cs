@@ -28,12 +28,11 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
 
     // A registered language the test controls: each creation returns a new fake service, optionally
     // only once the test releases it.
-    private sealed class FakeLanguage(string id, bool hasEditorServices = true) : ILanguageHostFactory
+    private class FakeLanguage(string id, bool hasEditorServices = true) : ILanguageHostFactory
     {
         public readonly List<Mock<IIntelliSenseService>> Created = [];
         public readonly List<CancellationToken> Tokens = [];
         public readonly List<bool> OnUiThread = [];
-        public ManualResetEventSlim? Gate { get; set; }
         public bool HonourCancellation { get; set; }
         public bool Throws { get; set; }
         public bool DisposeThrows { get; set; }
@@ -52,7 +51,14 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         public EditorLanguageProfile EditorProfile { get; } = new();
         public ILanguageHost Create(ILanguageHostOptions? options = null) => throw new NotSupportedException();
 
+        // Called through the contract's own CreateIntelliSenseAsync, which runs it off the UI thread.
         public IIntelliSenseService? CreateIntelliSense(CancellationToken cancellationToken)
+        {
+            Enter(cancellationToken);
+            return Finish(cancellationToken);
+        }
+
+        protected void Enter(CancellationToken cancellationToken)
         {
             lock (_lock)
             {
@@ -60,9 +66,12 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
                 Started.TrySetResult();
                 OnUiThread.Add(Dispatcher.UIThread.CheckAccess());
             }
+        }
+
+        protected IIntelliSenseService? Finish(CancellationToken cancellationToken)
+        {
             try
             {
-                Gate?.Wait(TimeSpan.FromSeconds(30));
                 if (HonourCancellation) cancellationToken.ThrowIfCancellationRequested();
                 if (Throws) throw new InvalidOperationException("the language failed to start");
                 if (!hasEditorServices) return null;
@@ -79,6 +88,17 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
             {
                 Finished.TrySetResult();
             }
+        }
+    }
+
+    // A language whose start-up takes until the test releases it: it waits for the gate without holding a thread.
+    private sealed class GatedLanguage(string id, TaskCompletionSource gate) : FakeLanguage(id), ILanguageHostFactory
+    {
+        public async Task<IIntelliSenseService?> CreateIntelliSenseAsync(CancellationToken cancellationToken)
+        {
+            Enter(cancellationToken);
+            await gate.Task;
+            return Finish(cancellationToken);
         }
     }
 
@@ -167,8 +187,8 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
     [InlineData(true)]
     public async Task ClosingATab_WhileItsServicesAreCreated_Should_CancelThem_AndDisposeWhatArrivesOnce(bool honourCancellation)
     {
-        using var gate = new ManualResetEventSlim();
-        var csharp = new FakeLanguage("csharp") { Gate = gate, HonourCancellation = honourCancellation };
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var csharp = new GatedLanguage("csharp", gate) { HonourCancellation = honourCancellation };
         var (tabs, shell, host) = Open(csharp);
         try
         {
@@ -178,7 +198,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
 
             shell.Tabs.Remove(vm);
             Assert.True(csharp.Tokens[0].IsCancellationRequested);
-            gate.Set();
+            gate.TrySetResult();
             // Signals, not polling: the creation call has ended, and a service it made has been disposed (by whoever finds the tab gone).
             await csharp.Finished.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
             if (!honourCancellation)
@@ -196,8 +216,8 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
     [AvaloniaFact]
     public async Task DisposingTheTabs_WhileServicesAreCreated_Should_DisposeWhatArrivesOnce()
     {
-        using var gate = new ManualResetEventSlim();
-        var csharp = new FakeLanguage("csharp") { Gate = gate };
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var csharp = new GatedLanguage("csharp", gate);
         var (tabs, shell, host) = Open(csharp);
         try
         {
@@ -206,7 +226,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
 
             tabs.Dispose();
             Assert.True(csharp.Tokens[0].IsCancellationRequested);
-            gate.Set();
+            gate.TrySetResult();
             await csharp.FirstDisposed.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
@@ -241,8 +261,8 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
     [AvaloniaFact]
     public async Task ACreationThatDoesNotEnd_Should_NotKeepTheTabForEver_AndTheLateServiceIsDisposed()
     {
-        using var gate = new ManualResetEventSlim();
-        var csharp = new FakeLanguage("csharp") { Gate = gate };
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var csharp = new GatedLanguage("csharp", gate);
         var (tabs, shell, host) = Open(csharp);
         try
         {
@@ -252,7 +272,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
             var ctrl = await ShownAsync(tabs, shell.Tabs[0]);
             Assert.Null(ctrl.IntelliSenseForTests);
 
-            gate.Set();
+            gate.TrySetResult();
             await csharp.FirstDisposed.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
             csharp.Created[0].Verify(s => s.Dispose(), Times.Once);
         }
@@ -282,8 +302,8 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
     [AvaloniaFact]
     public async Task ALateServiceThatFailsToDispose_Should_NotBreakTheTab()
     {
-        using var gate = new ManualResetEventSlim();
-        var csharp = new FakeLanguage("csharp") { Gate = gate, DisposeThrows = true };
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var csharp = new GatedLanguage("csharp", gate) { DisposeThrows = true };
         var (tabs, shell, host) = Open(csharp);
         try
         {
@@ -291,7 +311,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
             tabs.Attach(shell);
             var ctrl = await ShownAsync(tabs, shell.Tabs[0]);
 
-            gate.Set();
+            gate.TrySetResult();
             await csharp.FirstDisposed.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 

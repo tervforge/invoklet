@@ -99,8 +99,8 @@ public class MainWindowClosingTests
     {
         var (window, _, _) = CreateMainWindow();
         var ctrl = await GetSoleControlAsync(window);
-        using var gate = new ManualResetEventSlim(false);
-        var written = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var written = ctrl.HoldOutputQueueForTests(gate.Task);
         var closedFired = false;
         window.Closed += (_, _) => closedFired = true;
 
@@ -113,7 +113,7 @@ public class MainWindowClosingTests
         await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
         Assert.True(dispatched);
 
-        gate.Set();
+        gate.TrySetResult();
         await written;
         await closing;
 
@@ -128,11 +128,11 @@ public class MainWindowClosingTests
         var (window, _, windowService) = CreateMainWindow();
         var ctrl = await GetSoleControlAsync(window);
         ctrl.State.Editor.Text = "Console.WriteLine(1);";
-        using var gate = new ManualResetEventSlim(false);
-        Task<bool>? written = null;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task? written = null;
         windowService.Setup(w => w.ShowUnsavedChangesDialogAsync(It.IsAny<string>())).ReturnsAsync(() =>
         {
-            written = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+            written = ctrl.HoldOutputQueueForTests(gate.Task);
             return UnsavedChangesResult.DontSave;
         });
         var closedFired = false;
@@ -145,7 +145,7 @@ public class MainWindowClosingTests
         Assert.False(closing.IsCompleted);
         Assert.False(closedFired); // the answer came, and the write it made is still being waited for
 
-        gate.Set();
+        gate.TrySetResult();
         await written!;
         await closing;
 
@@ -156,10 +156,10 @@ public class MainWindowClosingTests
     public async Task ClosingTheWindow_WhileTheOutputIsNotWrittenInTime_Should_GiveItUpAndClose()
     {
         var (window, _, _) = CreateMainWindow();
-        window.OutputFlushLimit = TimeSpan.FromMilliseconds(100);
+        window.OutputFlushLimit = TimeSpan.Zero; // no time to wait at all: the write is still going
         var ctrl = await GetSoleControlAsync(window);
-        using var gate = new ManualResetEventSlim(false);
-        _ = ctrl.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30)));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = ctrl.HoldOutputQueueForTests(gate.Task);
         var closedFired = false;
         window.Closed += (_, _) => closedFired = true;
 
@@ -170,7 +170,7 @@ public class MainWindowClosingTests
 
             Assert.True(closedFired);
         }
-        finally { gate.Set(); }
+        finally { gate.TrySetResult(); }
     }
 
     [AvaloniaFact]
