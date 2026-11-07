@@ -15,6 +15,7 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- A script that finishes on its own when stopped no longer loses the last lines it prints on the way out.
 - A dialog opened from a tab in a window of its own appears over that window, not over the main one.
 - Selecting text in the results starts where the button went down, takes the letter it starts on, and can
   start or end in the empty part of the panel. Pressing on selected text starts a new selection instead of

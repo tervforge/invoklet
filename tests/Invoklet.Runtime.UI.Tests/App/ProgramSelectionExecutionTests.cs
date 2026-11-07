@@ -162,6 +162,9 @@ public sealed class ProgramSelectionExecutionTests : IDisposable
             Assert.NotEqual("Process", ctrl.State.ExecStatusText);
             Assert.NotEmpty(ctrl.State.Output.Content);
         });
+        // The output of the run is written to the script's build folder after it ends, in a queue of its own: what is asked now is written
+        // after it, so once this is done nothing writes to the folder the test removes.
+        await ctrl.SaveRunOutputForTests();
     }
 
     // A real compile and process: the selected statement inside Main runs, with the script's args;
