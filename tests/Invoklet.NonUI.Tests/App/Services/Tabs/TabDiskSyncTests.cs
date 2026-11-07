@@ -112,22 +112,25 @@ public sealed class TabDiskSyncTests
         fixture.Reader.Verify(r => r.ReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task CheckAsync_FileCannotBeRead_SkipsItAndChecksTheOthers()
+    public static TheoryData<Exception> ReadFailures => [new IOException("locked"), new UnauthorizedAccessException(), new TimeoutException()];
+
+    [Theory]
+    [MemberData(nameof(ReadFailures))]
+    public async Task CheckAsync_FileCannotBeRead_SkipsItAndChecksTheOthers(Exception failure)
     {
         // Arrange
         var fixture = new TabDiskSyncFixture();
-        var locked = fixture.CreateTab("a");
+        var failing = fixture.CreateTab("a");
         var other = fixture.CreateTab("b");
-        fixture.Reader.Setup(r => r.ReadAsync(locked.FilePath!, It.IsAny<CancellationToken>())).ThrowsAsync(new IOException("locked"));
+        fixture.FailReading(failing, failure);
         var sut = fixture.CreateSut();
 
         // Act
         await sut.CheckAsync(fixture.Host.Object, Token);
 
         // Assert
+        fixture.Host.Verify(h => h.Reload(failing), Times.Never);
         fixture.Host.Verify(h => h.Reload(other), Times.Once);
-        fixture.Host.Verify(h => h.Reload(locked), Times.Never);
     }
 
     [Fact]
@@ -247,24 +250,25 @@ public sealed class TabDiskSyncTests
     }
 
     [Fact]
-    public async Task CheckAsync_CancelledDuringAReadThatHangs_DoesNotWaitForIt()
+    public async Task CheckAsync_ReadCancelled_StopsWithoutReloading()
     {
         // Arrange
         var fixture = new TabDiskSyncFixture();
         fixture.CreateTab("a");
+        fixture.CreateTab("b");
         using var cts = new CancellationTokenSource();
-        var hanging = new TaskCompletionSource<ScriptFileState>(); // a file on a drive that does not answer
-        fixture.ReadWith(() => hanging.Task);
+        fixture.ReadWith(() =>
+        {
+            cts.Cancel(); // the window is closed while the drive is read
+            throw new OperationCanceledException(cts.Token);
+        });
         var sut = fixture.CreateSut();
 
         // Act
-        var check = sut.CheckAsync(fixture.Host.Object, cts.Token);
-        cts.Cancel();
-        await check.WaitAsync(TabDiskSyncFixture.Limit, Token);
+        await sut.CheckAsync(fixture.Host.Object, cts.Token);
 
         // Assert
-        Assert.True(check.IsCompletedSuccessfully);
-        Assert.False(hanging.Task.IsCompleted);
+        fixture.Reader.Verify(r => r.ReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         fixture.Host.Verify(h => h.Reload(It.IsAny<EditorTabItemViewModel>()), Times.Never);
     }
 

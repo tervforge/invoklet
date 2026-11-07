@@ -73,9 +73,13 @@ internal sealed class TabDiskSyncFixture
     private void SetDiskState(string path, byte onDisk) =>
         Reader.Setup(r => r.ReadAsync(path, It.IsAny<CancellationToken>())).ReturnsAsync(State(onDisk));
 
-    /// <summary>Every read of a file goes to <paramref name="read"/>; a task that never completes is a drive that does not answer.</summary>
+    /// <summary>Every read of a file goes to <paramref name="read"/>.</summary>
     public void ReadWith(Func<Task<ScriptFileState>> read) =>
         Reader.Setup(r => r.ReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(read);
+
+    /// <summary>Reading the tab's file fails as a drive does: locked, denied, or not answering in time.</summary>
+    public void FailReading(EditorTabItemViewModel tab, Exception failure) =>
+        Reader.Setup(r => r.ReadAsync(tab.FilePath!, It.IsAny<CancellationToken>())).ThrowsAsync(failure);
 
     public TabDiskSync CreateSut() => new(Windows.Object, Reader.Object);
 }

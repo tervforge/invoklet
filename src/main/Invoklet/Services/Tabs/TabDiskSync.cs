@@ -26,16 +26,23 @@ internal interface ITabDiskHost
 /// <summary>How the state of a script's file is read; replaced in tests.</summary>
 internal interface IScriptFileReader
 {
-    /// <summary>Reads and hashes the file away from the caller's thread: a script folder can be on a slow drive.</summary>
+    /// <summary>
+    /// Reads and hashes the file away from the caller's thread: a script folder can be on a slow drive. A drive that does not
+    /// answer in time is a <see cref="TimeoutException"/>; a cancelled read an <see cref="OperationCanceledException"/>.
+    /// </summary>
     Task<ScriptFileState> ReadAsync(string path, CancellationToken cancellationToken);
 
     bool Exists(string path);
 }
 
-internal sealed class DiskScriptFileReader : IScriptFileReader
+internal sealed class DiskScriptFileReader(TimeSpan? timeout = null) : IScriptFileReader
 {
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+
+    // A read that has started cannot be interrupted, and on a network drive it can last long: past the timeout, or when the
+    // check is cancelled, the caller stops waiting for it and the read ends on its own.
     public Task<ScriptFileState> ReadAsync(string path, CancellationToken cancellationToken) =>
-        Task.Run(() => ScriptFileState.Read(path), cancellationToken);
+        Task.Run(() => ScriptFileState.Read(path), cancellationToken).WaitAsync(timeout ?? DefaultTimeout, cancellationToken);
 
     public bool Exists(string path) => File.Exists(path);
 }
@@ -129,12 +136,11 @@ internal sealed class TabDiskSync(IWindowService windows, IScriptFileReader? rea
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                // A read that has started cannot be interrupted, and on a network drive it can last long: when the
-                // strip goes away the check stops waiting for it and the read ends on its own.
-                states.Add(await _reader.ReadAsync(path, cancellationToken).WaitAsync(cancellationToken));
+                states.Add(await _reader.ReadAsync(path, cancellationToken));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TimeoutException)
             {
+                // Unreadable or not answering now: the next check looks again.
                 states.Add(null);
             }
         }
