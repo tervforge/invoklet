@@ -4,13 +4,15 @@ namespace Invoklet.Services.Recovery;
 
 /// <summary>Private immutable snapshots, an atomic current pointer and one previous generation.
 /// A held OS file lock keeps independent application instances out of one another's sessions.</summary>
-public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
+public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder, IAsyncDisposable
 {
     private sealed record Pointer(int Version, string Current, string? Previous);
     private readonly string _root;
     private readonly SemaphoreSlim _writer = new(1);
     private readonly object _initializationLock = new();
-    private readonly Action<string>? _fault;
+    // Test-only: told of each stage a load or a checkpoint reaches. It can fail the stage (a crash there), and at the stages awaited
+    // (StageAsync) hold it until its task completes.
+    private readonly Func<string, Task>? _fault;
     private Task<RecoverySnapshot?>? _load;
     private FileStream? _owner;
     private string? _folder;
@@ -30,18 +32,28 @@ public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
     public string? SessionFolder => Volatile.Read(ref _folder);
 
     public DiskRecoveryStore(string root) => _root = root;
-    internal DiskRecoveryStore(string root, Action<string> fault) : this(root) => _fault = fault;
+    internal DiskRecoveryStore(string root, Func<string, Task> fault) : this(root) => _fault = fault;
+
+    private Task StageAsync(string name) => _fault?.Invoke(name) ?? Task.CompletedTask;
+
+    // A stage reached in synchronous code can fail, not wait.
+    private void Stage(string name)
+    {
+        var stage = StageAsync(name);
+        if (!stage.IsCompleted) throw new InvalidOperationException($"The stage '{name}' cannot wait.");
+        stage.GetAwaiter().GetResult();
+    }
 
     public Task<RecoverySnapshot?> LoadAsync()
     {
         lock (_initializationLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return _load ??= Task.Run(LoadCore);
+            return _load ??= Task.Run(LoadCoreAsync);
         }
     }
 
-    private RecoverySnapshot? LoadCore()
+    private async Task<RecoverySnapshot?> LoadCoreAsync()
     {
         Directory.CreateDirectory(_root);
         RestrictDirectory(_root);
@@ -59,7 +71,7 @@ public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
             try { owner = Lock(folder); }
             catch (IOException) { continue; } // Another live instance owns this session.
             catch (UnauthorizedAccessException) { continue; }
-            if (sessions.Count == 0) _fault?.Invoke("locked");
+            if (sessions.Count == 0) await StageAsync("locked");
             try
             {
                 var (snapshot, payload, fellBack) = ReadFolder(folder);
@@ -284,7 +296,7 @@ public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
         {
             return !File.Exists(Path.Combine(folder, "current.json")) && !File.Exists(Path.Combine(folder, "previous.json"));
         }
-        _fault?.Invoke("import-retired");
+        Stage("import-retired");
         // Keep the lock inode and its empty directory. After releasing ownership another instance
         // may already have adopted the folder; deleting anything here could destroy its new data
         // or split ownership across two different lock files. Folders without pointers are ignored.
@@ -401,19 +413,19 @@ public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
             // back to once this one is durable.
             var settled = _records.ToList();
             snapshot = snapshot with { ImportedSessions = [.. _records, .. pending] };
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
                 var name = Guid.NewGuid().ToString("N") + ".snapshot";
                 WriteDurably(Path.Combine(_folder!, name), JsonSerializer.SerializeToUtf8Bytes(snapshot));
-                _fault?.Invoke("payload");
+                await StageAsync("payload");
                 var pointer = new Pointer(1, name, _pointer?.Current);
                 if (_pointer is not null)
                     ReplacePointer("previous.json", JsonSerializer.SerializeToUtf8Bytes(_pointer));
-                _fault?.Invoke("previous");
+                await StageAsync("previous");
                 ReplacePointer("current.json", JsonSerializer.SerializeToUtf8Bytes(pointer));
                 _pointer = pointer;
                 _revision = snapshot.Revision;
-                _fault?.Invoke("committed");
+                await StageAsync("committed");
                 foreach (var record in pending)
                     TryMarkImported(Path.Combine(_root, record.Source), record, _folder!);
                 _records.AddRange(pending);
@@ -445,7 +457,7 @@ public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
         try
         {
             WriteDurably(temp, bytes);
-            _fault?.Invoke(name);
+            Stage(name);
             File.Move(temp, Path.Combine(_folder!, name), overwrite: true);
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
@@ -481,6 +493,31 @@ public sealed class DiskRecoveryStore : IRecoveryStore, ISessionFolder
             catch (Exception) { /* Failed loads still release any acquired owner below. */ }
         }
         _writer.Wait();
+        ReleaseOwnership();
+    }
+
+    /// <summary><see cref="Dispose"/> without holding the caller's thread while a load or a checkpoint finishes.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        Task<RecoverySnapshot?>? loading;
+        lock (_initializationLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            loading = _load;
+        }
+        if (loading is not null)
+        {
+            try { await loading.ConfigureAwait(false); }
+            catch (Exception) { /* Failed loads still release any acquired owner below. */ }
+        }
+        await _writer.WaitAsync().ConfigureAwait(false);
+        ReleaseOwnership();
+    }
+
+    // Called holding the writer, which it releases.
+    private void ReleaseOwnership()
+    {
         try
         {
             _owner?.Dispose();

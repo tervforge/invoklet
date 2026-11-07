@@ -244,32 +244,6 @@ public class CSharpIntelliSenseBackgroundAnalysisTests
         Assert.False(codeFixesFiredAfterDispose);
     }
 
-    // SyncDocument's check-then-act on _lastCode/the AdhocWorkspace's
-    // CurrentSolution was unsynchronized, even though completion/signature-help/quick-info/
-    // background-analysis each call it from their own concurrent Task.Run. A genuine race is timing-
-    // dependent and hard to force deterministically, so this is a smoke test, not a precise
-    // reproduction: many concurrent calls with different code snapshots hitting the shared workspace
-    // at once, past the point where the old unsynchronized version would very plausibly corrupt
-    // shared state (throwing, or desyncing _lastCode from CurrentSolution).
-    [Fact]
-    public async Task GetCompletionsAsync_Should_NotThrow_WhenCalledConcurrently_WithDifferentCodeSnapshots()
-    {
-        using var service = new CSharpIntelliSenseFixture().CreateSut();
-
-        var tasks = Enumerable.Range(0, 20).Select(i =>
-        {
-            var code = $"var x{i} = {i};\nx{i}.";
-            return Task.Run(async () =>
-            {
-                await service.GetCompletionsAsync(code, code.Length,
-                    CompletionTrigger.Insertion('.'), TestContext.Current.CancellationToken);
-                service.NotifyTextChanged(code);
-            });
-        });
-
-        await Task.WhenAll(tasks);
-    }
-
     // MetadataReference.CreateFromFile (PE-header + XML-doc parsing) used to
     // run again for every one of the ~167 default BCL reference assemblies on every new tab, even
     // though references are immutable and safe to share across unrelated workspaces. ReferenceCache

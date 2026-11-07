@@ -193,7 +193,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task FailedCheckpoint_Should_KeepWindowAndDirtyTextOpen_AndAllowRetry()
     {
         var fail = true;
-        using var store = new DiskRecoveryStore(RecoveryRoot, step => { if (fail && step == "payload") throw new IOException("injected"); });
+        using var store = new DiskRecoveryStore(RecoveryRoot, step => fail && step == "payload" ? throw new IOException("injected") : Task.CompletedTask);
         using var session = new Session(_root, store);
         await session.Ready();
         var tab = session.Vm.Tabs.Single();

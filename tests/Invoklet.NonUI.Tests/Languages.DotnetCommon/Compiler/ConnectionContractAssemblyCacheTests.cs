@@ -43,13 +43,15 @@ public sealed class ConnectionContractAssemblyCacheTests : IDisposable
     }
 
     [Fact]
-    public async Task ConcurrentBuilders_Should_PublishOneUsableArtifact_AndCancellationShouldNotPublish()
+    public async Task ASecondBuilder_Should_TakeThePublishedArtifact_AndCancellationShouldNotPublish()
     {
+        // Two builders publishing at the same moment are covered by the Publication tests below, which play the other one.
         var ct = TestContext.Current.CancellationToken;
-        var paths = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
-            ConnectionContractAssemblyCache.GetOrCreate(_folder, Files, References, "net10.0;", n => Create(n, Files), ct), ct)));
-        Assert.Equal(paths[0], paths[1]);
-        Assert.Equal(paths[0], ConnectionContractAssemblyCache.Find(_folder, Files, References, "net10.0;"));
+        var first = ConnectionContractAssemblyCache.GetOrCreate(_folder, Files, References, "net10.0;", n => Create(n, Files), ct);
+        var second = ConnectionContractAssemblyCache.GetOrCreate(_folder, Files, References, "net10.0;",
+            _ => throw new InvalidOperationException("A published artifact must not be compiled again."), ct);
+        Assert.Equal(first, second);
+        Assert.Equal(first, ConnectionContractAssemblyCache.Find(_folder, Files, References, "net10.0;"));
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
         Assert.ThrowsAny<OperationCanceledException>(() => ConnectionContractAssemblyCache.GetOrCreate(_folder, Files, References,
