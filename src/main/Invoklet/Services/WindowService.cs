@@ -49,9 +49,12 @@ public sealed class WindowService : IWindowService
         _aboutWindowFactory = aboutWindowFactory;
     }
 
-    // The same lookup, repeated verbatim 6 times below.
-    private static Window? MainWindow =>
-        (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+    // The window in use owns a dialog: the window of a tab moved out of the main one, or a dialog that opens another. The main window when none is active
+    // (the application is in the background).
+    private static Window? Owner =>
+        Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop ? OwnerOf(desktop.Windows, desktop.MainWindow) : null;
+
+    internal static Window? OwnerOf(IReadOnlyList<Window> windows, Window? main) => windows.LastOrDefault(w => w.IsActive && w.IsVisible) ?? main;
 
     public async Task ShowDependenciesAsync(IObservable<MdRunFrontMatter?>? frontMatter = null, IObservable<string?>? scriptPath = null)
     {
@@ -64,13 +67,13 @@ public sealed class WindowService : IWindowService
 
     public async Task<bool> ConfirmConnectionPackagesAsync(string message)
     {
-        if (MainWindow is not { } owner) return false;
+        if (Owner is not { } owner) return false;
         return await new ConnectionPackageConfirmationDialog(message).ShowDialog<bool?>(owner) == true;
     }
 
     public async Task<SecretAccessChoice> ConfirmSecretAccessAsync(string scriptName, string secretName, bool isSave, CancellationToken cancellationToken = default)
     {
-        if (MainWindow is not { } owner || cancellationToken.IsCancellationRequested) return SecretAccessChoice.Deny;
+        if (Owner is not { } owner || cancellationToken.IsCancellationRequested) return SecretAccessChoice.Deny;
         var dialog = new SecretAccessDialog(scriptName, secretName, isSave);
         // The script was stopped while the question was open: nobody waits for the answer any more. The dialog's own dispatcher, as
         // the stop comes on another thread.
@@ -80,7 +83,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<bool> ConfirmSecretChangeAsync(string scriptName, string secretName, bool remove, CancellationToken cancellationToken = default)
     {
-        if (MainWindow is not { } owner || cancellationToken.IsCancellationRequested) return false;
+        if (Owner is not { } owner || cancellationToken.IsCancellationRequested) return false;
         var dialog = new SecretChangeDialog(scriptName, secretName, remove);
         await using var stopped = cancellationToken.Register(() => dialog.Dispatcher.Post(() => dialog.Close()));
         return await dialog.ShowDialog<bool?>(owner) == true;
@@ -108,7 +111,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<string?> ShowSaveFileDialogAsync(string suggestedFileName, string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -125,13 +128,13 @@ public sealed class WindowService : IWindowService
 
     public async Task<Invoklet.Services.QuickOpen.QuickOpenEntry?> ShowQuickOpenAsync(Invoklet.Services.QuickOpen.QuickOpenContent content)
     {
-        if (MainWindow is not { } owner) return null;
+        if (Owner is not { } owner) return null;
         return await new QuickOpenDialog(content).ShowDialog<Invoklet.Services.QuickOpen.QuickOpenEntry?>(owner);
     }
 
     public async Task<string?> ShowOpenScriptFileDialogAsync(string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
         var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -146,7 +149,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<string?> ShowOpenLinqFileDialogAsync(string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -162,7 +165,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<UnsavedChangesResult> ShowUnsavedChangesDialogAsync(string fileName)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return UnsavedChangesResult.Cancel;
 
         var result = await new UnsavedChangesDialog(fileName).ShowDialog<UnsavedChangesResult?>(owner);
@@ -171,7 +174,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<ExitUnsavedChoice> ShowExitUnsavedDialogAsync(IReadOnlyList<string> fileNames)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return ExitUnsavedChoice.Cancel;
 
         var result = await new ExitUnsavedDialog(fileNames).ShowDialog<ExitUnsavedChoice?>(owner);
@@ -180,7 +183,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<SaveConflictChoice> ShowSaveConflictDialogAsync(string fileName)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return SaveConflictChoice.Cancel;
 
         var result = await new SaveConflictDialog(fileName).ShowDialog<SaveConflictChoice?>(owner);
@@ -195,14 +198,14 @@ public sealed class WindowService : IWindowService
 
     private async Task<bool> ShowReloadDialogAsync(ReloadFileDialog dialog)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return false;
         return await dialog.ShowDialog<bool?>(owner) == true;
     }
 
     public async Task<string?> ShowOpenAssemblyFileDialogAsync(string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -218,7 +221,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<string?> ShowOpenTextFileDialogAsync(string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -241,7 +244,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<string?> ShowSaveTextFileDialogAsync(string suggestedFileName, string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -285,7 +288,7 @@ public sealed class WindowService : IWindowService
         _textEditors.Add(window);
         window.Closed += (_, _) => _textEditors.Remove(window);
 
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is not null) window.Show(owner);
         else window.Show();
     }
@@ -298,7 +301,7 @@ public sealed class WindowService : IWindowService
 
     private async Task<string?> ShowSaveResultsDialogAsync(string suggestedFileName, string startFolder, string extension, FilePickerFileType type)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -315,7 +318,7 @@ public sealed class WindowService : IWindowService
 
     public async Task<string?> ShowSaveCodeFileDialogAsync(string suggestedFileName, string extension, string startFolder)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is null) return null;
 
         var startLocation = await owner.StorageProvider.TryGetFolderFromPathAsync(startFolder);
@@ -370,14 +373,14 @@ public sealed class WindowService : IWindowService
             if (_assemblyExplorer == window) _assemblyExplorer = null;
         };
 
-        var owner = MainWindow;
+        var owner = Owner;
         if (owner is not null) window.Show(owner);
         else window.Show();
     }
 
     private static Task ShowDialogAsync(Window dialog)
     {
-        var owner = MainWindow;
+        var owner = Owner;
         return owner is not null ? dialog.ShowDialog(owner) : Task.CompletedTask;
     }
 }
