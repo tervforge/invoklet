@@ -7,6 +7,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Markdig;
 using MarkView.Avalonia.Extensions;
 using MarkView.Avalonia.Rendering;
@@ -160,7 +161,7 @@ public class YoutubeTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task Youtube_thumbnail_is_requested_once_across_reattach()
+    public void Youtube_thumbnail_is_requested_once_across_reattach()
     {
         var loader = new RecordingLoader();
         var renderer = RenderWith($"![]({YoutubeShortUrl})", loader);
@@ -170,7 +171,9 @@ public class YoutubeTests : RenderTestBase
             window.Show();
             window.Content = null;
             window.Content = renderer.RootPanel;
-            await AsyncTestHelpers.PumpAsync();
+            // A load starts as the image is attached: a second one would be asked for by now, after the layout passes that attach it.
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
 
             Assert.Single(loader.Requests);
         }

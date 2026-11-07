@@ -131,13 +131,12 @@ public class ImageTests : RenderTestBase
         public void Register(AvaloniaRenderer renderer) => renderer.ImageLoaders.Insert(0, new FakeBitmapLoader(url, image));
     }
 
-    private static async Task PumpUntilSettledAsync()
+    // The test loaders answer at once and a load starts as the image is attached, so the image has its source when the window
+    // is shown: one layout pass gives it its size.
+    private static void LayOut(Window window)
     {
-        for (var i = 0; i < 20; i++)
-        {
-            Dispatcher.UIThread.RunJobs();
-            await Task.Delay(10);
-        }
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
     }
 
     /// <summary>
@@ -188,7 +187,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task ScaleDownToFit_large_image_scales_down_to_container_width()
+    public void ScaleDownToFit_large_image_scales_down_to_container_width()
     {
         var bigImage = new FakeImage(1600, 1200);
         var loader = new FakeBitmapLoader("fake://big.png", bigImage);
@@ -196,7 +195,7 @@ public class ImageTests : RenderTestBase
 
         var window = new Window { Width = 600, Height = 400, Content = renderer.RootPanel };
         window.Show();
-        await PumpUntilSettledAsync();
+        LayOut(window);
 
         var image = FindFirst<Image>(renderer.RootPanel);
         Assert.NotNull(image);
@@ -205,7 +204,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task ScaleDownToFit_small_image_does_not_upscale()
+    public void ScaleDownToFit_small_image_does_not_upscale()
     {
         var smallImage = new FakeImage(200, 150);
         var loader = new FakeBitmapLoader("fake://small.png", smallImage);
@@ -213,7 +212,7 @@ public class ImageTests : RenderTestBase
 
         var window = new Window { Width = 1200, Height = 400, Content = renderer.RootPanel };
         window.Show();
-        await PumpUntilSettledAsync();
+        LayOut(window);
 
         var image = FindFirst<Image>(renderer.RootPanel);
         Assert.NotNull(image);
@@ -222,7 +221,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task Fill_mode_upscales_small_image_to_container_width()
+    public void Fill_mode_upscales_small_image_to_container_width()
     {
         var smallImage = new FakeImage(200, 150);
         var loader = new FakeBitmapLoader("fake://small.png", smallImage);
@@ -230,7 +229,7 @@ public class ImageTests : RenderTestBase
 
         var window = new Window { Width = 600, Height = 400, Content = renderer.RootPanel };
         window.Show();
-        await PumpUntilSettledAsync();
+        LayOut(window);
 
         var image = FindFirst<Image>(renderer.RootPanel);
         Assert.NotNull(image);
@@ -239,7 +238,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task Explicit_size_never_upscales_past_native_resolution_regardless_of_mode()
+    public void Explicit_size_never_upscales_past_native_resolution_regardless_of_mode()
     {
         foreach (var mode in new[] { ImageResizeMode.ScaleDownToFit, ImageResizeMode.Fill, ImageResizeMode.Natural })
         {
@@ -256,7 +255,7 @@ public class ImageTests : RenderTestBase
 
             var window = new Window { Width = 1000, Height = 800, Content = renderer.RootPanel };
             window.Show();
-            await PumpUntilSettledAsync();
+            LayOut(window);
 
             // Capped at native resolution — never upscaled to the requested 800x600.
             Assert.Equal(400, image.Bounds.Width, 0);
@@ -265,7 +264,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task Explicit_size_downscale_request_is_honoured()
+    public void Explicit_size_downscale_request_is_honoured()
     {
         var nativeImage = new FakeImage(400, 300);
         var loader = new FakeBitmapLoader("fake://native.png", nativeImage);
@@ -276,7 +275,7 @@ public class ImageTests : RenderTestBase
 
         var window = new Window { Width = 1000, Height = 800, Content = renderer.RootPanel };
         window.Show();
-        await PumpUntilSettledAsync();
+        LayOut(window);
 
         Assert.Equal(100, image!.Bounds.Width, 0);
         Assert.Equal(75, image.Bounds.Height, 0);
@@ -290,7 +289,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task MarkdownViewer_ImageResizeMode_flows_through_to_rendered_image()
+    public void MarkdownViewer_ImageResizeMode_flows_through_to_rendered_image()
     {
         var smallImage = new FakeImage(200, 150);
         var viewer = new MarkdownViewer { Width = 600, Height = 400, ImageResizeMode = ImageResizeMode.Fill };
@@ -301,7 +300,7 @@ public class ImageTests : RenderTestBase
 
         var window = new Window { Width = 600, Height = 400, Content = viewer };
         window.Show();
-        await PumpUntilSettledAsync();
+        LayOut(window);
 
         var image = FindFirst<Image>(viewer);
         Assert.NotNull(image);
@@ -312,7 +311,7 @@ public class ImageTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task MarkdownViewer_default_ScaleDownToFit_flows_through_to_rendered_image()
+    public void MarkdownViewer_default_ScaleDownToFit_flows_through_to_rendered_image()
     {
         var bigImage = new FakeImage(1600, 1200);
         var viewer = new MarkdownViewer { Width = 600, Height = 400 };
@@ -323,7 +322,7 @@ public class ImageTests : RenderTestBase
 
         var window = new Window { Width = 600, Height = 400, Content = viewer };
         window.Show();
-        await PumpUntilSettledAsync();
+        LayOut(window);
 
         var image = FindFirst<Image>(viewer);
         Assert.NotNull(image);
