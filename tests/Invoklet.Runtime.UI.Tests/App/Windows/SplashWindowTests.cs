@@ -63,7 +63,7 @@ public class SplashWindowTests
         Assert.Equal(0, destination.Opacity);
 
         destination.Workspace.SetResult();
-        for (var i = 0; i < 20 && !splash.HasClosed; i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        await TestWait.WhileAsync(() => { Dispatcher.UIThread.RunJobs(); return !splash.HasClosed; });
         Assert.True(splash.HasClosed);
         Assert.Equal(1, destination.Opacity);
         destination.Close();

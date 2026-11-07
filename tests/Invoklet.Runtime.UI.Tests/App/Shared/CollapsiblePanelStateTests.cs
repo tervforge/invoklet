@@ -61,33 +61,27 @@ public class CollapsiblePanelStateTests
     }
 
     [AvaloniaFact]
-    public async Task ChangingSize_Should_InvokeOnChanged_AfterTheThrottle_WithTheNewCollapsedFlagAndSize()
+    public void ChangingSize_Should_InvokeOnChanged_AfterTheThrottle_WithTheNewCollapsedFlagAndSize()
     {
         bool? collapsed = null;
         double? size = null;
         var state = new CollapsiblePanelState(collapsed: false, savedSize: 300, defaultExpandedSize: 220,
-            onChanged: (c, s) => { collapsed = c; size = s; });
+            onChanged: (c, s) => { collapsed = c; size = s; }, saveThrottle: TimeSpan.Zero);
 
         state.Size = new GridLength(450);
-
-        for (var i = 0; i < 50 && collapsed is null; i++)
-        {
-            await Task.Delay(20);
-            Dispatcher.UIThread.RunJobs();
-        }
+        Dispatcher.UIThread.RunJobs();
 
         Assert.False(collapsed);
         Assert.Equal(450, size);
     }
 
     [AvaloniaFact]
-    public async Task ChangingSize_Should_NotInvokeOnChanged_ForTheInitialConstructorValue()
+    public void ChangingSize_Should_NotInvokeOnChanged_ForTheInitialConstructorValue()
     {
         var invoked = false;
         _ = new CollapsiblePanelState(collapsed: false, savedSize: 300, defaultExpandedSize: 220,
-            onChanged: (_, _) => invoked = true);
+            onChanged: (_, _) => invoked = true, saveThrottle: TimeSpan.Zero);
 
-        await Task.Delay(500);
         Dispatcher.UIThread.RunJobs();
 
         Assert.False(invoked);

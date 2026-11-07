@@ -156,7 +156,12 @@ public sealed class ProgramSelectionExecutionTests : IDisposable
         ctrl.State.Editor.Select(text.IndexOf(selected, StringComparison.Ordinal), selected.Length);
         var sdk = new DotnetSdkProvider().Get().First();
         await ctrl.RunSelectionAsync(sdk).WaitAsync(TimeSpan.FromMinutes(3));
-        for (var i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(25); }
+        await TestWait.EventuallyAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual("Process", ctrl.State.ExecStatusText);
+            Assert.NotEmpty(ctrl.State.Output.Content);
+        });
     }
 
     // A real compile and process: the selected statement inside Main runs, with the script's args;
