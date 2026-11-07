@@ -76,7 +76,7 @@ public class RealNetcoredbgDebugTests : IDisposable
             Kind = kind,
         };
         var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance);
-        // Same path EditorTabItemControl gives its ScriptBreakpoints: OutputDirectory/InvokletQuery.cs.
+        // Same path EditorTabItemControl gives the breakpoints it sends: OutputDirectory/InvokletQuery.cs.
         if (breakpointLine is { } line)
             host.AddBreakpoint(new TestBreakpoint(Path.Combine(_aliasOutputDir, "InvokletQuery.cs"), line));
         return host;

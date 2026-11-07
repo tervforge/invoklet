@@ -34,6 +34,7 @@ using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
 using Invoklet.Services.Recovery;
 using Invoklet.Services.Scaling;
+using Invoklet.Services.Tabs;
 using Invoklet.UserControls.Healpers;
 using Invoklet.UserControls.Models;
 using Microsoft.Extensions.Logging;
@@ -56,10 +57,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private readonly IThemeService _themeService;
     private readonly IWindowService _windowService;
     internal readonly EditorTabState State;
-    private SemanticHighlighter? _semanticHighlighter;
-    private SquiggleRenderer? _squiggleRenderer;
-    private CancellationTokenSource? _debugTooltipCloseCts;
-    private CancellationTokenSource? _quickInfoCts;
+    private EditorAnalysisView? _analysis;
+    private EditorHover? _hover;
+    private EditorBreakpoints _breakpoints = null!;
     private CancellationTokenSource? _navigationCts;
     private RefactoringRequests? _refactoringRequests;
     private EventHandler? _refactoringCaretHandler;
@@ -68,18 +68,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private EventHandler<TextInputEventArgs>? _textEnteredHandler;
     private EventHandler? _intelliSenseTextChangedHandler;
     private EventHandler<VisualTreeAttachmentEventArgs>? _editorAttachedHandler;
-    private EventHandler<PointerEventArgs>? _quickInfoPointerMovedHandler;
-    private EventHandler<PointerEventArgs>? _quickInfoPointerExitedHandler;
-    private bool _debugTooltipInside;
-    private long _tooltipGeneration;
     // The symbol whose debugger value tip is open; null when no value tip is shown.
-    private (int Start, int Length)? _debugTooltipSpan;
     // A popup, not a ToolTip: Avalonia closes a ToolTip on any mouse press, its own content
     // included, so the value tip's expand buttons could never be clicked.
-    private Popup? _debugValuePopup;
-    private InlayHintRenderer? _inlayHintRenderer;
     private IIntelliSenseService? _intelliSense;
-    private IntelliSenseEventSubscriptions? _intelliSenseEventSubscriptions;
     private EditorInteractionSubscriptions? _editorInteractionSubscriptions;
     internal IIntelliSenseService? IntelliSenseForTests => _intelliSense;
     private bool _InvokletAnalyzers;
@@ -108,7 +100,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private IDisposable? _selectedArgumentSetSub;
     private bool _syncingArgumentSet;
     private bool _disposed;
-    private readonly DebugHoverController _debugHover = new();
 
     // The stage the current run reached, which names the stage that failed: written as the host reports it, on whichever thread
     // that is, so it is already current when the run ends even if the status update posted for it has not been processed yet.
@@ -250,10 +241,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // ordering for the same fact), which would otherwise flag a just-opened, untouched tab as
         // dirty on its very first frame — including a brand-new empty tab, which has nothing
         // unsaved yet until the user actually types something.
+        _breakpoints = new EditorBreakpoints(editor, () => State.RunningHost, () => State.SourceFilePath);
         _editorInteractionSubscriptions = new EditorInteractionSubscriptions(
             editor, OnEditorTextChanged, OnEditorCaretPositionChanged, OnEditorDocumentChanged,
             OnRenameSymbolRequested, OnFindReferencesRequested, OnGoToDefinitionRequested,
-            OnFixApplyRequested, OnGutterBreakpointAdded, OnGutterBreakpointRemoved,
+            OnFixApplyRequested, _breakpoints.OnAdded, _breakpoints.OnRemoved,
             OnBreakpointRightClicked);
         _editorInteractionSubscriptions.Attach();
 
@@ -359,7 +351,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         State.Editor.SetTheme(theme.Editor.TextMateName);
         _ilHighlighting?.SetTheme(theme.Editor.TextMateName);
-        _semanticHighlighter?.SetDark(theme.Editor.IsDark);
+        _analysis?.SetDark(theme.Editor.IsDark);
         var editorBg = _themeService!.GetBrush("Invoklet.Editor.BackgroundBrush");
 
         if (editorBg is not null)
@@ -705,33 +697,24 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (selection is not null) request = request with { Kind = MdRunKind.Statements };
             var script = selection ?? s.Editor.Text;
             // Read on the UI thread; they name the host's source file once it exists (see below).
-            // Disabled breakpoints stay in the gutter but never reach the debugger.
-            var enabledBreakpoints = BreakpointHostBridge.Enabled(s.Editor.Breakpoints);
-            // Reset to Pending — stale Verified/Unverified color from a previous run shouldn't linger
-            // in the margin until the new session's setBreakpoints response arrives.
-            foreach (var bp in s.Editor.Breakpoints)
-            {
-                bp.VerificationState = BreakpointVerificationState.Pending;
-            }
-
-            s.Editor.InvalidateBreakpoints();
+            var enabledBreakpoints = _breakpoints.StartRun();
 
             await Task.Run(async () =>
             {
                 await using var host = _registry.Create(ResolveLanguageId(), request);
                 runHost = host;
                 s.RunningHost = host;
-                // The file the host compiles and its debugger reports (see ScriptBreakpoint).
+                // The file the host compiles and its debugger reports breakpoints in.
                 var sourceFilePath = host.SourceFilePath ?? "";
                 s.SourceFilePath = sourceFilePath;
                 if (debug && host.Supports(LanguageHostCapabilities.Debug))
                 {
                     foreach (var (line, condition, hitCondition) in enabledBreakpoints)
-                        host.AddBreakpoint(new ScriptBreakpoint(sourceFilePath, line, condition, hitCondition));
+                        BreakpointHostBridge.Add(host, sourceFilePath, line, condition, hitCondition);
                     host.BreakpointHit += ctx =>
                         PostRun(() => OnBreakpointHit(ctx), host);
                     host.BreakpointVerified += (bp, verified, message) =>
-                        PostRun(() => OnBreakpointVerified(bp, verified, message), host);
+                        PostRun(() => _breakpoints.Verified(bp, verified, message), host);
                     var hostResult = await HostExecutionAdapter.DebugAsync(host, script, @event => HandleHostEvent(host, @event), runCts.Token);
                     if (hostResult.Error is not null) ExceptionDispatchInfo.Capture(hostResult.Error).Throw();
                     cancelled = hostResult.Cancelled;
@@ -856,20 +839,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _formatting = null;
         if (_intelliSenseTextChangedHandler is { } intelliSenseTextChanged)
             State.Editor.TextChanged -= intelliSenseTextChanged;
-        if (_quickInfoPointerMovedHandler is { } quickInfoMoved)
-            State.Editor.TextArea.TextView.PointerMoved -= quickInfoMoved;
-        if (_quickInfoPointerExitedHandler is { } quickInfoExited)
-            State.Editor.TextArea.TextView.PointerExited -= quickInfoExited;
+        _hover?.Dispose();
+        _hover = null;
         _refactoringRequests?.Cancel();
-        if (_squiggleRenderer is { } squiggle)
-            State.Editor.TextArea.TextView.BackgroundRenderers.Remove(squiggle);
-        if (_semanticHighlighter is { } semantic)
-            State.Editor.TextArea.TextView.LineTransformers.Remove(semantic);
-        if (_inlayHintRenderer is { } inlay)
-            State.Editor.TextArea.TextView.ElementGenerators.Remove(inlay);
-        _squiggleRenderer = null;
-        _semanticHighlighter = null;
-        _inlayHintRenderer = null;
+        _analysis?.Dispose();
+        _analysis = null;
         _ilHighlighting?.Dispose();
         _ilHighlighting = null;
         State.Editor.Dispose();
@@ -883,23 +857,13 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         contextRefreshCts?.Cancel();
         var schemaWarmupCts = Interlocked.Exchange(ref _connectionSchemaWarmupCts, null);
         schemaWarmupCts?.Cancel();
-        _quickInfoCts?.Cancel();
         _navigationCts?.Cancel();
-        _debugTooltipCloseCts?.Cancel();
-        if (_debugValuePopup is { } debugValuePopup)
-        {
-            debugValuePopup.IsOpen = false;
-            ((ISetLogicalParent)debugValuePopup).SetParent(null);
-        }
         DisposePreview();
         Cancel();
         CancelAllWatchEvaluations();
-        _debugHover.Dispose();
         // The run owns its CTS until its asynchronous cleanup has finished.
         if (!_run.InProgress) State.RunCts?.Dispose();
         _breakpointDialog?.Close();
-        _intelliSenseEventSubscriptions?.Dispose();
-        _intelliSenseEventSubscriptions = null;
         _intelliSense?.Dispose(); // owned by this tab — see EditorTabsControl.OnTabsCollectionChanged
         GC.SuppressFinalize(this);
     }
@@ -1022,30 +986,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     }
 
     internal void ApplyBreakpointOptions(int line, string? condition, string? hitCondition, bool enabled)
-    {
-        condition = string.IsNullOrWhiteSpace(condition) ? null : condition.Trim();
-        hitCondition = string.IsNullOrWhiteSpace(hitCondition) ? null : hitCondition.Trim();
-        var bp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == line);
-        if (bp is null)
-        {
-            // Set all options before publishing the new breakpoint to the running host.
-            State.Editor.BreakpointAdded -= OnGutterBreakpointAdded;
-            try { State.Editor.AddBreakpoint(line); }
-            finally { State.Editor.BreakpointAdded += OnGutterBreakpointAdded; }
-            bp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == line);
-        }
-        if (bp is null) return;
-        bp.Condition = condition;
-        bp.HitCondition = hitCondition;
-        bp.IsEnabled = enabled;
-        State.Editor.InvalidateBreakpoints();
-        if (State.RunningHost is { } host && host.Supports(LanguageHostCapabilities.Breakpoints)
-            && State.SourceFilePath is { } path)
-        {
-            BreakpointHostBridge.Remove(host, path, line);
-            if (enabled) BreakpointHostBridge.Add(host, path, line, condition, hitCondition);
-        }
-    }
+        => _breakpoints.Apply(line, condition, hitCondition, enabled);
 
     // ── Format / navigation ────────────────────────────────────────────────────
 
@@ -1204,26 +1145,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // so it's decompiled instead and shown in a separate, non-modal window (explicit user request:
     // NOT another tab — the script keeps running/editable behind it, mirroring how dnSpy/ILSpy show a
     // decompiled member without disturbing whatever else is open).
-    // ── Coalesced partial redraws for background analysis results ──
-    private RedrawCoalescer? _redraws;
-    private CodeTextEditor? _redrawsEditor;
-
-    internal int RedrawsRun => _redraws?.RedrawsRun ?? 0; // test observability
-    internal SemanticHighlighter? SemanticHighlighterForTests => _semanticHighlighter;
-
-    private void RequestRedraw(CodeTextEditor editor, (int Start, int End)? changed)
-    {
-        // One coalescer per editor: spans of another editor's text mean nothing here.
-        if (!ReferenceEquals(_redrawsEditor, editor))
-        {
-            _redrawsEditor = editor;
-            _redraws = new RedrawCoalescer(
-                work => Dispatcher.Post(work, DispatcherPriority.Background),
-                () => _disposed ? null : editor.Document?.TextLength,
-                (start, length) => editor.TextArea.TextView.Redraw(start, length));
-        }
-        _redraws!.Request(changed);
-    }
+    internal int RedrawsRun => _analysis?.RedrawsRun ?? 0; // test observability
+    internal SemanticHighlighter? SemanticHighlighterForTests => _analysis?.SemanticHighlighter;
 
     // The rows of the completion window; they are controls, so they stay with the tab.
     private sealed class CompletionRowFactory(EditorsTabItemControl tab, CodeTextEditor editor) : ICompletionItemFactory
@@ -1319,8 +1242,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    // A new navigation request replaces the one still running, as does closing the tab. Not disposed, like
-    // _quickInfoCts: the replaced request may still be reading its token.
+    // A new navigation request replaces the one still running, as does closing the tab. Not disposed: the replaced
+    // request may still be reading its token.
     private CancellationToken BeginNavigation()
     {
         _navigationCts?.Cancel();
@@ -1528,20 +1451,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         UpdateOutputUi();
     }
 
-    // Maps the DAP-facing breakpoint (the ScriptBreakpoint passed to host.AddBreakpoint) back to the
-    // editor-side gutter breakpoint by line, so BreakPointMargin can color it red/green/yellow.
-    private void OnBreakpointVerified(IBreakpoint bp, bool verified, string? message)
-    {
-        var editorBp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == bp.Line);
-        if (editorBp is null) return;
-
-        editorBp.VerificationState = verified
-            ? BreakpointVerificationState.Verified
-            : BreakpointVerificationState.Unverified;
-        editorBp.VerificationMessage = message;
-        State.Editor.InvalidateBreakpoints();
-    }
-
     // Runs on the ILanguageHost.Compiled event, itself raised on the RunAsync's own Task.Run
     // background thread (not the UI thread) — so the disassembly work below happens off-UI already;
     // only the resulting string needs to be marshalled back for display.
@@ -1598,10 +1507,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void OnEditorDocumentChanged(object? sender, EventArgs e)
     {
-        _squiggleRenderer?.Update(State.Editor.Document, []);
-        State.Editor.UpdateScrollMarkers([]);
-        _semanticHighlighter?.Update(State.Editor.Document, []);
-        _inlayHintRenderer?.Update(State.Editor.Document, []);
+        _analysis?.Clear();
     }
 
     // The IL tab is highlighted with the IL grammar in the current editor theme. Installed once, when the
@@ -1693,24 +1599,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             && ReferenceEquals(host, State.RunningHost);
     }
 
-    // Forwards gutter breakpoint edits to the running debug session, if there is one — otherwise
-    // they only take effect the next time RunAsync reads State.Editor.Breakpoints at run start.
-    private void OnGutterBreakpointAdded(object? sender, BreakpointEventArgs e)
-    {
-        if (State.RunningHost is not { } host || !host.Supports(LanguageHostCapabilities.Breakpoints)) return;
-        if (State.SourceFilePath is not { } path) return;
-        var editorBp = State.Editor.Breakpoints.FirstOrDefault(b => b.Line == e.Line);
-        if (editorBp?.IsEnabled != false)
-            BreakpointHostBridge.Add(host, path, e.Line, editorBp?.Condition, editorBp?.HitCondition);
-    }
-
-    private void OnGutterBreakpointRemoved(object? sender, BreakpointEventArgs e)
-    {
-        if (State.RunningHost is not { } host || !host.Supports(LanguageHostCapabilities.Breakpoints)) return;
-        if (State.SourceFilePath is not { } path) return;
-        BreakpointHostBridge.Remove(host, path, e.Line);
-    }
-
     internal void OnBreakpointHit(IBreakpointHitContext context)
     {
         var s = State;
@@ -1722,27 +1610,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             ? context.CallStack[0].Line
             : context.Breakpoint.Line;
 
-        // ToDo: move all of this into DebugPanel
         // Switch to Debugger tab so the user sees variables immediately
         if (_outputTabsControl is { } tc) tc.SelectedIndex = 1;
-
-        _vm.DebugPanel.DebugThreads.Clear();
-        foreach (var t in context.Threads)
-            _vm.DebugPanel.DebugThreads.Add(new DebugThread(t.Id, t.Name));
-
-        _vm.DebugPanel.DebugLocals.Clear();
-        foreach (var v in context.LocalVariables)
-            _vm.DebugPanel.DebugLocals.Add(CreateDebugLocal(v, context));
-
-        _vm.DebugPanel.DebugCallStack.Clear();
-        foreach (var f in context.CallStack)
-            _vm.DebugPanel.DebugCallStack.Add(new DebugFrame(f.MethodName, Path.GetFileName(f.FileName), f.Line));
+        _vm.DebugPanel.ShowHit(context);
 
         // Watch expressions are evaluated against whichever frame/scope is current, so refresh them
         // for the new stop — stale values from the previous breakpoint hit would be misleading.
         foreach (var w in _vm.DebugPanel.WatchExpressions) _ = EvaluateWatchAsync(w);
 
-        _vm.DebugPanel.ShowStop(context);
         if (context.StopReason == DebugStopReason.Exception)
         {
             if (context.Exception is { IsUnhandled: true } unhandled)
@@ -1755,18 +1630,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         }
 
         UpdateOutputUi();
-    }
-
-    private static DebugLocal CreateDebugLocal(IVariableInfo v, IBreakpointHitContext context)
-    {
-        Func<Task<IReadOnlyList<DebugLocal>>>? loader = v.HasChildren
-            ? async () =>
-            {
-                var children = await context.GetChildrenAsync(v.VariablesReference);
-                return children.Select(c => CreateDebugLocal(c, context)).ToList();
-            }
-        : null;
-        return new DebugLocal(v.Name, v.Value, v.TypeName, v.HasChildren, loader);
     }
 
     // ── Editor preferences ────────────────────────────────────────────────────
@@ -1831,11 +1694,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 _intelliSense?.NotifyTextChanged(State.Editor.Text);
             }
 
-            if (_inlayHintRenderer is { } renderer && renderer.IsEnabled != _prefs.CSharp.InlayHintsEnabled)
-            {
-                renderer.IsEnabled = _prefs.CSharp.InlayHintsEnabled;
-                State.Editor.TextArea.TextView.Redraw();
-            }
+            _analysis?.SetInlayHintsEnabled(_prefs.CSharp.InlayHintsEnabled);
 
             // Re-render the lightbulb against the raw candidate lists already on hand — the master
             // switch/exclusion list can change without any new text/caret-move to naturally trigger a
@@ -1914,11 +1773,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         if (intelliSense is null) return;
 
-        Action<string, IReadOnlyList<IDiagnosticInfo>> diagnosticsChanged = (_, _) => { };
-        Action<string, IReadOnlyList<ISemanticToken>> semanticTokensChanged = (_, _) => { };
-        Action<string, IReadOnlyList<ICodeFixInfo>> codeFixesChanged = (_, _) => { };
-        Action<string, IReadOnlyList<IInlayHint>> inlayHintsChanged = (_, _) => { };
-
         editor.MemberTemplatePositionProvider = async (code, offset, ct) =>
         {
             try
@@ -1934,26 +1788,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         editor.AsyncCompletionProvider = new EditorCompletionProvider(
             intelliSense, () => State.Editor.Text, new CompletionRowFactory(this, editor)).ProvideAsync;
 
-        editor.AsyncOverloadProvider = async e =>
-        {
-            var result = await intelliSense.GetSignatureHelpAsync(
-                State.Editor.Text, e.CaretOffset, e.Trigger, e.CancellationToken);
-            if (result is null) return;
-            var isDark = _themeService.CurrentTheme.Editor.IsDark;
-            // Parameter info stays within the editor: most of its width, never wider than a
-            // comfortable reading line, never so narrow a parameter has no room.
-            var maxWidth = Math.Clamp(editor.TextArea.TextView.Bounds.Width * 0.8, 320, 900);
-            // The editor's font is monospace; a character is about 0.6 of its size wide.
-            var charWidth = editor.FontSize * 0.6;
-            foreach (var item in result.Items)
-            {
-                var activeParameter = item.Parameters.ElementAtOrDefault(item.ActiveParameterIndex);
-                var content = OverloadDescription.Of(item.Summary, activeParameter);
-                e.Overloads.Add((
-                    DisplaySegmentRenderer.BuildParameterInfoSignature(item.Signature, isDark, maxWidth, charWidth),
-                    content is null ? null : new TextBlock { Text = content, TextWrapping = TextWrapping.Wrap, MaxWidth = maxWidth }));
-            }
-        };
+        editor.AsyncOverloadProvider = new EditorParameterInfo(
+            intelliSense, editor, () => _themeService.CurrentTheme.Editor.IsDark).ProvideAsync;
 
         editor.AsyncOccurrencesProvider = async e =>
         {
@@ -1965,75 +1801,17 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         };
 
 
-        // ── Live diagnostics (squiggles) ──────────────────────────────────────
-        var squiggleRenderer = _squiggleRenderer = new SquiggleRenderer();
-        editor.TextArea.TextView.BackgroundRenderers.Add(squiggleRenderer);
-
-        diagnosticsChanged = (code, diagnostics) =>
-            Dispatcher.Post(() =>
+        // ── Background analysis: underlines, semantic colours, inlay hints, and the code fixes of the lightbulb ──
+        // Two sources feed the lightbulb: these diagnostic-driven fixes, pushed by every analysis of the text, and the
+        // refactorings at the caret below, pulled on caret moves. Each keeps its last list in _lightbulb, so a change of
+        // the code-fix preferences re-filters both at once (OnPreferencesChanged).
+        var analysis = _analysis = new EditorAnalysisView(editor, intelliSense, _themeService.CurrentTheme.Editor.IsDark,
+            _prefs.CSharp.InlayHintsEnabled, fixes =>
             {
                 if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
-                squiggleRenderer.Update(editor.Document, diagnostics);
-                editor.UpdateScrollMarkers(DiagnosticScrollMarkers.Of(editor.Document, diagnostics));
-                editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
-            });
-
-        // ── Semantic highlighting ─────────────────────────────────────────────
-        var semanticHighlighter = new SemanticHighlighter();
-        semanticHighlighter.SetDark(_themeService.CurrentTheme.Editor.IsDark);
-        editor.TextArea.TextView.LineTransformers.Add(semanticHighlighter);
-        _semanticHighlighter = semanticHighlighter;
-
-        semanticTokensChanged = (code, tokens) =>
-            Dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
-                RequestRedraw(editor, semanticHighlighter.Update(editor.Document, tokens));
-            });
-
-        // ── Inlay hints (inferred `var`/`foreach (var ...)` types) ─────────────
-        var inlayHintRenderer = new InlayHintRenderer { IsEnabled = _prefs.CSharp.InlayHintsEnabled };
-        editor.TextArea.TextView.ElementGenerators.Add(inlayHintRenderer);
-        _inlayHintRenderer = inlayHintRenderer;
-
-        inlayHintsChanged = (code, hints) =>
-            Dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
-                RequestRedraw(editor, inlayHintRenderer.Update(editor.Document, hints));
-            });
-
-        // The decorations follow ONE document's edits; a new document (file reloaded) starts bare
-        // until its first analysis instead of borrowing the old document's offsets.
-
-        // ── Code fixes (lightbulb: real Roslyn CodeFixProviders + CodeRefactoringProviders) ─────
-        // Two independent sources feed the same lightbulb margin: diagnostic-driven
-        // fixes (CodeFixesChanged, pushed from NotifyTextChanged's background pass whenever the text
-        // changes) and caret-position-driven refactorings (GetRefactoringsAsync, pulled below on
-        // caret move — a refactoring isn't tied to any diagnostic, so it has no reason to recompute
-        // just because the text changed elsewhere in the document). CodeFixMargin itself is unaware
-        // of the split — it just renders whatever flat list UpdateLightbulb hands it — so each source
-        // keeps its own last-known list here (as instance fields, not locals — OnPreferencesChanged
-        // needs to re-filter+re-render the CURRENT lists the instant the user flips a code-fix
-        // preference, not only on the next keystroke/caret-move) and remerges on every update from
-        // either one.
-
-        codeFixesChanged = (code, fixes) =>
-            Dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
                 _lightbulb.SetDiagnosticFixes(fixes);
                 UpdateLightbulb();
             });
-
-
-        _intelliSenseEventSubscriptions = new IntelliSenseEventSubscriptions(
-            intelliSense, diagnosticsChanged, semanticTokensChanged, codeFixesChanged, inlayHintsChanged);
-        _intelliSenseEventSubscriptions.Attach();
 
         // ── Refactorings (lightbulb: real Roslyn CodeRefactoringProviders) ──────
         var refactoringRequests = _refactoringRequests = new RefactoringRequests(intelliSense, _timings.RefactoringDebounce);
@@ -2088,218 +1866,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         };
         editor.TextChanged += _intelliSenseTextChangedHandler;
 
-        // ── Quick Info tooltips on hover ──────────────────────────────────────
-        ToolTip.SetShowDelay(editor.TextArea.TextView, 0);
-        _quickInfoCts = new CancellationTokenSource();
-        var hoverResolver = new HoverResolver(_debugHover, intelliSense);
-
-        _quickInfoPointerMovedHandler = (_, e) =>
-        {
-            // An open value tip stays while the pointer is over its symbol, and is not replaced while
-            // the pointer crosses other text on its way into the tip: it closes after the grace period
-            // unless the pointer gets into it or back onto the symbol.
-            if (_debugTooltipSpan is { } span)
-            {
-                var hovered = editor.GetOffsetFromPoint(e.GetPosition(editor));
-                if (hovered >= span.Start && hovered < span.Start + span.Length)
-                    _debugTooltipCloseCts?.Cancel();
-                else if (_debugTooltipCloseCts is null || _debugTooltipCloseCts.IsCancellationRequested)
-                    ScheduleDebugTooltipClose(editor);
-                return;
-            }
-
-            // Not disposed here — a superseded hover's background Task.Run may still be mid-flight
-            // past this point, and registering/reading against an already-disposed
-            // CancellationTokenSource throws ObjectDisposedException. A
-            // CancellationTokenSource whose WaitHandle is never touched holds no unmanaged
-            // resources, so leaving the old one for the GC is safe.
-            _quickInfoCts?.Cancel();
-            _quickInfoCts = new CancellationTokenSource();
-            _debugTooltipCloseCts?.Cancel();
-            _debugTooltipInside = false;
-            _tooltipGeneration++;
-            var ct = _quickInfoCts.Token;
-            _debugTooltipCloseCts?.Cancel();
-            var (debugGeneration, debugToken) = _debugHover.Begin();
-            var pos = e.GetPosition(editor);
-
-            _ = Task.Run(async () =>
-            {
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, debugToken);
-                var requestCt = linked.Token;
-                try
-                {
-                    await Task.Delay(_timings.QuickInfoHoverDelay, requestCt);
-                    var (request, debugContext) = await Dispatcher.InvokeAsync(() =>
-                    {
-                        var context = State.CurrentDebugCtx;
-                        return (new HoverRequest(editor.Text, editor.GetOffsetFromPoint(pos), editor.IdentifierChars, context,
-                            DebugHoverController.Capture(context),
-                            squiggleRenderer.Diagnostics.Select(HoverDiagnostic.Of).ToArray(),
-                            () => ReferenceEquals(context, State.CurrentDebugCtx)), context);
-                    });
-                    if (request.Offset < 0 || ct.IsCancellationRequested) return;
-
-                    var hover = await hoverResolver.ResolveAsync(request, requestCt);
-
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        if (_disposed || ct.IsCancellationRequested || !_debugHover.IsCurrent(debugGeneration) ||
-                            !ReferenceEquals(debugContext, State.CurrentDebugCtx)) return;
-
-                        if (hover is DebugValueHover value)
-                        {
-                            _debugTooltipSpan = (value.SymbolStart, value.Symbol.Length);
-                            editor.SetHoverTokenHighlight(value.SymbolStart, value.Symbol.Length,
-                                ThemeBrush("Invoklet.Editor.HoverHighlightBrush", new SolidColorBrush(Color.FromArgb(55, 90, 140, 210))));
-                            ToolTip.SetTip(editor.TextArea.TextView, null);
-                            ShowDebugValuePopup(editor, value.SymbolStart,
-                                BuildDebugHoverContent(value.Value, debugContext, debugToken, value.Symbol));
-                            return;
-                        }
-
-                        // Built here, not in the resolver — DisplaySegmentRenderer creates Avalonia controls,
-                        // which must happen on the UI thread, unlike the rest of this background task.
-                        object? content = hover switch
-                        {
-                            DiagnosticHover diagnostic => diagnostic.Message,
-                            QuickInfoHover quickInfo => DisplaySegmentRenderer.BuildWithSummary(
-                                quickInfo.Info.Signature, quickInfo.Info.Summary, _themeService.CurrentTheme.Editor.IsDark),
-                            _ => null,
-                        };
-                        ToolTip.SetTip(editor.TextArea.TextView, content);
-                    });
-                }
-                catch (OperationCanceledException)
-                {
-                }
-            });
-        };
-        editor.TextArea.TextView.PointerMoved += _quickInfoPointerMovedHandler;
-
-        _quickInfoPointerExitedHandler = (_, _) =>
-        {
-            _quickInfoCts?.Cancel();
-            ScheduleDebugTooltipClose(editor);
-        };
-        editor.TextArea.TextView.PointerExited += _quickInfoPointerExitedHandler;
+        // ── Quick Info and debugger values on hover ───────────────────────────
+        _hover = new EditorHover(editor, intelliSense, _timings, () => State.CurrentDebugCtx, () => analysis.Diagnostics,
+            () => _themeService.CurrentTheme.Editor.IsDark);
     }
 
-    private void InvalidateHoverTooltip()
-    {
-        _debugTooltipInside = false;
-        _debugTooltipSpan = null;
-        _tooltipGeneration++;
-        _debugHover.Cancel();
-        State.Editor.ClearHoverTokenHighlight();
-        ToolTip.SetTip(State.Editor.TextArea.TextView, null);
-        if (_debugValuePopup is { } popup)
-        {
-            popup.IsOpen = false;
-            ((ISetLogicalParent)popup).SetParent(null);
-            _debugValuePopup = null;
-        }
-    }
-
-    // Just below the hovered symbol's line, like the completion window.
-    private void ShowDebugValuePopup(CodeTextEditor editor, int symbolStart, Control content)
-    {
-        if (_debugValuePopup is { } previous)
-        {
-            previous.IsOpen = false;
-            ((ISetLogicalParent)previous).SetParent(null);
-        }
-        var textView = editor.TextArea.TextView;
-        var location = editor.Document.GetLocation(symbolStart);
-        var position = textView.GetVisualPosition(new TextViewPosition(location), VisualYPosition.LineBottom)
-            - textView.ScrollOffset;
-        var popup = _debugValuePopup = new Popup
-        {
-            PlacementTarget = textView,
-            InheritsTransform = true,
-            Placement = PlacementMode.AnchorAndGravity,
-            PlacementAnchor = PopupAnchor.TopLeft,
-            PlacementGravity = PopupGravity.BottomRight,
-            HorizontalOffset = position.X,
-            VerticalOffset = position.Y,
-            IsLightDismissEnabled = false,
-            Focusable = false,
-            Child = content,
-        };
-        ((ISetLogicalParent)popup).SetParent(TopLevel.GetTopLevel(editor));
-        popup.IsOpen = true;
-    }
-
-    private void ScheduleDebugTooltipClose(CodeTextEditor editor)
-    {
-        _debugTooltipCloseCts?.Cancel();
-        var cts = _debugTooltipCloseCts = new CancellationTokenSource();
-        _ = CloseAfterGraceAsync(editor, cts.Token, _tooltipGeneration, State.CurrentDebugCtx);
-    }
-
-    private async Task CloseAfterGraceAsync(CodeTextEditor editor, CancellationToken token,
-        long generation, IBreakpointHitContext? context)
-    {
-        try
-        {
-            await Task.Delay(_timings.DebugTooltipCloseGrace, token);
-            if (_disposed || token.IsCancellationRequested) return;
-            await Dispatcher.InvokeAsync(() =>
-            {
-                if (_disposed || token.IsCancellationRequested || _debugTooltipInside ||
-                    generation != _tooltipGeneration || !ReferenceEquals(context, State.CurrentDebugCtx)) return;
-                InvalidateHoverTooltip();
-            });
-        }
-        catch (OperationCanceledException) { }
-    }
-
-    private Control BuildDebugHoverContent(IVariableInfo root, IBreakpointHitContext? context,
-        CancellationToken token, string symbol)
-    {
-        var tip = new DebugValueTip(CreateDebugHoverLocal(root, context, token, symbol));
-        tip.PointerEntered += OnDebugTooltipPointerEntered;
-        tip.PointerExited += OnDebugTooltipPointerExited;
-        return tip;
-    }
-
-    // Like the Locals panel's rows (CreateDebugLocal), but members are fetched only while this tip's
-    // stop is current, at most MaxChildren of them and within the child timeout.
-    private DebugLocal CreateDebugHoverLocal(IVariableInfo variable, IBreakpointHitContext? context,
-        CancellationToken token, string? name = null)
-    {
-        Func<Task<IReadOnlyList<DebugLocal>>>? loader = variable.HasChildren && context is not null
-            ? async () =>
-            {
-                if (!ReferenceEquals(context, State.CurrentDebugCtx)) return [];
-                var children = await _debugHover.LoadChildrenAsync(context, variable, token);
-                return children.Select(c => CreateDebugHoverLocal(c, context, token)).ToList();
-            }
-        : null;
-        return new DebugLocal(string.IsNullOrEmpty(variable.Name) ? name ?? "" : variable.Name,
-            variable.Value, variable.TypeName, loader is not null, loader);
-    }
-
-    private void OnDebugTooltipPointerEntered(object? sender, PointerEventArgs e)
-    {
-        if (_disposed) return;
-        _debugTooltipInside = true;
-        _debugTooltipCloseCts?.Cancel();
-    }
-
-    private void OnDebugTooltipPointerExited(object? sender, PointerEventArgs e)
-    {
-        if (_disposed) return;
-        _debugTooltipInside = false;
-        ScheduleDebugTooltipClose(State.Editor);
-    }
-
-    private static IBrush ThemeBrush(string key, IBrush fallback)
-    {
-        var app = Application.Current;
-        return app?.TryGetResource(key, app.ActualThemeVariant, out var value) == true
-            && value is IBrush brush ? brush : fallback;
-    }
+    private void InvalidateHoverTooltip() => _hover?.Invalidate();
 
     // Applies a language's lexical/syntactic conventions (ILanguageHostFactory.EditorProfile) to the
     // language-agnostic CodeTextEditor — triggers/identifier chars/brace pairs/indentation used to be
@@ -2369,55 +1941,15 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void SetDocumentContent(CodeTextEditor editor, string? filePath)
     {
-        string content;
-        MdRunDocument? rpad = null;
-
-        if (_vm.RestoredRecovery is { } recovered)
-        {
-            rpad = recovered.Document is null ? null : MdRunDocument.FromSnapshot(recovered.Document);
-            content = recovered.EditorText;
-            State.DocumentParseError = recovered.ParseError;
-            _vm.DiskState = recovered.BaselineKnown ? new ScriptFileState(recovered.DiskHash?.ToArray()) : null;
-            _vm.RequiresBaselineConfirmation = !recovered.BaselineKnown;
-            if (filePath is not null)
-                State.OutputDirectory = _buildCache.EnsureOutputDirectory(filePath, EnsureWorkDirectory());
-        }
-        else if (filePath is null && _vm.Example is { } example)
-        {
-            // An example: an untitled, editable copy of its whole document — the code, its front
-            // matter and the Markdown around it, which Save As writes out — never the original.
-            var parsed = MdRunParser.Parse(example.Text);
-            rpad = parsed.Document;
-            content = rpad?.RunCode ?? "";
-        }
-        else if (filePath is null)
-        {
-            // Deferred creation ("tab lifecycle") — a brand-new tab is genuinely
-            // empty, not the old "Hello, RPad!" sample, and stays in-memory only until the user does
-            // Save/Save As. It still gets a real (in-memory) MdRunDocument built from the language/kind
-            // chosen in NewFileKindDialog (_vm.NewFileLanguage/NewFileKind) rather than staying null —
-            // that's what lets the toolbar's kind combobox, IntelliSense's kind-aware analysis, and
-            // Run/Debug all already behave correctly for the chosen language/kind before the first
-            // save, the same as they do for a file freshly loaded from disk.
-            // Empty, except that a Program starts with its Main skeleton.
-            content = _registry.NewScriptCode(_vm.NewFileLanguage, _vm.NewFileKind, _prefs.Editor.IndentationUnit);
-            rpad = MdRunParser.TryParse(MdRunWriter.NewFile(
-                "", title: "Untitled", language: _vm.NewFileLanguage, kind: _vm.NewFileKind));
-        }
-        else if (File.Exists(filePath))
-        {
-            (content, rpad) = ReadScript(File.ReadAllBytes(filePath));
-
-            // Allocate/reuse this file's persistent build directory now, at open time, rather than
-            // lazily on first Run — see EnsureWorkDirectory/BuildRunOptions for how it's consumed.
+        var opened = ScriptOpening.Open(_vm.RestoredRecovery, filePath, _vm.Example, _vm.NewFileLanguage, _vm.NewFileKind,
+            () => _registry.NewScriptCode(_vm.NewFileLanguage, _vm.NewFileKind, _prefs.Editor.IndentationUnit),
+            File.Exists, File.ReadAllBytes);
+        TakeScript(opened);
+        // The build folder of a script with a file is allocated at open time rather than on the first run (see EnsureWorkDirectory).
+        if (filePath is not null && opened.Source is ScriptSource.Recovered or ScriptSource.File)
             State.OutputDirectory = _buildCache.EnsureOutputDirectory(filePath, EnsureWorkDirectory());
-        }
-        else
-        {
-            content = "";
-            // A file that appears later was made by someone else: saving must not replace it unasked.
-            if (filePath is not null) _vm.DiskState = ScriptFileState.Absent;
-        }
+        var content = opened.Text;
+        var rpad = opened.Document;
 
         ApplyDocument(rpad);
 
@@ -2458,31 +1990,19 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         UpdateProjectInfoBlock();
     }
 
-    // The script in a file's exact bytes, which become what later saves compare the file with. An
-    // invalid document comes back as the whole file and no MdRunDocument, and says why in the output.
-    private (string Content, MdRunDocument? Document) ReadScript(byte[] bytes)
+    // What the tab holds of its script besides the text: why it is no valid document, shown in the output when it is a file just
+    // read, and what is known of the file on disk.
+    private void TakeScript(OpenedScript script)
     {
-        _vm.DiskState = ScriptFileState.Of(bytes);
-        _vm.RequiresBaselineConfirmation = false;
-        var raw = DecodeScript(bytes);
-        var parsed = MdRunParser.Parse(raw);
-        // Invalid document: show the whole file as-is instead of default metadata —
-        // WriteFile's no-MdRunDocument branch then saves it back verbatim, and RunAsync refuses it.
-        State.DocumentParseError = parsed.Error;
-        if (parsed.Error is { } error)
+        State.DocumentParseError = script.ParseError;
+        _vm.DiskState = script.DiskState;
+        _vm.RequiresBaselineConfirmation = script.RequiresBaselineConfirmation;
+        if (script.Source == ScriptSource.File && script.ParseError is { } error)
         {
             State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(InvalidDocumentMessage(error))}</div>");
             SetStatus("Invalid document", "Invoklet.Status.ErrorBrush");
             UpdateOutputUi();
         }
-        return (parsed.Document?.RunCode ?? raw, parsed.Document);
-    }
-
-    // Decoded as File.ReadAllText does.
-    private static string DecodeScript(byte[] bytes)
-    {
-        using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
     }
 
     // Makes rpad the tab's document: the toolbar, IntelliSense and the baseline that tells a
@@ -2564,12 +2084,14 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // This tab's editor services, grammar and snippets are its language's; a script that is now
         // in another language needs a tab of its own.
         var language = State.MdRunDocument?.FrontMatter.Language ?? MdRunLanguage.CSharp;
-        if (MdRunParser.TryParse(DecodeScript(bytes))?.FrontMatter.Language is { } newLanguage && newLanguage != language)
+        var read = ScriptOpening.Read(bytes);
+        if (read.Document?.FrontMatter.Language is { } newLanguage && newLanguage != language)
             return DiskReload.OtherLanguage;
 
-        var (content, rpad) = ReadScript(bytes);
+        TakeScript(read);
+        var content = read.Text;
         _vm.DeclinedDiskState = null;
-        ApplyDocument(rpad);
+        ApplyDocument(read.Document);
         // Usings that are gone from the header must leave IntelliSense too.
         RefreshIntelliSenseUsings();
 
@@ -3028,19 +2550,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         frontMatter is null ? null
             : GeneratedConnections.For(frontMatter.Connections, frontMatter.Language, frontMatter.Packages.Keys, _connectionDrivers,
                 _connectionSchemas?.Cache, ScriptDirectory, readSchemaFromDisk: false);
-
-    private sealed class ScriptBreakpoint(
-        string fileName,
-        int line,
-        string? condition,
-        string? hitCondition = null)
-        : IBreakpoint
-    {
-        public string FileName { get; } = fileName;
-        public int Line { get; set; } = line;
-        public string? Condition { get; } = condition;
-        public string? HitCondition { get; } = hitCondition;
-    }
 }
 
 /// <summary>How <see cref="EditorsTabItemControl.ReloadFromDisk"/> ended.</summary>

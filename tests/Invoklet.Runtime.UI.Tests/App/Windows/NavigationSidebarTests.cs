@@ -363,9 +363,10 @@ public sealed class NavigationSidebarTests : IDisposable
         Settle();
         Assert.Equal(["Getting started", "Output", "Debugging"], vm.SampleTree.Select(n => n.Title));
         Assert.All(vm.SampleTree, folder => Assert.True(folder.IsFolder));
-        Assert.Equal(["quick-start.inv", "expression-kind.inv", "program-kind.inv"], vm.SampleTree[0].Children!.Select(c => c.Id));
+        Assert.Equal(["quick-start.inv", "expression-kind.inv", "program-kind.inv", "vb-quick-start.inv", "vb-program-kind.inv"],
+            vm.SampleTree[0].Children!.Select(c => c.Id));
         var rows = Named<TreeView>(window, "SampleTree").GetVisualDescendants().OfType<TreeViewItem>().ToList();
-        Assert.Equal("Getting started folder, 3 items", global::Avalonia.Automation.AutomationProperties.GetName(rows[0]));
+        Assert.Equal("Getting started folder, 5 items", global::Avalonia.Automation.AutomationProperties.GetName(rows[0]));
     }
 
     // Opening and folding bundles leaves the file tree's selection and the editor tabs alone.

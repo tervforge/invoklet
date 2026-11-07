@@ -32,6 +32,7 @@ public static class ExampleScripts
     private static readonly string[] Order =
     [
         "getting-started/quick-start.inv", "getting-started/expression-kind.inv", "getting-started/program-kind.inv",
+        "getting-started/vb-quick-start.inv", "getting-started/vb-program-kind.inv",
         "output/products-overview.inv", "output/live-output.inv",
         "debugging/debugging-loop.inv",
     ];
