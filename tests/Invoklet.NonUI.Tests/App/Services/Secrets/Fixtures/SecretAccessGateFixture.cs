@@ -1,4 +1,5 @@
 using Invoklet.Contracts;
+using Invoklet.NonUI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.Preferences;
 using Invoklet.Services.Secrets;
@@ -6,9 +7,16 @@ using Moq;
 
 namespace Invoklet.NonUI.Tests.App.Services.Secrets.Fixtures;
 
-// The gate over fake settings; the user's answer to the question is Answer, and every question asked is in Asked.
+// The gate over fake settings; the user's answer to the question is Answer, and every question asked is in Asked. The UI thread is
+// Dispatcher: whether the question was asked and the settings saved on it is in AskedOnUiThread and SavedOnUiThread.
 internal sealed class SecretAccessGateFixture
 {
+    public QueuedDispatcher Dispatcher { get; } = new();
+
+    public bool? AskedOnUiThread { get; private set; }
+
+    public bool? SavedOnUiThread { get; private set; }
+
     public SecretsSettings Settings { get; } = new();
 
     public Mock<IPreferencesService> Preferences { get; } = new();
@@ -33,7 +41,11 @@ internal sealed class SecretAccessGateFixture
     // What the script's file holds, as its SHA-256: changed by the test as another program would; nothing is read from the disk.
     public string? FileContents { get; set; } = "AAAA";
 
-    public SecretAccessGateFixture() => Preferences.SetupGet(p => p.Secrets).Returns(Settings);
+    public SecretAccessGateFixture()
+    {
+        Preferences.SetupGet(p => p.Secrets).Returns(Settings);
+        Preferences.Setup(p => p.Save()).Callback(() => SavedOnUiThread = Dispatcher.CheckAccess());
+    }
 
     public SecretAccess Request(string secret = "billing", bool isSave = false, bool unsaved = false, SecretChange change = SecretChange.None) =>
         new(unsaved ? null : ScriptPath, secret, isSave, change);
@@ -41,6 +53,7 @@ internal sealed class SecretAccessGateFixture
     public SecretAccessGate CreateSut() => new(Preferences.Object, (script, secret, isSave, token) =>
     {
         Asked.Add((script, secret, isSave));
+        AskedOnUiThread = Dispatcher.CheckAccess();
         StoppedWhileAsking?.Cancel();
         if (OpenQuestion is { } open) return open.Task;
         return Task.FromResult(token.IsCancellationRequested ? SecretAccessChoice.Deny : Answer);
@@ -48,7 +61,7 @@ internal sealed class SecretAccessGateFixture
     {
         ChangesAsked.Add((script, secret, remove));
         return Task.FromResult(AllowChange);
-    });
+    }, Dispatcher);
 
     /// <summary>The SHA-256 (hex) of <paramref name="bytes"/>, as the gate keeps a file's contents.</summary>
     public static string HashOf(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));

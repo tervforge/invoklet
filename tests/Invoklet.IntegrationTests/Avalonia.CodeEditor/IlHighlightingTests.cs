@@ -11,6 +11,7 @@ using Invoklet.Avalonia.CodeTextEditor.Highlighting;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Format.MdRun;
+using Invoklet.IntegrationTests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
@@ -147,7 +148,7 @@ public class IlHighlightingTests
     private static readonly ActiveTheme Light = new(new InterfaceTheme("Light", ThemeVariant.Light, false), new EditorTheme("Light+", ThemeName.LightPlus, false));
     private static readonly ActiveTheme Dark = new(new InterfaceTheme("Dark", ThemeVariant.Dark, true), new EditorTheme("Dark+", ThemeName.DarkPlus, true));
 
-    private static (EditorsTabItemControl Tab, Window Host) OpenTab()
+    private static (EditorsTabItemControl Tab, Window Host) OpenTab(IDispatcher? dispatcher = null)
     {
         var prefs = new Mock<IPreferencesService>();
         prefs.Setup(p => p.Editor).Returns(new EditorSettings());
@@ -160,7 +161,8 @@ public class IlHighlightingTests
         themeService.Setup(t => t.CurrentTheme).Returns(Dark);
         var vm = new EditorTabItemViewModel(null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var tab = new EditorsTabItemControl(vm, themeService.Object, new Mock<IWindowService>().Object,
-            new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense: null, new Mock<IBuildCacheService>().Object);
+            new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense: null, new Mock<IBuildCacheService>().Object,
+            dispatcher: dispatcher);
         var host = new Window { Width = 900, Height = 600, Content = tab };
         host.Styles.Add(new InvokletTheme());
         host.Show();
@@ -174,9 +176,9 @@ public class IlHighlightingTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static (EditorsTabItemControl Tab, TextEditor IlOutput, Window Host) OpenIlTab()
+    private static (EditorsTabItemControl Tab, TextEditor IlOutput, Window Host) OpenIlTab(IDispatcher? dispatcher = null)
     {
-        var (tab, host) = OpenTab();
+        var (tab, host) = OpenTab(dispatcher);
         ShowIlTab(tab);
         return (tab, tab.GetVisualDescendants().OfType<TextEditor>().Single(e => e.Name == "IlOutput"), host);
     }
@@ -227,23 +229,22 @@ public class IlHighlightingTests
     [AvaloniaFact]
     public async Task LargeIl_Should_BeAttachedOnceOnTheUiThread_AndStayHighlighted()
     {
-        var (tab, ilOutput, host) = OpenIlTab();
+        // The worker that disassembles is "another thread": the UI thread is a queue the test runs.
+        var ui = new QueuedDispatcher();
+        var (tab, ilOutput, host) = OpenIlTab(ui);
         try
         {
             var il = string.Concat(Enumerable.Repeat(Il, 50_000));
             var documents = 0;
-            var documentChangedOnUiThread = false;
-            ilOutput.DocumentChanged += (_, _) =>
-            {
-                documents++;
-                documentChangedOnUiThread = Dispatcher.UIThread.CheckAccess();
-            };
+            ilOutput.DocumentChanged += (_, _) => documents++;
 
-            await Task.Run(() => tab.AttachIlDocument(il, tab.RunGenerationForTests), TestContext.Current.CancellationToken);
-            Dispatcher.UIThread.RunJobs();
+            tab.AttachIlDocument(il, tab.RunGenerationForTests);
+            var adoptedOnTheWorker = documents;
+            ui.RunPosted();
+            Dispatcher.UIThread.RunJobs(); // the editor lays the adopted document out
 
+            Assert.Equal(0, adoptedOnTheWorker);
             Assert.Equal(1, documents);
-            Assert.True(documentChangedOnUiThread);
             Assert.Equal(100_001, ilOutput.Document.LineCount);
             Assert.Equal(IlGrammar.ScopeName, tab.IlGrammarScope);
             Assert.True(ilOutput.IsReadOnly);
@@ -258,16 +259,17 @@ public class IlHighlightingTests
     [AvaloniaFact]
     public async Task AStaleRunsIl_Should_NotReplaceTheNewerDocument_OrDisturbTheHighlighting()
     {
-        var (tab, ilOutput, host) = OpenIlTab();
+        var ui = new QueuedDispatcher();
+        var (tab, ilOutput, host) = OpenIlTab(ui);
         try
         {
             tab.AttachIlDocument(Il, tab.RunGenerationForTests);
-            Dispatcher.UIThread.RunJobs();
+            ui.RunPosted();
             var current = ilOutput.Document;
             var scope = tab.IlGrammarScope;
 
-            await Task.Run(() => tab.AttachIlDocument("// from an older run\n", tab.RunGenerationForTests - 1), TestContext.Current.CancellationToken);
-            Dispatcher.UIThread.RunJobs();
+            tab.AttachIlDocument("// from an older run\n", tab.RunGenerationForTests - 1);
+            ui.RunPosted();
 
             Assert.Same(current, ilOutput.Document);
             Assert.Equal(Il, ilOutput.Text);

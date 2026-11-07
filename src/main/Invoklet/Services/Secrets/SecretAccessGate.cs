@@ -15,8 +15,10 @@ namespace Invoklet.Services.Secrets;
 /// <param name="confirmChange">Whether an allowed script may replace (or, <c>true</c>, remove) a secret already kept: script name, secret,
 /// removes. Without it, an allowed script changes secrets unasked.</param>
 /// <param name="fingerprint">The SHA-256 (hex) of a file, or null when it can't be read; by default read from the disk.</param>
+/// <param name="dispatcher">The UI thread's dispatcher; by default Avalonia's.</param>
 public sealed class SecretAccessGate(IPreferencesService preferences, Func<string, string, bool, CancellationToken, Task<SecretAccessChoice>> ask,
-    Func<string, string?>? fingerprint = null, Func<string, string, bool, CancellationToken, Task<bool>>? confirmChange = null)
+    Func<string, string?>? fingerprint = null, Func<string, string, bool, CancellationToken, Task<bool>>? confirmChange = null,
+    IDispatcher? dispatcher = null)
 {
     private readonly Func<string, string?> _fingerprint = fingerprint ?? FileFingerprint;
 
@@ -30,7 +32,7 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
 
     // The UI thread's dispatcher, taken where the gate is made (on the UI thread): requests come on other threads, where reading the
     // static Dispatcher.UIThread while it is unset would make that thread the UI thread.
-    private readonly Dispatcher _dispatcher = Dispatcher.UIThread;
+    private readonly IDispatcher _dispatcher = dispatcher ?? Dispatcher.UIThread;
 
     // One question at a time: a script asking for three secrets, or two scripts at once, is asked once per script.
     private readonly SemaphoreSlim _asking = new(1, 1);
@@ -40,7 +42,25 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     /// the settings tells the windows, which update themselves on the thread that owns them.
     /// </summary>
     public Task<bool> MayAccessOnUiThreadAsync(SecretAccess access, CancellationToken cancellationToken)
-        => _dispatcher.InvokeAsync(() => MayAccessAsync(access, cancellationToken));
+    {
+        var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _dispatcher.Post(async () =>
+        {
+            try
+            {
+                answer.TrySetResult(await MayAccessAsync(access, cancellationToken));
+            }
+            catch (OperationCanceledException ex)
+            {
+                answer.TrySetCanceled(ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                answer.TrySetException(ex);
+            }
+        });
+        return answer.Task;
+    }
 
     public async Task<bool> MayAccessAsync(SecretAccess access, CancellationToken cancellationToken)
     {

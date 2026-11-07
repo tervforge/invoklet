@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Format.MdRun;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
@@ -34,7 +35,7 @@ public class PanelTabsTests
         return window;
     }
 
-    private static TabControl OutputTabs(out Window host, string theme = "VsCodeDark")
+    private static TabControl OutputTabs(out Window host, string theme = "VsCodeDark", IDispatcher? dispatcher = null)
     {
         var prefs = new Mock<IPreferencesService>();
         prefs.Setup(p => p.Editor).Returns(new EditorSettings());
@@ -49,7 +50,8 @@ public class PanelTabsTests
             new EditorTheme("Test", TextMateSharp.Grammars.ThemeName.DarkPlus, true)));
         var vm = new EditorTabItemViewModel(null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var tab = new EditorsTabItemControl(vm, themeService.Object, new Mock<IWindowService>().Object,
-            new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense: null, new Mock<IBuildCacheService>().Object);
+            new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense: null, new Mock<IBuildCacheService>().Object,
+            dispatcher: dispatcher);
         host = Host(tab, theme);
         return tab.GetVisualDescendants().OfType<TabControl>().Single(t => t.Name == "OutputTabsControl");
     }
@@ -74,24 +76,28 @@ public class PanelTabsTests
     }
 
     [AvaloniaFact]
-    public async Task CompiledIl_Should_TransferTheWorkerDocumentToTheUiThread()
+    public void CompiledIl_Should_TransferTheWorkerDocumentToTheUiThread()
     {
-        var tabs = OutputTabs(out var host);
+        // The worker that disassembles is "another thread": the UI thread is a queue the test runs.
+        var ui = new QueuedDispatcher();
+        var tabs = OutputTabs(out var host, dispatcher: ui);
         try
         {
             tabs.SelectedIndex = 2;
             var tab = Assert.IsType<EditorsTabItemControl>(host.Content);
             var update = typeof(EditorsTabItemControl).GetMethod("UpdateIlOutput",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-            await Task.Run(() => update.Invoke(tab, [typeof(MdRunDocument).Assembly.Location, 0]), TestContext.Current.CancellationToken);
-            Dispatcher.UIThread.RunJobs();
             var editor = host.GetVisualDescendants().OfType<global::AvaloniaEdit.TextEditor>().Single(e => e.Name == "IlOutput");
+            var empty = editor.Document;
+            update.Invoke(tab, [typeof(MdRunDocument).Assembly.Location, 0]);
+            Assert.Same(empty, editor.Document); // built on the worker, not yet adopted
+            ui.RunPosted();
             Assert.Contains(".class", editor.Text, StringComparison.Ordinal);
             Assert.Contains("MdRunDocument", editor.Text, StringComparison.Ordinal);
             Assert.True(editor.Document.LineCount > 1);
             var current = editor.Document;
-            await Task.Run(() => update.Invoke(tab, [typeof(MdRunDocument).Assembly.Location, -1]), TestContext.Current.CancellationToken);
-            Dispatcher.UIThread.RunJobs();
+            update.Invoke(tab, [typeof(MdRunDocument).Assembly.Location, -1]);
+            ui.RunPosted();
             Assert.Same(current, editor.Document);
         }
         finally { host.Close(); }

@@ -369,4 +369,44 @@ public sealed class SecretAccessGateTests
         Assert.All(results, Assert.True);
         Assert.Single(fixture.Asked);
     }
+
+    // A script's request arrives on a thread of the pool; the question is a dialog, which belongs on the UI thread.
+    [Fact]
+    public async Task MayAccessOnUiThreadAsync_ARequestFromAnotherThread_AsksOnTheUiThread()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var sut = fixture.CreateSut();
+
+        // Act
+        var allowed = sut.MayAccessOnUiThreadAsync(fixture.Request(isSave: true), CancellationToken.None);
+        var askedBeforeTheUiThreadRan = fixture.Asked.Count;
+        fixture.Dispatcher.RunPosted();
+
+        // Assert
+        Assert.Equal(0, askedBeforeTheUiThreadRan);
+        Assert.True(await allowed);
+        Assert.True(fixture.AskedOnUiThread);
+    }
+
+    // Saving Always Allow tells the windows, which update their menus: it must be on the UI thread even when the dialog's answer
+    // comes from elsewhere. Saving from the pool threw, and the script was refused although the user had allowed it.
+    [Fact]
+    public async Task MayAccessOnUiThreadAsync_AnswerFromAnotherThread_SavesOnTheUiThread()
+    {
+        // Arrange
+        var fixture = new SecretAccessGateFixture { OpenQuestion = new TaskCompletionSource<SecretAccessChoice>() };
+        var sut = fixture.CreateSut();
+        var allowed = sut.MayAccessOnUiThreadAsync(fixture.Request(isSave: true), CancellationToken.None);
+        fixture.Dispatcher.RunPosted(); // the question is open
+
+        // Act
+        fixture.OpenQuestion.SetResult(SecretAccessChoice.Always);
+        fixture.Dispatcher.RunPosted();
+
+        // Assert
+        Assert.True(await allowed);
+        Assert.True(fixture.SavedOnUiThread);
+        Assert.Single(fixture.Settings.AllowedScripts);
+    }
 }

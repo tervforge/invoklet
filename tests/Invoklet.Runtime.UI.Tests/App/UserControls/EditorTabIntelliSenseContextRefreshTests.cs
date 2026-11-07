@@ -110,6 +110,9 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
         }
     }
 
+    // A schema is written on whatever thread read it; the tab catches up on its UI thread, a queue the test runs.
+    private readonly QueuedDispatcher _ui = new();
+
     private async Task<T> WithTabAsync<T>(SlowService service, Func<EditorsTabItemControl, ConnectionSchemas, Task<T>> body)
     {
         var drivers = new ConnectionDriverRegistry();
@@ -132,7 +135,7 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
             null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var tab = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object,
             new Mock<ILanguageHostRegistry>().Object, prefs.Object, service.Mock.Object, new Mock<IBuildCacheService>().Object,
-            connectionDrivers: drivers, connectionSchemas: schemas);
+            connectionDrivers: drivers, connectionSchemas: schemas, dispatcher: _ui);
         var host = new Window { Content = tab };
         host.Show();
         try
@@ -188,7 +191,8 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
             await TestWait.WhileAsync(() => service.Entered < 1);
 
             // The schema changes while the first update is still working: the second sees V2.
-            await Task.Run(() => schemas.Cache.Put(Stock, Version(2)), TestContext.Current.CancellationToken);
+            schemas.Cache.Put(Stock, Version(2));
+            _ui.RunPosted();
             await TestWait.WhileAsync(() => service.Entered < 2);
             Assert.True(service.Tokens.First().IsCancellationRequested, "the older update was not cancelled");
 
@@ -208,12 +212,10 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
         await WithTabAsync(service, async (tab, schemas) =>
         {
             service.Gate.Reset();
-            await Task.Run(() =>
-            {
-                schemas.Cache.Put(Stock, Version(2));
-                schemas.Cache.Put(Stock, Version(3));
-                schemas.Cache.Put(Stock, Version(4));
-            }, TestContext.Current.CancellationToken);
+            schemas.Cache.Put(Stock, Version(2));
+            schemas.Cache.Put(Stock, Version(3));
+            schemas.Cache.Put(Stock, Version(4));
+            _ui.RunPosted();
             // Overtaken updates are cancelled and merged, so the number of entries is not fixed:
             // wait until they stop arriving.
             await TestWait.SettleAsync(() => service.Entered);
