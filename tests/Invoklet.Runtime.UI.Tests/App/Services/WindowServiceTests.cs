@@ -45,9 +45,10 @@ public class WindowServiceTests
         Assert.True(factoryCalled);
     }
 
-    // A dialog of a tab in a window of its own opens over that window; with no window in use, over the main one.
+    // The snapshot the rule is given carries what Avalonia says of each window: a tab's window, activated, owns a dialog. The rule itself is
+    // tested without windows (DialogOwnerTests).
     [AvaloniaFact]
-    public void OwnerOf_TheWindowInUse_IsTheOwnerOfADialog()
+    public void OwnerAmong_TheWindowInUse_IsTheOwnerOfADialog()
     {
         var main = new Window();
         var tab = new Window();
@@ -55,24 +56,11 @@ public class WindowServiceTests
         tab.Show();
         tab.Activate();
         Dispatcher.UIThread.RunJobs();
-        Dispatcher.UIThread.RunJobs();
 
-        var owner = WindowService.OwnerOf([main, tab], main);
+        var owner = WindowService.OwnerAmong([main, tab], main);
 
-        Assert.True(tab.IsActive);
         Assert.Same(tab, owner);
         tab.Close();
         main.Close();
-    }
-
-    [AvaloniaFact]
-    public void OwnerOf_NoWindowInUse_IsTheMainWindow()
-    {
-        var main = new Window();
-        var hidden = new Window();
-
-        var owner = WindowService.OwnerOf([main, hidden], main);
-
-        Assert.Same(main, owner);
     }
 }

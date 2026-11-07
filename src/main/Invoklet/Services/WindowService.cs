@@ -51,10 +51,12 @@ public sealed class WindowService : IWindowService
 
     // The window in use owns a dialog: the window of a tab moved out of the main one, or a dialog that opens another. The main window when none is active
     // (the application is in the background).
+    // Taken right before each dialog: which window is active changes as the user works.
     private static Window? Owner =>
-        Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop ? OwnerOf(desktop.Windows, desktop.MainWindow) : null;
+        Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop ? OwnerAmong(desktop.Windows, desktop.MainWindow) : null;
 
-    internal static Window? OwnerOf(IReadOnlyList<Window> windows, Window? main) => windows.LastOrDefault(w => w.IsActive && w.IsVisible) ?? main;
+    internal static Window? OwnerAmong(IReadOnlyList<Window> windows, Window? main) =>
+        DialogOwner.Choose(windows.Select(w => new DialogOwner.Candidate<Window>(w, w.IsActive, w.IsVisible)).ToList(), main);
 
     public async Task ShowDependenciesAsync(IObservable<MdRunFrontMatter?>? frontMatter = null, IObservable<string?>? scriptPath = null)
     {
