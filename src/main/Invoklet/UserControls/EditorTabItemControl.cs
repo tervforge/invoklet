@@ -56,8 +56,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private readonly IThemeService _themeService;
     private readonly IWindowService _windowService;
     internal readonly EditorTabState State;
-    private SemanticHighlighter? _semanticHighlighter;
-    private SquiggleRenderer? _squiggleRenderer;
+    private EditorAnalysisView? _analysis;
     private CancellationTokenSource? _debugTooltipCloseCts;
     private CancellationTokenSource? _quickInfoCts;
     private CancellationTokenSource? _navigationCts;
@@ -77,9 +76,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // A popup, not a ToolTip: Avalonia closes a ToolTip on any mouse press, its own content
     // included, so the value tip's expand buttons could never be clicked.
     private Popup? _debugValuePopup;
-    private InlayHintRenderer? _inlayHintRenderer;
     private IIntelliSenseService? _intelliSense;
-    private IntelliSenseEventSubscriptions? _intelliSenseEventSubscriptions;
     private EditorInteractionSubscriptions? _editorInteractionSubscriptions;
     internal IIntelliSenseService? IntelliSenseForTests => _intelliSense;
     private bool _InvokletAnalyzers;
@@ -359,7 +356,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         State.Editor.SetTheme(theme.Editor.TextMateName);
         _ilHighlighting?.SetTheme(theme.Editor.TextMateName);
-        _semanticHighlighter?.SetDark(theme.Editor.IsDark);
+        _analysis?.SetDark(theme.Editor.IsDark);
         var editorBg = _themeService!.GetBrush("Invoklet.Editor.BackgroundBrush");
 
         if (editorBg is not null)
@@ -861,15 +858,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         if (_quickInfoPointerExitedHandler is { } quickInfoExited)
             State.Editor.TextArea.TextView.PointerExited -= quickInfoExited;
         _refactoringRequests?.Cancel();
-        if (_squiggleRenderer is { } squiggle)
-            State.Editor.TextArea.TextView.BackgroundRenderers.Remove(squiggle);
-        if (_semanticHighlighter is { } semantic)
-            State.Editor.TextArea.TextView.LineTransformers.Remove(semantic);
-        if (_inlayHintRenderer is { } inlay)
-            State.Editor.TextArea.TextView.ElementGenerators.Remove(inlay);
-        _squiggleRenderer = null;
-        _semanticHighlighter = null;
-        _inlayHintRenderer = null;
+        _analysis?.Dispose();
+        _analysis = null;
         _ilHighlighting?.Dispose();
         _ilHighlighting = null;
         State.Editor.Dispose();
@@ -898,8 +888,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // The run owns its CTS until its asynchronous cleanup has finished.
         if (!_run.InProgress) State.RunCts?.Dispose();
         _breakpointDialog?.Close();
-        _intelliSenseEventSubscriptions?.Dispose();
-        _intelliSenseEventSubscriptions = null;
         _intelliSense?.Dispose(); // owned by this tab — see EditorTabsControl.OnTabsCollectionChanged
         GC.SuppressFinalize(this);
     }
@@ -1204,26 +1192,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // so it's decompiled instead and shown in a separate, non-modal window (explicit user request:
     // NOT another tab — the script keeps running/editable behind it, mirroring how dnSpy/ILSpy show a
     // decompiled member without disturbing whatever else is open).
-    // ── Coalesced partial redraws for background analysis results ──
-    private RedrawCoalescer? _redraws;
-    private CodeTextEditor? _redrawsEditor;
-
-    internal int RedrawsRun => _redraws?.RedrawsRun ?? 0; // test observability
-    internal SemanticHighlighter? SemanticHighlighterForTests => _semanticHighlighter;
-
-    private void RequestRedraw(CodeTextEditor editor, (int Start, int End)? changed)
-    {
-        // One coalescer per editor: spans of another editor's text mean nothing here.
-        if (!ReferenceEquals(_redrawsEditor, editor))
-        {
-            _redrawsEditor = editor;
-            _redraws = new RedrawCoalescer(
-                work => Dispatcher.Post(work, DispatcherPriority.Background),
-                () => _disposed ? null : editor.Document?.TextLength,
-                (start, length) => editor.TextArea.TextView.Redraw(start, length));
-        }
-        _redraws!.Request(changed);
-    }
+    internal int RedrawsRun => _analysis?.RedrawsRun ?? 0; // test observability
+    internal SemanticHighlighter? SemanticHighlighterForTests => _analysis?.SemanticHighlighter;
 
     // The rows of the completion window; they are controls, so they stay with the tab.
     private sealed class CompletionRowFactory(EditorsTabItemControl tab, CodeTextEditor editor) : ICompletionItemFactory
@@ -1598,10 +1568,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void OnEditorDocumentChanged(object? sender, EventArgs e)
     {
-        _squiggleRenderer?.Update(State.Editor.Document, []);
-        State.Editor.UpdateScrollMarkers([]);
-        _semanticHighlighter?.Update(State.Editor.Document, []);
-        _inlayHintRenderer?.Update(State.Editor.Document, []);
+        _analysis?.Clear();
     }
 
     // The IL tab is highlighted with the IL grammar in the current editor theme. Installed once, when the
@@ -1831,11 +1798,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 _intelliSense?.NotifyTextChanged(State.Editor.Text);
             }
 
-            if (_inlayHintRenderer is { } renderer && renderer.IsEnabled != _prefs.CSharp.InlayHintsEnabled)
-            {
-                renderer.IsEnabled = _prefs.CSharp.InlayHintsEnabled;
-                State.Editor.TextArea.TextView.Redraw();
-            }
+            _analysis?.SetInlayHintsEnabled(_prefs.CSharp.InlayHintsEnabled);
 
             // Re-render the lightbulb against the raw candidate lists already on hand — the master
             // switch/exclusion list can change without any new text/caret-move to naturally trigger a
@@ -1914,11 +1877,6 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         if (intelliSense is null) return;
 
-        Action<string, IReadOnlyList<IDiagnosticInfo>> diagnosticsChanged = (_, _) => { };
-        Action<string, IReadOnlyList<ISemanticToken>> semanticTokensChanged = (_, _) => { };
-        Action<string, IReadOnlyList<ICodeFixInfo>> codeFixesChanged = (_, _) => { };
-        Action<string, IReadOnlyList<IInlayHint>> inlayHintsChanged = (_, _) => { };
-
         editor.MemberTemplatePositionProvider = async (code, offset, ct) =>
         {
             try
@@ -1965,75 +1923,17 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         };
 
 
-        // ── Live diagnostics (squiggles) ──────────────────────────────────────
-        var squiggleRenderer = _squiggleRenderer = new SquiggleRenderer();
-        editor.TextArea.TextView.BackgroundRenderers.Add(squiggleRenderer);
-
-        diagnosticsChanged = (code, diagnostics) =>
-            Dispatcher.Post(() =>
+        // ── Background analysis: underlines, semantic colours, inlay hints, and the code fixes of the lightbulb ──
+        // Two sources feed the lightbulb: these diagnostic-driven fixes, pushed by every analysis of the text, and the
+        // refactorings at the caret below, pulled on caret moves. Each keeps its last list in _lightbulb, so a change of
+        // the code-fix preferences re-filters both at once (OnPreferencesChanged).
+        var analysis = _analysis = new EditorAnalysisView(editor, intelliSense, _themeService.CurrentTheme.Editor.IsDark,
+            _prefs.CSharp.InlayHintsEnabled, fixes =>
             {
                 if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
-                squiggleRenderer.Update(editor.Document, diagnostics);
-                editor.UpdateScrollMarkers(DiagnosticScrollMarkers.Of(editor.Document, diagnostics));
-                editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
-            });
-
-        // ── Semantic highlighting ─────────────────────────────────────────────
-        var semanticHighlighter = new SemanticHighlighter();
-        semanticHighlighter.SetDark(_themeService.CurrentTheme.Editor.IsDark);
-        editor.TextArea.TextView.LineTransformers.Add(semanticHighlighter);
-        _semanticHighlighter = semanticHighlighter;
-
-        semanticTokensChanged = (code, tokens) =>
-            Dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
-                RequestRedraw(editor, semanticHighlighter.Update(editor.Document, tokens));
-            });
-
-        // ── Inlay hints (inferred `var`/`foreach (var ...)` types) ─────────────
-        var inlayHintRenderer = new InlayHintRenderer { IsEnabled = _prefs.CSharp.InlayHintsEnabled };
-        editor.TextArea.TextView.ElementGenerators.Add(inlayHintRenderer);
-        _inlayHintRenderer = inlayHintRenderer;
-
-        inlayHintsChanged = (code, hints) =>
-            Dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
-                RequestRedraw(editor, inlayHintRenderer.Update(editor.Document, hints));
-            });
-
-        // The decorations follow ONE document's edits; a new document (file reloaded) starts bare
-        // until its first analysis instead of borrowing the old document's offsets.
-
-        // ── Code fixes (lightbulb: real Roslyn CodeFixProviders + CodeRefactoringProviders) ─────
-        // Two independent sources feed the same lightbulb margin: diagnostic-driven
-        // fixes (CodeFixesChanged, pushed from NotifyTextChanged's background pass whenever the text
-        // changes) and caret-position-driven refactorings (GetRefactoringsAsync, pulled below on
-        // caret move — a refactoring isn't tied to any diagnostic, so it has no reason to recompute
-        // just because the text changed elsewhere in the document). CodeFixMargin itself is unaware
-        // of the split — it just renders whatever flat list UpdateLightbulb hands it — so each source
-        // keeps its own last-known list here (as instance fields, not locals — OnPreferencesChanged
-        // needs to re-filter+re-render the CURRENT lists the instant the user flips a code-fix
-        // preference, not only on the next keystroke/caret-move) and remerges on every update from
-        // either one.
-
-        codeFixesChanged = (code, fixes) =>
-            Dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
                 _lightbulb.SetDiagnosticFixes(fixes);
                 UpdateLightbulb();
             });
-
-
-        _intelliSenseEventSubscriptions = new IntelliSenseEventSubscriptions(
-            intelliSense, diagnosticsChanged, semanticTokensChanged, codeFixesChanged, inlayHintsChanged);
-        _intelliSenseEventSubscriptions.Attach();
 
         // ── Refactorings (lightbulb: real Roslyn CodeRefactoringProviders) ──────
         var refactoringRequests = _refactoringRequests = new RefactoringRequests(intelliSense, _timings.RefactoringDebounce);
@@ -2135,7 +2035,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                         var context = State.CurrentDebugCtx;
                         return (new HoverRequest(editor.Text, editor.GetOffsetFromPoint(pos), editor.IdentifierChars, context,
                             DebugHoverController.Capture(context),
-                            squiggleRenderer.Diagnostics.Select(HoverDiagnostic.Of).ToArray(),
+                            analysis.Diagnostics.Select(HoverDiagnostic.Of).ToArray(),
                             () => ReferenceEquals(context, State.CurrentDebugCtx)), context);
                     });
                     if (request.Offset < 0 || ct.IsCancellationRequested) return;
