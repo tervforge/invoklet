@@ -52,7 +52,8 @@ public sealed class OpenApiScriptTests : IDisposable
             }
             catch (HttpListenerException) when (port < 41100) { }
         }
-        _ = Task.Run(Serve);
+        // Asynchronous throughout: it waits for each request without holding a thread.
+        _ = Serve();
     }
 
     public void Dispose()

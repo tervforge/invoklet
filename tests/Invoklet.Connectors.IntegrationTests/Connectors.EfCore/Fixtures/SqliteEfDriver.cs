@@ -25,22 +25,23 @@ internal sealed class SqliteEfDriver : EfCoreConnectionDriver
 
     protected override string? CheckConnectionString(string text) => null;
 
-    // How many reads were started, and a gate a test can hold them at.
+    // How many reads were started, and a gate a test can hold them at: a read waits for it without holding a thread.
+    public SqliteEfDriver() => ReadStartingForTests = () =>
+    {
+        Interlocked.Increment(ref _reads);
+        Started.TrySetResult();
+        return Gate?.Task ?? Task.CompletedTask;
+    };
+
     public int Reads => Volatile.Read(ref _reads);
 
-    public ManualResetEventSlim Started { get; } = new();
+    public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public ManualResetEventSlim? Gate { get; set; }
+    public TaskCompletionSource? Gate { get; set; }
 
     private int _reads;
 
-    protected override void UseProvider(DbContextOptionsBuilder options, string connectionString)
-    {
-        Interlocked.Increment(ref _reads);
-        Started.Set();
-        Gate?.Wait();
-        options.UseSqlite(connectionString);
-    }
+    protected override void UseProvider(DbContextOptionsBuilder options, string connectionString) => options.UseSqlite(connectionString);
 
     protected override void AddDesignTimeServices(IServiceCollection services)
     {

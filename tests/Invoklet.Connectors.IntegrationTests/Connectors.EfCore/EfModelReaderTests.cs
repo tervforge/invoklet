@@ -72,11 +72,11 @@ public sealed class EfModelReaderTests : IDisposable
     public async Task TestAsync_ReadsStillRunning_AreJoinedNotRepeated_AndACancelledCallerStopsWaiting()
     {
         // Arrange
-        using var gate = new ManualResetEventSlim();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var sut = new SqliteEfDriver { Gate = gate };
         var resolved = Resolved(_shop.ConnectionString);
         var first = sut.TestAsync(resolved, TestContext.Current.CancellationToken);
-        await Task.Run(() => sut.Started.Wait(TestContext.Current.CancellationToken), TestContext.Current.CancellationToken);
+        await sut.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
         using var giveUp = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var second = sut.TestAsync(resolved, giveUp.Token);
 
@@ -84,7 +84,7 @@ public sealed class EfModelReaderTests : IDisposable
         await giveUp.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second);
         var third = sut.TestAsync(resolved, TestContext.Current.CancellationToken);
-        gate.Set();
+        gate.SetResult();
         var results = await Task.WhenAll(first, third);
 
         // Assert
@@ -107,15 +107,15 @@ public sealed class EfModelReaderTests : IDisposable
     [Fact]
     public async Task TestAsync_TwoInstancesOfADriver_ShareTheReadThatIsGoing()
     {
-        using var gate = new ManualResetEventSlim();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var first = new SqliteEfDriver { Gate = gate };
         var second = new SqliteEfDriver { Gate = gate };
         var resolved = Resolved(_shop.ConnectionString);
         var started = first.TestAsync(resolved, TestContext.Current.CancellationToken);
-        await Task.Run(() => first.Started.Wait(TestContext.Current.CancellationToken), TestContext.Current.CancellationToken);
+        await first.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
 
         var joined = second.TestAsync(resolved, TestContext.Current.CancellationToken);
-        gate.Set();
+        gate.SetResult();
         await Task.WhenAll(started, joined);
 
         Assert.Equal((1, 0), (first.Reads, second.Reads));
