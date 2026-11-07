@@ -64,7 +64,7 @@ public class ResultsWrapLayoutTests
             var narrow = Ink("<pre>X X</pre>", wrap: true);
             var wide = Ink("<pre>X          X</pre>", wrap: true);
 
-            Assert.Equal(narrow.Height, wide.Height);
+            AssertSameLineHeight(narrow, wide);
             Assert.True(wide.Width > narrow.Width + 30, $"spaces collapsed, ink {wide} vs {narrow}");
         }, CancellationToken.None);
 
@@ -118,7 +118,7 @@ public class ResultsWrapLayoutTests
         {
             var narrow = Ink("<div class=\"out\">X X</div>", wrap: true);
             var wide = Ink("<div class=\"out\">X          X</div>", wrap: true);
-            Assert.Equal(narrow.Height, wide.Height);
+            AssertSameLineHeight(narrow, wide);
             Assert.True(wide.Width > narrow.Width + 30, $"spaces collapsed, ink {wide} vs {narrow}");
         }, CancellationToken.None);
 
@@ -148,6 +148,10 @@ public class ResultsWrapLayoutTests
             window.Close();
         }
     }
+
+    private static void AssertSameLineHeight(Rect first, Rect second)
+        => Assert.True(Math.Abs(first.Height - second.Height) <= 1,
+            $"expected one line with platform rasterization tolerance, ink {first} vs {second}");
 
     // The panel shows its horizontal scroll bar exactly when the laid-out content is wider than the viewport.
     private static bool NeedsHorizontalScroll(string html, bool wrap)

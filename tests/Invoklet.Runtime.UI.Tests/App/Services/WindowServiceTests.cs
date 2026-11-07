@@ -1,4 +1,6 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Invoklet.Services;
 using Invoklet.Windows;
 using Moq;
@@ -41,5 +43,24 @@ public class WindowServiceTests
         await service.ShowPreferencesAsync();
 
         Assert.True(factoryCalled);
+    }
+
+    // The snapshot the rule is given carries what Avalonia says of each window: a tab's window, activated, owns a dialog. The rule itself is
+    // tested without windows (DialogOwnerTests).
+    [AvaloniaFact]
+    public void OwnerAmong_TheWindowInUse_IsTheOwnerOfADialog()
+    {
+        var main = new Window();
+        var tab = new Window();
+        main.Show();
+        tab.Show();
+        tab.Activate();
+        Dispatcher.UIThread.RunJobs();
+
+        var owner = WindowService.OwnerAmong([main, tab], main);
+
+        Assert.Same(tab, owner);
+        tab.Close();
+        main.Close();
     }
 }

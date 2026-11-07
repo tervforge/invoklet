@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
@@ -67,6 +69,95 @@ public class OutputHtmlViewTests
         Assert.Contains(">Team<", view.RenderedHtml);
         Assert.Contains(">P[]<", view.RenderedHtml);
         Assert.Equal(html, vm.Content);
+    }
+
+    private const string OuterWithFoldedInner = """<div class="dp-box" data-dp-node="o"><div class="dp-count">P[1]</div><table class="dp-table"><thead><tr><th class="dp-th">Home</th></tr></thead><tbody><tr><td class="dp-td"><div class="dp-box" data-dp-node="i" data-dp-collapsed="1"><div class="dp-type">A</div><table class="dp-table"><thead><tr><th class="dp-th">City</th></tr></thead><tbody><tr><td class="dp-td">Oslo</td></tr></tbody></table></div></td></tr></tbody></table></div>""";
+
+    private static async Task<(Window Window, OutputHtmlView View)> ShowFocusedAsync(string content)
+    {
+        var view = new OutputHtmlView();
+        var vm = new OutputHtmlViewModel();
+        vm.Append(content);
+        view.DataContext = vm;
+        var window = new Window { Width = 600, Height = 300, Content = view };
+        window.Show();
+        await FlushPendingApply();
+        window.UpdateLayout();
+        view.FindControl<global::Invoklet.Avalonia.HtmlRenderer.HtmlPanel>("OutputHtml")!.Focus(NavigationMethod.Tab);
+        return (window, view);
+    }
+
+    [AvaloniaFact]
+    public async Task Tab_InThePanel_GoesThroughTheArrowsAndMenusInOrder()
+    {
+        var (window, view) = await ShowFocusedAsync(OuterWithFoldedInner);
+
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+        Assert.Equal("invoklet-node:o", view.KeyboardLinkForTests);
+        Assert.True(view.KeyboardRingShownForTests);
+
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+        Assert.Equal("invoklet-box:o", view.KeyboardLinkForTests);
+
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.Shift);
+        Assert.Equal("invoklet-node:o", view.KeyboardLinkForTests);
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(PhysicalKey.Enter)]
+    [InlineData(PhysicalKey.Space)]
+    public async Task EnterOrSpace_OnAnArrow_FoldsItsTableAndStaysOnIt(PhysicalKey key)
+    {
+        var (window, view) = await ShowFocusedAsync(OuterWithFoldedInner);
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+
+        window.KeyPressQwerty(key, RawInputModifiers.None);
+        window.UpdateLayout();
+
+        Assert.DoesNotContain(">Home<", view.RenderedHtml);
+        Assert.Equal("invoklet-node:o", view.KeyboardLinkForTests);
+        Assert.True(view.KeyboardRingShownForTests);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Enter_OnANestedArrow_OpensIt()
+    {
+        var (window, view) = await ShowFocusedAsync(OuterWithFoldedInner);
+        Assert.DoesNotContain("Oslo", view.RenderedHtml);
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+        Assert.Equal("invoklet-node:i", view.KeyboardLinkForTests);
+
+        window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+
+        Assert.Contains("Oslo", view.RenderedHtml);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Tab_PastTheLastLink_LeavesThePanelAndHidesTheRing()
+    {
+        var (window, view) = await ShowFocusedAsync("<div>no tables</div>");
+
+        window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+
+        Assert.Null(view.KeyboardLinkForTests);
+        Assert.False(view.KeyboardRingShownForTests);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Enter_WithoutAFocusedLink_DoesNothing()
+    {
+        var (window, view) = await ShowFocusedAsync(OuterWithFoldedInner);
+
+        window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+
+        Assert.Contains(">Home<", view.RenderedHtml);
+        window.Close();
     }
 
     // A dump of a plain value has no box, and the setting reaches it too.

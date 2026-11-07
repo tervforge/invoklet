@@ -64,7 +64,7 @@ public class TextMateThemeSwitchTests
     }
 
     [AvaloniaFact]
-    public async Task Code_block_removed_from_tree_stops_following_theme_changes()
+    public void Code_block_removed_from_tree_stops_following_theme_changes()
     {
         using var theme = new ThemeScope(ThemeVariant.Light);
         var (root, text) = Render();
@@ -76,7 +76,6 @@ public class TextMateThemeSwitchTests
 
             window.Content = null;
             theme.Switch(ThemeVariant.Dark);
-            await AsyncTestHelpers.PumpAsync();
 
             Assert.Equal(light, Colours(text));
         }

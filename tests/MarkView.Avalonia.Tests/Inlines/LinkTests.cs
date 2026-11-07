@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
@@ -132,7 +133,7 @@ public class LinkTests : RenderTestBase
     }
 
     [AvaloniaFact]
-    public async Task Reattaching_while_a_load_is_in_flight_does_not_start_a_second_load()
+    public void Reattaching_while_a_load_is_in_flight_does_not_start_a_second_load()
     {
         var loader = new ControlledLoader("test://");
         var (root, _) = RenderImage("![a](test://a.png)", loader);
@@ -142,7 +143,9 @@ public class LinkTests : RenderTestBase
             window.Show();
             window.Content = null;
             window.Content = root;
-            await AsyncTestHelpers.PumpAsync();
+            // A load starts as the image is attached: a second one would be asked for by now, after the layout passes that attach it.
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
 
             Assert.Single(loader.Requests);
         }

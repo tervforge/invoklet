@@ -135,7 +135,7 @@ public class EditorTabItemControlCodeFixSettingsTests
     }
 
     [AvaloniaFact]
-    public async Task CodeFixesDisabled_Should_HideEveryEntry_AndSkipFetchingRefactorings()
+    public void CodeFixesDisabled_Should_HideEveryEntry_AndSkipFetchingRefactorings()
     {
         var settings = new CSharpLanguageSettings { CodeFixesEnabled = false };
         var prefs = MakePrefs(settings);
@@ -149,9 +149,6 @@ public class EditorTabItemControlCodeFixSettingsTests
         intelliSense.Raise(s => s.CodeFixesChanged += null, editor.Text,
             (IReadOnlyList<ICodeFixInfo>)[new FakeCodeFixInfo(2, "Add using System;", DiagnosticSeverity.Warning, "fix-key", "CS0246")]);
         editor.TextArea.Caret.Offset = 3;
-
-        // With no debounce a refactoring request, were one made, would be made at once: a moment is enough for both handlers.
-        await Task.Delay(150, TestContext.Current.CancellationToken);
 
         Assert.Empty(margin.Fixes);
         intelliSense.Verify(

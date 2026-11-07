@@ -466,7 +466,7 @@ public sealed class HtmlContainerInt : IDisposable
     /// </summary>
     public string SelectedText
     {
-        get { return _selectionHandler.GetSelectedText(); }
+        get { return _selectionHandler?.GetSelectedText(); }
     }
 
     /// <summary>
@@ -508,8 +508,11 @@ public sealed class HtmlContainerInt : IDisposable
     /// </summary>
     /// <param name="htmlSource">the html to init with, init empty if not given</param>
     /// <param name="baseCssData">optional: the stylesheet to init with, init default if not given</param>
+    private SelectionHandler.KeptSelection _keptSelection;
+
     public void SetHtml(string htmlSource, CssData baseCssData = null)
     {
+        _keptSelection = _selectionHandler?.Keep();
         Clear();
         if (!string.IsNullOrEmpty(htmlSource))
         {
@@ -652,6 +655,12 @@ public sealed class HtmlContainerInt : IDisposable
                 _root.PerformLayout(g);
             }
 
+            if (_keptSelection != null)
+            {
+                _selectionHandler?.Resume(_keptSelection);
+                _keptSelection = null;
+            }
+
             if (!_loadComplete)
             {
                 _loadComplete = true;
@@ -699,7 +708,8 @@ public sealed class HtmlContainerInt : IDisposable
         try
         {
             if (_selectionHandler != null)
-                _selectionHandler.HandleMouseDown(parent, OffsetByScroll(location), IsMouseInContainer(location));
+                // A drag can start in the empty part of the panel, below or beside the content.
+                _selectionHandler.HandleMouseDown(parent, OffsetByScroll(location), IsMouseInContainer(location) || parent.LeftMouseButton);
         }
         catch (Exception ex)
         {
@@ -719,7 +729,12 @@ public sealed class HtmlContainerInt : IDisposable
 
         try
         {
-            if (_selectionHandler != null && IsMouseInContainer(location))
+            // Released in the empty part of the panel, a drag still ends.
+            if (_selectionHandler != null && !IsMouseInContainer(location))
+            {
+                _selectionHandler.HandleMouseUp(parent, e.LeftButton);
+            }
+            else if (_selectionHandler != null)
             {
                 var ignore = _selectionHandler.HandleMouseUp(parent, e.LeftButton);
                 if (!ignore && e.LeftButton)
@@ -775,7 +790,8 @@ public sealed class HtmlContainerInt : IDisposable
         try
         {
             var loc = OffsetByScroll(location);
-            if (_selectionHandler != null && IsMouseInContainer(location))
+            // A drag goes on in the empty part of the panel too.
+            if (_selectionHandler != null && (IsMouseInContainer(location) || parent.LeftMouseButton))
                 _selectionHandler.HandleMouseMove(parent, loc);
 
             if (_hoverBoxes != null)

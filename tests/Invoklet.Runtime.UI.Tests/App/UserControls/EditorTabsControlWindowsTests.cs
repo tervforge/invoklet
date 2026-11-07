@@ -118,7 +118,7 @@ public class EditorTabsControlWindowsTests
 
         // Act
         fixture.ViewModel.NewMdRunFile();
-        await other.TabsReadyForTests();
+        await sut.TabsReadyForTests(); // the new tab is the main window's
         Dispatcher.UIThread.RunJobs();
 
         // Assert

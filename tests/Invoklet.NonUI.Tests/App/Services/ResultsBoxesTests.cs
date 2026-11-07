@@ -185,6 +185,41 @@ public sealed class ResultsBoxesTests
         Assert.Contains("Ann", page);
     }
 
+    private static readonly string[] Links = ["invoklet-node:a", "https://example.com", "invoklet-box:a", "invoklet-table:0"];
+
+    [Theory]
+    [InlineData(null, true, "invoklet-node:a")]
+    [InlineData("invoklet-node:a", true, "invoklet-box:a")]
+    [InlineData("invoklet-box:a", true, "invoklet-table:0")]
+    [InlineData("invoklet-table:0", true, null)]
+    [InlineData(null, false, "invoklet-table:0")]
+    [InlineData("invoklet-box:a", false, "invoklet-node:a")]
+    [InlineData("invoklet-node:a", false, null)]
+    [InlineData("invoklet-node:gone", true, "invoklet-node:a")]
+    public void NextLink_FromALink_GoesOnAndLeavesAtTheEnds(string? current, bool forward, string? expected)
+    {
+        // Arrange (the arguments)
+
+        // Act
+        var next = ResultsBoxes.NextLink(Links, current, forward);
+
+        // Assert
+        Assert.Equal(expected, next);
+    }
+
+    [Fact]
+    public void NextLink_NoLinkOfATable_IsNull()
+    {
+        // Arrange
+        string[] links = ["https://example.com"];
+
+        // Act
+        var next = ResultsBoxes.NextLink(links, null, true);
+
+        // Assert
+        Assert.Null(next);
+    }
+
     [Fact]
     public void Show_ABoxWithoutATable_HasNoMenu()
     {

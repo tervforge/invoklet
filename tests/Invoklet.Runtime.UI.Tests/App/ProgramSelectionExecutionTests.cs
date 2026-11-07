@@ -155,8 +155,8 @@ public sealed class ProgramSelectionExecutionTests : IDisposable
         var text = ctrl.State.Editor.Text;
         ctrl.State.Editor.Select(text.IndexOf(selected, StringComparison.Ordinal), selected.Length);
         var sdk = new DotnetSdkProvider().Get().First();
+        // The run's task is its boundary: once it is done, its status and output are on the tab and nothing writes to its folder any more.
         await ctrl.RunSelectionAsync(sdk).WaitAsync(TimeSpan.FromMinutes(3));
-        for (var i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(25); }
     }
 
     // A real compile and process: the selected statement inside Main runs, with the script's args;

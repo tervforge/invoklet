@@ -101,7 +101,8 @@ public class TextAnchorTest
     [OneTimeSetUp]
     public void FixtureSetup()
     {
-        int seed = Environment.TickCount;
+        // Fixed: with the time as the seed a failure could not be run again; another seed is another test.
+        const int seed = 1031;
         Console.WriteLine("TextAnchorTest Seed: " + seed);
         rnd = new Random(seed);
     }
@@ -325,6 +326,9 @@ public class TextAnchorTest
             if ((i % 5) == 0)
                 GC.Collect();
         }
+
+        // As many characters went in as came out, and the anchors made on the way did not break the document.
+        Assert.That(document.TextLength, Is.EqualTo(1000));
     }
 
     [Test]

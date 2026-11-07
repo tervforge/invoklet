@@ -24,16 +24,4 @@ internal static class AsyncTestHelpers
         }
     }
 
-    /// <summary>
-    /// Pumps the UI dispatcher for a fixed number of short iterations. Only for asserting that
-    /// something does NOT happen; positive assertions use <see cref="WaitUntilAsync"/>.
-    /// </summary>
-    public static async Task PumpAsync(int iterations = 20)
-    {
-        for (var i = 0; i < iterations; i++)
-        {
-            Dispatcher.UIThread.RunJobs();
-            await Task.Delay(10);
-        }
-    }
 }

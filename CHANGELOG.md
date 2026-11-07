@@ -3,6 +3,24 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.11.8] — 2026-11-07
+
+### Changed
+
+- The results use the same kind of code font as the editor, instead of Courier New on macOS and Linux.
+- Copying a string from the results copies its value, without the quotes shown around it, and the cells of a
+  table are separated by tabs, so they stay in their columns when pasted into a spreadsheet.
+- The arrow and the menu of each table in the results can be reached with Tab and used with Enter or Space.
+- Text in the results is drawn evenly: long lines wrap between words, and only a token too long for a line is broken.
+
+### Fixed
+
+- A script that finishes on its own when stopped no longer loses the last lines it prints on the way out.
+- A dialog opened from a tab in a window of its own appears over that window, not over the main one.
+- Selecting text in the results starts where the button went down, takes the letter it starts on, and can
+  start or end in the empty part of the panel. Pressing on selected text starts a new selection instead of
+  dragging it. New output from a running script no longer takes the selection away or scrolls from it.
+
 ## [0.11.7] — 2026-11-07
 
 ### Added
@@ -1239,3 +1257,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.9.5]: https://github.com/tervforge/invoklet/releases/tag/v0.9.5
 [0.11.6]: https://github.com/tervforge/invoklet/releases/tag/v0.11.6
 [0.11.7]: https://github.com/tervforge/invoklet/releases/tag/v0.11.7
+[0.11.8]: https://github.com/tervforge/invoklet/releases/tag/v0.11.8

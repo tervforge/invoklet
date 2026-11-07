@@ -114,7 +114,8 @@ internal sealed class GraphicsAdapter : RGraphics
         var lineConv = (FormattedLineAdapter)line;
 
         point.X += rtl ? lineConv.Size.Width : 0;
-        var (currentX, currentY) = Utils.ConvertRound(point) + new Point(lineConv.TextLine.Start, 0);
+        // The line stays on a whole pixel, but not the position along it: cut to whole pixels, letters of one width lie at uneven distances.
+        var (currentX, currentY) = new Point(point.X + lineConv.TextLine.Start, Math.Floor(point.Y));
 
         foreach (var run in lineConv.TextLine.TextRuns)
         {

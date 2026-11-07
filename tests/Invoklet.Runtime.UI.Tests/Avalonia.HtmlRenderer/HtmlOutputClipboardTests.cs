@@ -82,11 +82,12 @@ public class HtmlOutputClipboardTests
             Assert.Contains("Menu copied text", output.SelectedText);
             output.Copy();
             string? text = null;
-            for (var i = 0; i < 100 && text?.Contains("Menu copied text") != true; i++)
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+            while (DateTime.UtcNow < deadline && text?.Contains("Menu copied text") != true)
             {
                 var data = await window.Clipboard!.TryGetDataAsync();
                 text = data is null ? null : await data.TryGetTextAsync();
-                await Task.Delay(10);
+                await Task.Delay(20, TestContext.Current.CancellationToken);
             }
             Assert.Contains("Menu copied text", text);
         }

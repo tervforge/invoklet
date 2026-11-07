@@ -30,7 +30,8 @@ public class TextSegmentTreeTest
     [OneTimeSetUp]
     public void FixtureSetup()
     {
-        int seed = Environment.TickCount;
+        // Fixed: with the time as the seed a failure could not be run again; another seed is another test.
+        const int seed = 3049;
         Console.WriteLine("TextSegmentTreeTest Seed: " + seed);
         rnd = new Random(seed);
     }

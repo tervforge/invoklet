@@ -144,6 +144,13 @@ public class KeyboardFocusTests
         window.Show();
         vm.OpenExample(vm.Examples[0]);
         await SettleAsync();
+        // Everything the route goes through is there first: the trees load in the background and the example's tab builds its
+        // toolbar and editor after it opens. On a slow machine Tab otherwise met a tree being rebuilt, or the editor before the toolbar.
+        await TestWait.WhileAsync(() => vm.ConnectionNavigation is { IsLoaded: false });
+        await WaitForControlAsync<TreeViewItem>(window);
+        await WaitForControlAsync<ToolbarComboBox>(window);
+        await WaitForControlAsync<global::AvaloniaEdit.Editing.TextArea>(window);
+        await SettleAsync();
         // From the top of the side panel: its other section headers and its trees come before the document tab.
         var start = await WaitForControlAsync<ToggleButton>(window, IsSectionHeader);
         // A click folds the section; the second one opens it again, so its tree is still there for Tab.
@@ -153,11 +160,12 @@ public class KeyboardFocusTests
         Assert.False(FocusFrames.IsShown(start));
 
         var seen = new List<Control>();
-        for (var i = 0; i < 20; i++)
+        while (true)
         {
             Tab(window);
             var focused = (Control)window.FocusManager!.GetFocusedElement()!;
             if (focused is global::AvaloniaEdit.Editing.TextArea) break; // the editor keeps Tab for indenting
+            Assert.DoesNotContain(focused, seen); // the route must reach the editor rather than cycle
             seen.Add(focused);
             Assert.True(FocusFrames.IsShown(focused), $"{focused.GetType().Name} has no keyboard-focus frame");
             Assert.Single(FocusFrames.Of(focused));

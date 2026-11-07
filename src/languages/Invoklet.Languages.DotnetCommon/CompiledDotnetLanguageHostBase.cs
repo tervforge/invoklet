@@ -63,6 +63,8 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
     // Of this host only; a test shortens it.
     internal TimeSpan StopGracePeriod { get; set; } = DefaultStopGracePeriod;
 
+    private static readonly TimeSpan OutputAfterExit = TimeSpan.FromSeconds(2);
+
     private volatile bool _scriptListensForStop;
 
     private readonly CompiledDotnetLanguageHostOptions _options;
@@ -290,6 +292,10 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             try
             {
                 await process.WaitForExitAsync(grace.Token);
+                // It finished: what it printed on the way out is still in the pipes. The run ends when they are read, or a moment later
+                // if another process keeps them open.
+                run.CancelAfter(OutputAfterExit);
+                return;
             }
             catch (OperationCanceledException)
             {

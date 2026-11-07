@@ -250,6 +250,8 @@ public class MarkdownViewerSourceTests
             viewer.Source = new Uri(new Uri(path).AbsoluteUri + "#deep");
 
             await AsyncTestHelpers.WaitUntilAsync(() => scrollViewer.Offset.Y > 0);
+
+            Assert.True(scrollViewer.Offset.Y > 0, "the viewer did not scroll to the heading");
         }
         finally
         {

@@ -94,9 +94,9 @@ internal sealed class SelectionHandler : IDisposable
     private bool _mouseDownInControl;
 
     /// <summary>
-    /// used to handle drag & drop
+    /// Where the left button went down: a selection starts there, whatever point the first move reports.
     /// </summary>
-    private bool _mouseDownOnSelectedWord;
+    private RPoint _pressPoint;
 
     /// <summary>
     /// is the cursor on the control has been changed by the selection handler
@@ -107,11 +107,6 @@ internal sealed class SelectionHandler : IDisposable
     /// used to know if double click selection is requested
     /// </summary>
     private DateTime _lastMouseDown;
-
-    /// <summary>
-    /// used to know if drag & drop was already started not to execute the same operation over
-    /// </summary>
-    private object _dragDropData;
 
     #endregion
 
@@ -175,21 +170,15 @@ internal sealed class SelectionHandler : IDisposable
             if (isMouseInContainer)
             {
                 _mouseDownInControl = true;
-                _isDoubleClickSelect = (DateTime.Now - _lastMouseDown).TotalMilliseconds < 400;
+                // A second press elsewhere soon after the first is a new selection, not a double click.
+                _isDoubleClickSelect = (DateTime.Now - _lastMouseDown).TotalMilliseconds < 400
+                    && Math.Abs(loc.X - _pressPoint.X) <= 4 && Math.Abs(loc.Y - _pressPoint.Y) <= 4;
                 _lastMouseDown = DateTime.Now;
-                _mouseDownOnSelectedWord = false;
+                _pressPoint = loc;
 
                 if (_root.HtmlContainer.IsSelectionEnabled && parent.LeftMouseButton)
                 {
-                    var word = DomUtils.GetCssBoxWord(_root, loc);
-                    if (word != null && word.Selected)
-                    {
-                        _mouseDownOnSelectedWord = true;
-                    }
-                    else
-                    {
-                        clear = true;
-                    }
+                    clear = true;
                 }
                 else if (parent.RightMouseButton)
                 {
@@ -223,13 +212,6 @@ internal sealed class SelectionHandler : IDisposable
             if (_root.HtmlContainer.IsSelectionEnabled)
             {
                 ignore = _inSelection;
-                if (!_inSelection && leftMouseButton && _mouseDownOnSelectedWord)
-                {
-                    ClearSelection();
-                    parent.Invalidate();
-                }
-
-                _mouseDownOnSelectedWord = false;
                 _inSelection = false;
             }
             ignore = ignore || (DateTime.Now - _lastMouseDown > TimeSpan.FromSeconds(1));
@@ -245,17 +227,8 @@ internal sealed class SelectionHandler : IDisposable
     {
             if (_root.HtmlContainer.IsSelectionEnabled && _mouseDownInControl && parent.LeftMouseButton)
             {
-                if (_mouseDownOnSelectedWord)
-                {
-                    // make sure not to start drag-drop on click but when it actually moves as it fucks mouse-up
-                    if ((DateTime.Now - _lastMouseDown).TotalMilliseconds > 200)
-                        StartDragDrop(parent);
-                }
-                else
-                {
-                    HandleSelection(parent, loc, !_isDoubleClickSelect);
-                    _inSelection = _selectionStart != null && _selectionEnd != null && (_selectionStart != _selectionEnd || _selectionStartIndex != _selectionEndIndex);
-                }
+                HandleSelection(parent, loc, !_isDoubleClickSelect);
+                _inSelection = _selectionStart != null && _selectionEnd != null && (_selectionStart != _selectionEnd || _selectionStartIndex != _selectionEndIndex);
             }
             else
             {
@@ -384,9 +357,6 @@ internal sealed class SelectionHandler : IDisposable
     /// </summary>
     public void ClearSelection()
     {
-            // clear drag and drop
-            _dragDropData = null;
-
             ClearSelection(_root);
 
             _selectionStartOffset = -1;
@@ -418,45 +388,87 @@ internal sealed class SelectionHandler : IDisposable
     /// <param name="control">the control hosting the html to invalidate</param>
     /// <param name="loc">the mouse location</param>
     /// <param name="allowPartialSelect">true - partial word selection allowed, false - only full words selection</param>
+    /// <summary>What is selected and whether the button is down, for a new document with the same text at its start: output of a running script is appended by replacing the page.</summary>
+    internal sealed record KeptSelection(
+        int Start, string StartText, int StartIndex, double StartOffset,
+        int End, string EndText, int EndIndex, double EndOffset,
+        bool Backward, bool All, bool Pressed, RPoint PressPoint, DateTime LastPress, bool WholeWords);
+
+    public KeptSelection Keep()
+    {
+        var words = AllWords(_root).ToList();
+        var (start, end) = (_selectionStart == null ? -1 : words.IndexOf(_selectionStart), _selectionEnd == null ? -1 : words.IndexOf(_selectionEnd));
+        var all = _selectionStart == null && words.Any(w => w.Selected);
+        if (start < 0 && end < 0 && !all && !_mouseDownInControl) return null;
+        return new KeptSelection(
+            start, start < 0 ? null : words[start].AsString, _selectionStartIndex, _selectionStartOffset,
+            end, end < 0 ? null : words[end].AsString, _selectionEndIndex, _selectionEndOffset,
+            _backwardSelection, all, _mouseDownInControl, _pressPoint, _lastMouseDown, _isDoubleClickSelect);
+    }
+
+    /// <summary>Takes up what <see cref="Keep"/> kept, once the words are laid out. A selection whose words are not there any more is gone.</summary>
+    public void Resume(KeptSelection kept)
+    {
+        (_mouseDownInControl, _pressPoint, _lastMouseDown, _isDoubleClickSelect) = (kept.Pressed, kept.PressPoint, kept.LastPress, kept.WholeWords);
+        var words = AllWords(_root).ToList();
+        if (kept.All)
+        {
+            foreach (var word in words) word.Selection = this;
+            return;
+        }
+        if (kept.Start < 0 || kept.Start >= words.Count || words[kept.Start].AsString != kept.StartText) return;
+        _selectionStart = words[kept.Start];
+        (_selectionStartIndex, _selectionStartOffset, _selectionStartPoint) = (kept.StartIndex, kept.StartOffset, kept.PressPoint);
+        if (kept.End < 0 || kept.End >= words.Count || words[kept.End].AsString != kept.EndText) return;
+        _selectionEnd = words[kept.End];
+        (_selectionEndIndex, _selectionEndOffset, _backwardSelection) = (kept.EndIndex, kept.EndOffset, kept.Backward);
+        SelectWordsInRange(_root, _backwardSelection ? _selectionEnd : _selectionStart, _backwardSelection ? _selectionStart : _selectionEnd);
+    }
+
+    private static IEnumerable<CssRect> AllWords(CssBox box)
+    {
+        foreach (var word in box.Words) yield return word;
+        foreach (var child in box.Boxes)
+            foreach (var word in AllWords(child)) yield return word;
+    }
+
+    // The word a point belongs to: the one under it, or the nearest on the nearest line, so that a drag can start or end in empty space.
+    private CssRect WordNear(RPoint loc)
+    {
+        var lineBox = DomUtils.GetCssLineBox(_root, loc) ?? DomUtils.GetNearestCssLineBox(_root, loc);
+        if (lineBox == null || lineBox.Words.Count == 0) return null;
+
+        var word = DomUtils.GetCssBoxWord(lineBox, loc);
+        if (word != null) return word;
+
+        // Above a line is before its start and below it past its end, as in any text.
+        if (loc.Y < lineBox.Words[0].Top) return lineBox.Words[0];
+        if (loc.Y > lineBox.LineBottom) return lineBox.Words[lineBox.Words.Count - 1];
+
+        CssRect nearest = null;
+        var distance = double.MaxValue;
+        foreach (var candidate in lineBox.Words)
+        {
+            var d = loc.X < candidate.Left ? candidate.Left - loc.X : loc.X > candidate.Right ? loc.X - candidate.Right : 0;
+            if (d < distance) (nearest, distance) = (candidate, d);
+        }
+        return nearest;
+    }
+
     private void HandleSelection(RControl control, RPoint loc, bool allowPartialSelect)
     {
-            // get the line under the mouse or nearest from the top
-            var lineBox = DomUtils.GetCssLineBox(_root, loc);
-            if (lineBox != null)
+            var word = WordNear(loc);
             {
-                // get the word under the mouse
-                var word = DomUtils.GetCssBoxWord(lineBox, loc);
-
-                // if no word found under the mouse use the last or the first word in the line
-                if (word == null && lineBox.Words.Count > 0)
-                {
-                    if (loc.Y > lineBox.LineBottom)
-                    {
-                        // under the line
-                        word = lineBox.Words[lineBox.Words.Count - 1];
-                    }
-                    else if (loc.X < lineBox.Words[0].Left)
-                    {
-                        // before the line
-                        word = lineBox.Words[0];
-                    }
-                    else if (loc.X > lineBox.Words[lineBox.Words.Count - 1].Right)
-                    {
-                        // at the end of the line
-                        word = lineBox.Words[lineBox.Words.Count - 1];
-                    }
-                }
-
                 // if there is matching word
                 if (word != null)
                 {
                     if (_selectionStart == null)
                     {
-                        // on start set the selection start word
-                        _selectionStartPoint = loc;
-                        _selectionStart = word;
+                        // it starts where the button went down: the first move can already be far from there
+                        _selectionStartPoint = _pressPoint;
+                        _selectionStart = WordNear(_pressPoint) ?? word;
                         if (allowPartialSelect)
-                            CalculateWordCharIndexAndOffset(control, word, loc, true);
+                            CalculateWordCharIndexAndOffset(control, _selectionStart, _pressPoint, true);
                     }
 
                     // always set selection end word
@@ -496,21 +508,6 @@ internal sealed class SelectionHandler : IDisposable
             {
                 ClearSelection(childBox);
             }
-        }
-
-    /// <summary>
-    /// Start drag & drop operation on the currently selected html segment.
-    /// </summary>
-    /// <param name="control">the control to start the drag & drop on</param>
-    private void StartDragDrop(RControl control)
-    {
-            if (_dragDropData == null)
-            {
-                var html = DomUtils.GenerateHtml(_root, HtmlGenerationStyle.Inline, true);
-                var plainText = DomUtils.GetSelectedPlainText(_root);
-                _dragDropData = control.Adapter.GetClipboardDataObject(html, plainText);
-            }
-            control.DoDragDropCopy(_dragDropData);
         }
 
     /// <summary>
@@ -612,7 +609,7 @@ internal sealed class SelectionHandler : IDisposable
     {
             int selectionIndex;
             double selectionOffset;
-            CalculateWordCharIndexAndOffset(control, word, loc, selectionStart, out selectionIndex, out selectionOffset);
+            CalculateWordCharIndexAndOffset(control, word, loc, out selectionIndex, out selectionOffset);
 
             if (selectionStart)
             {
@@ -636,10 +633,9 @@ internal sealed class SelectionHandler : IDisposable
     /// <param name="control">used to create graphics to measure string</param>
     /// <param name="word">the word to calculate its index and offset</param>
     /// <param name="loc">the location to calculate for</param>
-    /// <param name="inclusive">is to include the first character in the calculation</param>
     /// <param name="selectionIndex">return the index of the char under the location</param>
     /// <param name="selectionOffset">return the offset of the char under the location</param>
-    private static void CalculateWordCharIndexAndOffset(RControl control, CssRect word, RPoint loc, bool inclusive, out int selectionIndex, out double selectionOffset)
+    private static void CalculateWordCharIndexAndOffset(RControl control, CssRect word, RPoint loc, out int selectionIndex, out double selectionOffset)
     {
             selectionIndex = 0;
             selectionOffset = 0f;
@@ -650,22 +646,35 @@ internal sealed class SelectionHandler : IDisposable
                 selectionIndex = -1;
                 selectionOffset = -1;
             }
-            else if (offset > word.Width - word.OwnerBox.ActualWordSpacing || loc.Y > DomUtils.GetCssLineBoxByWord(word).LineBottom)
+            else if (offset >= word.Width || loc.Y > DomUtils.GetCssLineBoxByWord(word).LineBottom)
             {
                 // mouse under the line, to the right of the word - set to the end of the word
                 selectionIndex = word.Text.Length;
                 selectionOffset = word.Width;
             }
-            else if (offset > 0)
+            else if (offset > 0 && loc.Y >= word.Top)
             {
-                // calculate partial word selection
-                int charFit;
-                double charFitWidth;
-                var maxWidth = offset + (inclusive ? 0 : 1.5f * word.LeftGlyphPadding);
-                control.MeasureString(word.AsString, word.OwnerBox.ActualFont, maxWidth, out charFit, out charFitWidth);
+                // The boundary between two characters nearest to the point. Asking the formatter how much fits does not tell it: it always fits one.
+                var text = word.AsString;
+                var font = word.OwnerBox.ActualFont;
+                double WidthOf(int length)
+                {
+                    if (length == 0) return 0;
+                    control.MeasureString(text.Substring(0, length), font, double.MaxValue, out _, out var width);
+                    return width;
+                }
 
-                selectionIndex = charFit;
-                selectionOffset = charFitWidth;
+                var (low, high) = (0, text.Length);
+                while (low < high)
+                {
+                    var middle = (low + high) / 2;
+                    if (WidthOf(middle) < offset) low = middle + 1;
+                    else high = middle;
+                }
+                var after = WidthOf(low);
+                var before = low > 0 ? WidthOf(low - 1) : 0;
+                selectionIndex = low > 0 && offset - before < after - offset ? low - 1 : low;
+                selectionOffset = selectionIndex == low ? after : before;
             }
         }
 

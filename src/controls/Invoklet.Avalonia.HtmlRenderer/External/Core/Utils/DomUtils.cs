@@ -346,6 +346,33 @@ internal sealed class DomUtils
     }
 
     /// <summary>
+    /// The line nearest to a location that lies on none: by height, then along the line.
+    /// </summary>
+    public static CssLineBox GetNearestCssLineBox(CssBox box, RPoint location)
+    {
+        CssLineBox nearest = null;
+        var (bestY, bestX) = (double.MaxValue, double.MaxValue);
+        Visit(box);
+        return nearest;
+
+        void Visit(CssBox current)
+        {
+            if (current == null || current.Display == CssConstants.None || current.Visibility != CssConstants.Visible) return;
+            foreach (var line in current.LineBoxes)
+            {
+                if (line.Words.Count == 0) continue;
+                foreach (var rect in line.Rectangles.Values)
+                {
+                    var y = location.Y < rect.Top ? rect.Top - location.Y : location.Y > rect.Bottom ? location.Y - rect.Bottom : 0;
+                    var x = location.X < rect.Left ? rect.Left - location.X : location.X > rect.Right ? location.X - rect.Right : 0;
+                    if (y < bestY || (y == bestY && x < bestX)) (nearest, bestY, bestX) = (line, y, x);
+                }
+            }
+            foreach (var child in current.Boxes) Visit(child);
+        }
+    }
+
+    /// <summary>
     /// Get css word box under the given sub-tree at the given x,y location.<br/>
     /// the location must be in correct scroll offset.
     /// </summary>
@@ -480,6 +507,26 @@ internal sealed class DomUtils
 
     #region Private methods
 
+    // A string in the results is shown in quotes; what is copied is its value. The text lies in the box of the span or in an anonymous one inside it.
+    private static bool IsQuotedValue(CssBox box)
+    {
+        var owner = box.HtmlTag != null ? box : box.ParentBox;
+        return owner?.GetAttribute("class")?.Contains("dp-string") == true;
+    }
+
+    // Only the quotes that are selected, at the ends of the value: one inside it is the script's.
+    private static void RemoveQuotes(StringBuilder sb, int start, CssBox box)
+    {
+        var (first, last) = (box.Words[0], box.Words[box.Words.Count - 1]);
+        var end = sb.Length - 1;
+        while (end > start && char.IsWhiteSpace(sb[end])) end--;
+        if (last.Selected && last.SelectedEndIndexOffset < 0 && sb[end] is '"' or '\'') sb.Remove(end, 1);
+
+        var begin = start;
+        while (begin < sb.Length && char.IsWhiteSpace(sb[begin])) begin++;
+        if (first.Selected && first.SelectedStartIndex <= 0 && begin < sb.Length && sb[begin] is '"' or '\'') sb.Remove(begin, 1);
+    }
+
     /// <summary>
     /// Get selected plain text of the given html sub-tree.<br/>
     /// Append all the selected words.
@@ -490,6 +537,7 @@ internal sealed class DomUtils
     private static int GetSelectedPlainText(StringBuilder sb, CssBox box)
     {
         int lastWordIndex = 0;
+        var start = sb.Length;
         foreach (var boxWord in box.Words)
         {
             // append the text of selected word (handle partial selected words)
@@ -498,6 +546,11 @@ internal sealed class DomUtils
                 sb.Append(GetSelectedWord(boxWord, true));
                 lastWordIndex = sb.Length;
             }
+        }
+        if (lastWordIndex > 0 && IsQuotedValue(box))
+        {
+            RemoveQuotes(sb, start, box);
+            lastWordIndex = sb.Length;
         }
 
         // empty span box
@@ -527,16 +580,18 @@ internal sealed class DomUtils
             }
 
             // new line for css block
+            if (box.Display == CssConstants.TableRow && sb[sb.Length - 1] == '\t')
+                sb.Length--; // no tab after the last cell of a row
             if (box.Display == CssConstants.Block || box.Display == CssConstants.ListItem || box.Display == CssConstants.TableRow)
             {
                 if (!(box.IsBrElement && sb.Length > 1 && sb[sb.Length - 1] == '\n'))
                     sb.AppendLine();
             }
 
-            // space between table cells
+            // a tab between table cells: pasted into a spreadsheet, they stay in their columns
             if (box.Display == CssConstants.TableCell)
             {
-                sb.Append(' ');
+                sb.Append('\t');
             }
 
             // paragraphs has additional newline for nice formatting

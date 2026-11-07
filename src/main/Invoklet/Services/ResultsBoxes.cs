@@ -36,6 +36,17 @@ internal static partial class ResultsBoxes
     /// <summary>The box whose table a link's menu is for, or null for any other link.</summary>
     public static string? TableLinkOf(string link) => link.StartsWith(TablePrefix, StringComparison.Ordinal) ? link[TablePrefix.Length..] : null;
 
+    /// <summary>The link the Tab key goes to from <paramref name="current"/>, the first or last from none; null past either end, where the key leaves the panel.
+    /// Only what a table of the results offers takes part.</summary>
+    public static string? NextLink(IEnumerable<string> links, string? current, bool forward)
+    {
+        var own = links.Where(l => ToggleOf(l) is not null || TableLinkOf(l) is not null || ResultsTables.TableOf(l) is not null).ToList();
+        if (own.Count == 0) return null;
+        if (current is null || own.IndexOf(current) is var at && at < 0) return forward ? own[0] : own[^1];
+        var next = at + (forward ? 1 : -1);
+        return next >= 0 && next < own.Count ? own[next] : null;
+    }
+
     /// <summary>The page to show. <paramref name="toggled"/> holds the boxes the user turned from how they were written. The title of a table is its
     /// first row, as wide as the table. <paramref name="generatedLabels"/> says whether a label made from a script's source text shows; one the script gave
     /// always does. A dump that loses its label loses the accent bar beside it too. An outermost box with no title has no strip: it is open, with its "…" in the header of its table.</summary>

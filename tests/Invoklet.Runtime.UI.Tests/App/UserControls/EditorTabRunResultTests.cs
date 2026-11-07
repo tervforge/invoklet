@@ -363,11 +363,8 @@ public class EditorTabRunResultTests
         }
     }
 
-    private static async Task RunAsync(EditorsTabItemControl ctrl)
-    {
-        await ctrl.RunAsync(debug: false, Sdk);
-        Dispatcher.UIThread.RunJobs(); // the posted output and failure message
-    }
+    // The run's task is its boundary: its output, its status and the message about its end are on the tab when it is done.
+    private static Task RunAsync(EditorsTabItemControl ctrl) => ctrl.RunAsync(debug: false, Sdk);
 
     [AvaloniaFact]
     public async Task ANonZeroExitCode_Should_FailTheRun_AndShowTheCode_AfterTheScriptsOutput()
