@@ -310,7 +310,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         var csharp = new GatedLanguage("csharp", gate) { Throws = true };
         var logged = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var logger = new Mock<ILogger<EditorsTabItemControl>>();
-        logger.Setup(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(), It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("arrived late")),
+        logger.Setup(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(), It.Is<It.IsAnyType>((state, _) => (state.ToString() ?? string.Empty).Contains("arrived late")),
                 It.IsAny<Exception?>(), It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
             .Callback(new InvocationAction(call => logged.TrySetResult((Exception?)call.Arguments[3])));
         var (tabs, shell, host) = Open(logger.Object, csharp);
