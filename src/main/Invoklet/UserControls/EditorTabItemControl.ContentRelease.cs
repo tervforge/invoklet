@@ -25,9 +25,22 @@ public partial class EditorsTabItemControl
     /// <summary>The last of the writes of the output that were asked for: complete when all of them are done.</summary>
     internal Task OutputWrites => _outputWrites;
 
-    internal Task<T> QueueOutputJobForTests<T>(Func<T> job) => InOutputQueue(job);
+    /// <summary>Test-only: holds the writes queued after it until <paramref name="until"/> completes, as a slow disk would.</summary>
+    internal Task HoldOutputQueueForTests(Task until)
+    {
+        var next = _outputWrites.ContinueWith(_ => until, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        _outputWrites = next;
+        return next;
+    }
 
     internal Task SaveRunOutputForTests() => SaveRunOutput();
+
+    private Task<T> InOutputQueue<T>(Func<Task<T>> write)
+    {
+        var next = _outputWrites.ContinueWith(_ => write(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        _outputWrites = next;
+        return next;
+    }
 
     private Task<T> InOutputQueue<T>(Func<T> write)
     {
@@ -60,13 +73,13 @@ public partial class EditorsTabItemControl
         var folder = State.OutputDirectory;
         var id = _vm.RecoveryId;
 
-        var written = await InOutputQueue(() =>
+        var written = await InOutputQueue(async () =>
         {
             // The output has changed since it was taken (a run ended, the output was cleared): this release is out of date.
             if (Volatile.Read(ref _outputVersion) != generation) return false;
             // The output of a run waits in the folder of that run; only an output without one goes to the spill.
             var keptInFolder = _prefs.Editor.ResultsKeepOutput && folder is not null && SaveRunOutputOf(folder, output);
-            return store.TryWrite(id, new ReleasedContent(text, viewState, keptInFolder ? null : output));
+            return await store.TryWriteAsync(id, new ReleasedContent(text, viewState, keptInFolder ? null : output));
         });
         if (!written || _disposed || _contentReleased || HasRunningProcess || !stillWanted()
             || Volatile.Read(ref _outputVersion) != generation
@@ -248,7 +261,7 @@ public partial class EditorsTabItemControl
         // The editor may have no size yet, and a line can only be scrolled to once it has one. It stays
         // invisible until then, so the text is never seen at the top and then jumping.
         editor.Opacity = 0;
-        Dispatcher.Post(() =>
+        _ui.Post(() =>
         {
             if (_disposed) return;
             editor.UpdateLayout();

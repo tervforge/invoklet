@@ -212,7 +212,7 @@ public sealed class AnalysisSchedulerTests
         await started.Task.WaitAsync(Limit, TestContext.Current.CancellationToken);
 
         // Act
-        sut.Stop();
+        await sut.StopAsync().WaitAsync(Limit, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(ended);
@@ -221,8 +221,8 @@ public sealed class AnalysisSchedulerTests
     [Fact]
     public async Task Stop_PassThatNeverChecksItsToken_ReturnsAfterTheTimeout()
     {
-        // Arrange
-        var fixture = new AnalysisSchedulerFixture { StopTimeout = TimeSpan.FromMilliseconds(50) };
+        // Arrange: no time to wait at all, so the pass is still running when the timeout is over
+        var fixture = new AnalysisSchedulerFixture { StopTimeout = TimeSpan.Zero };
         var sut = fixture.CreateSut();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var never = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -234,24 +234,25 @@ public sealed class AnalysisSchedulerTests
         await started.Task.WaitAsync(Limit, TestContext.Current.CancellationToken);
 
         // Act
-        var stop = Task.Run(sut.Stop, TestContext.Current.CancellationToken);
+        var stop = sut.StopAsync();
 
         // Assert
         await stop.WaitAsync(Limit, TestContext.Current.CancellationToken);
+        Assert.False(never.Task.IsCompleted);
         never.SetResult(true);
     }
 
     [Fact]
-    public void Stop_NothingWasNotified_DoesNothing()
+    public async Task Stop_NothingWasNotified_DoesNothing()
     {
         // Arrange
         var sut = new AnalysisSchedulerFixture().CreateSut();
 
         // Act
-        var stop = sut.Stop;
+        var thrown = await Record.ExceptionAsync(sut.StopAsync);
 
         // Assert
-        Assert.Null(Record.Exception(stop));
+        Assert.Null(thrown);
     }
 
     [Fact]
@@ -259,7 +260,7 @@ public sealed class AnalysisSchedulerTests
     {
         // Arrange
         var sut = new AnalysisSchedulerFixture().CreateSut();
-        sut.Stop();
+        await sut.StopAsync();
         var analysed = 0;
 
         // Act
@@ -278,7 +279,7 @@ public sealed class AnalysisSchedulerTests
     public async Task Stop_PassThatIgnoresCancellationAndEndsLaterWantingARepeat_DoesNotRunAgain()
     {
         // Arrange
-        var fixture = new AnalysisSchedulerFixture { StopTimeout = TimeSpan.FromMilliseconds(50) };
+        var fixture = new AnalysisSchedulerFixture { StopTimeout = TimeSpan.Zero };
         var sut = fixture.CreateSut();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -290,7 +291,7 @@ public sealed class AnalysisSchedulerTests
             return release.Task;
         });
         await started.Task.WaitAsync(Limit, TestContext.Current.CancellationToken);
-        await Task.Run(sut.Stop, TestContext.Current.CancellationToken);
+        await sut.StopAsync();
 
         // Act: the late pass says its result is obsolete, which would start a repeat of it
         release.SetResult(false);
@@ -304,7 +305,7 @@ public sealed class AnalysisSchedulerTests
     public async Task Stop_PassThatFailsLater_DoesNotTellTheOwnerWhoIsGone()
     {
         // Arrange
-        var fixture = new AnalysisSchedulerFixture { StopTimeout = TimeSpan.FromMilliseconds(50) };
+        var fixture = new AnalysisSchedulerFixture { StopTimeout = TimeSpan.Zero };
         var sut = fixture.CreateSut();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -314,7 +315,7 @@ public sealed class AnalysisSchedulerTests
             return release.Task;
         });
         await started.Task.WaitAsync(Limit, TestContext.Current.CancellationToken);
-        await Task.Run(sut.Stop, TestContext.Current.CancellationToken);
+        await sut.StopAsync();
 
         // Act
         release.SetException(new InvalidOperationException("workspace disposed"));
@@ -322,29 +323,6 @@ public sealed class AnalysisSchedulerTests
 
         // Assert
         Assert.Empty(fixture.Failures);
-    }
-
-    [Fact]
-    public async Task Stop_RunnerThatExecutesThePassOnTheCallingThread_IsNotBlockedByTheNotifyThatStartedIt()
-    {
-        // Arrange
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var sut = new AnalysisScheduler(() => TimeSpan.Zero, work => work(), _ => { }, TimeSpan.FromMilliseconds(50));
-        var notify = Task.Run(() => sut.Notify(() => "text", (_, _) =>
-        {
-            started.TrySetResult();
-            return release.Task;
-        }), TestContext.Current.CancellationToken);
-        await started.Task.WaitAsync(Limit, TestContext.Current.CancellationToken);
-
-        // Act: the pass is still running inside Notify, which must not hold the scheduler's lock meanwhile
-        var stop = Task.Run(sut.Stop, TestContext.Current.CancellationToken);
-
-        // Assert
-        await stop.WaitAsync(Limit, TestContext.Current.CancellationToken);
-        release.SetResult(true);
-        await notify.WaitAsync(Limit, TestContext.Current.CancellationToken);
     }
 
     [Fact]

@@ -75,9 +75,11 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
         var intelliSense = new Mock<IIntelliSenseService>();
         var vm = new EditorTabItemViewModel(
             null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
+        // A schema is written on whatever thread read it; the tab catches up on its UI thread, a queue the test runs.
+        var ui = new QueuedDispatcher();
         var tab = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object,
             new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense.Object, new Mock<IBuildCacheService>().Object,
-            connectionDrivers: drivers, connectionSchemas: schemas);
+            connectionDrivers: drivers, connectionSchemas: schemas, dispatcher: ui);
         var host = new Window { Content = tab };
         host.Show();
         try
@@ -88,26 +90,25 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
             await TestWait.SettleAsync(() => intelliSense.Invocations.Count); // and any further ones it started
             intelliSense.Invocations.Clear();
 
-            await Task.Run(() => schemas.Cache.Put(other, new ConnectionSchema("1 service", [], "")),
-                TestContext.Current.CancellationToken);
-            await TestWait.WhileAsync(() => false, TimeSpan.FromMilliseconds(200)); // let a wrong refresh show
-            intelliSense.Verify(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+            schemas.Cache.Put(other, new ConnectionSchema("1 service", [], ""));
+            ui.RunPosted();
+            intelliSense.Verify(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
 
             var previous = tab.ContextRefreshTask;
-            await Task.Run(() => schemas.Cache.Put(listed, new ConnectionSchema("2 services", [], "")),
-                TestContext.Current.CancellationToken);
-            await TestWait.WhileAsync(() => ReferenceEquals(tab.ContextRefreshTask, previous)); // the change reaches the tab on the UI thread
+            schemas.Cache.Put(listed, new ConnectionSchema("2 services", [], ""));
+            Assert.Same(previous, tab.ContextRefreshTask); // nothing before the tab's UI thread runs
+            ui.RunPosted();
+            Assert.NotSame(previous, tab.ContextRefreshTask);
             // The text is analysed again once the new classes are in, which happens off the UI thread.
             await tab.ContextRefreshTask;
-            intelliSense.Verify(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+            intelliSense.Verify(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()), Times.Once);
             intelliSense.Verify(s => s.NotifyTextChanged(It.IsAny<string>()), Times.Once);
 
             tab.Dispose();
             intelliSense.Invocations.Clear();
-            await Task.Run(() => schemas.Cache.Put(listed, new ConnectionSchema("3 services", [], "")),
-                TestContext.Current.CancellationToken);
-            await TestWait.WhileAsync(() => false, TimeSpan.FromMilliseconds(200));
-            Assert.DoesNotContain(intelliSense.Invocations, i => i.Method.Name == nameof(IIntelliSenseService.ApplyExecutionContext));
+            schemas.Cache.Put(listed, new ConnectionSchema("3 services", [], ""));
+            ui.RunPosted();
+            Assert.DoesNotContain(intelliSense.Invocations, i => i.Method.Name == nameof(IIntelliSenseService.ApplyExecutionContextAsync));
         }
         finally { host.Close(); }
     }

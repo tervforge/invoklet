@@ -78,7 +78,7 @@ internal sealed class ScriptContext
 
     // Test-only: called when an execution context request has done its slow lookups and is about to be applied, so a test can hold an
     // older request there while a newer one overtakes it.
-    internal Action<ExecutionRequest>? ExecutionContextResolvedForTests { get; set; }
+    internal Func<ExecutionRequest, Task>? ExecutionContextResolvedForTests { get; set; }
 
     // Shared across every ScriptContext instance (one per tab, see EditorTabsControl.
     // CreateIntelliSenseAsync) — MetadataReferences are immutable and safe to share across unrelated
@@ -187,7 +187,7 @@ internal sealed class ScriptContext
             : [], contract);
     }
 
-    internal void UpdateExecutionContext(ExecutionRequest request) => ApplyExecutionContext(request, CancellationToken.None);
+    internal Task UpdateExecutionContextAsync(ExecutionRequest request) => ApplyExecutionContextAsync(request, CancellationToken.None);
 
     // A request cancelled before it is applied changes nothing: the slow parts (reading the NuGet
     // assets, the targeting pack, the contract assembly lookup) run without the workspace lock, and
@@ -197,7 +197,7 @@ internal sealed class ScriptContext
     //
     // Requests also supersede each other by the order they were made in: one that finishes after a
     // later request has been applied is dropped, whether or not its caller cancelled it.
-    internal void ApplyExecutionContext(ExecutionRequest request, CancellationToken cancellationToken)
+    internal async Task ApplyExecutionContextAsync(ExecutionRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var sequence = Interlocked.Increment(ref _contextRequests);
@@ -221,7 +221,7 @@ internal sealed class ScriptContext
                 _logger.LogDebug(ex, "No cached connection contract available");
             }
         }
-        ExecutionContextResolvedForTests?.Invoke(request);
+        if (ExecutionContextResolvedForTests is { } resolved) await resolved(request);
         lock (_session.SyncLock)
         {
             cancellationToken.ThrowIfCancellationRequested();

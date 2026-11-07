@@ -3,6 +3,13 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.12.0] — 2026-11-07
+
+### Added
+
+- Path Store (Tools → Path Store): named paths on this machine, such as a workspace or a data folder, that a script
+  reads with `Util.GetPath("name")` instead of keeping the path in the script. Works from the window and the command line.
+
 ## [0.11.9] — 2026-11-07
 
 ### Added
@@ -1269,3 +1276,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.7]: https://github.com/tervforge/invoklet/releases/tag/v0.11.7
 [0.11.8]: https://github.com/tervforge/invoklet/releases/tag/v0.11.8
 [0.11.9]: https://github.com/tervforge/invoklet/releases/tag/v0.11.9
+[0.12.0]: https://github.com/tervforge/invoklet/releases/tag/v0.12.0

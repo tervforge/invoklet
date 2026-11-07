@@ -53,6 +53,11 @@ public interface ILanguageHostFactory
     // a service that is returned anyway still belongs to the caller.
     IIntelliSenseService? CreateIntelliSense(CancellationToken cancellationToken) => null;
 
+    // CreateIntelliSense off the caller's thread, which is the UI thread. A language whose start-up can wait without holding a thread
+    // replaces this; it must not block its caller either.
+    Task<IIntelliSenseService?> CreateIntelliSenseAsync(CancellationToken cancellationToken) =>
+        Task.Run(() => CreateIntelliSense(cancellationToken), cancellationToken);
+
     // Prepares what every CreateIntelliSense call shares, so the first document opens fast. Off the UI thread.
     void WarmUpIntelliSense() { }
 
@@ -88,8 +93,8 @@ public interface ILanguageHostRegistry
     string GetDisplayName(string language);
     string? GetCodeForKind(string language, string code, MdRunKind kind, string indent = "    ");
 
-    // See ILanguageHostFactory.CreateIntelliSense; null for a language that isn't registered.
-    IIntelliSenseService? CreateIntelliSense(string language, CancellationToken cancellationToken);
+    // See ILanguageHostFactory.CreateIntelliSenseAsync; null for a language that isn't registered.
+    Task<IIntelliSenseService?> CreateIntelliSenseAsync(string language, CancellationToken cancellationToken);
 
     // Every registered language's ILanguageHostFactory.WarmUpIntelliSense.
     void WarmUpIntelliSense();

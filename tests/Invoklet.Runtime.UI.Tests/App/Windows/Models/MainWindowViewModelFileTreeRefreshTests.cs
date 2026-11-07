@@ -2,6 +2,7 @@ using System.Reflection;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Invoklet.Contracts;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.Preferences;
 using Invoklet.Windows.Models;
@@ -89,63 +90,34 @@ public class MainWindowViewModelFileTreeRefreshTests
         vm.Dispose();
     }
 
-    // Release 0.3.0: Avalonia.Headless resets the static
-    // Dispatcher.UIThread between isolated tests, and the next read creates it on the reading thread.
-    // The watcher debounce's late thread-pool callback used to read it there, making a pool thread
-    // "the UI thread" so the next test's setup failed VerifyAccess. Simulates that reset (Avalonia's
-    // private static field, restored afterwards) and waits for the callback's post without pumping
-    // the UI dispatcher — pumping could recreate the static on this thread and hide the defect.
+    // A watcher event comes on a thread of the pool; the refresh is posted to the UI thread's dispatcher taken at construction, never
+    // to the static Dispatcher.UIThread read there (after Avalonia.Headless resets it, that read made the pool thread "the UI thread").
     [AvaloniaFact]
-    public void LateWatcherCallback_Should_PostToTheCapturedDispatcher_WhenUIThreadWasReset()
+    public void WatcherEvent_FromAnotherThread_RefreshesTheTreeOnTheUiThread()
     {
         var fileSystem = CreateFileSystemMock();
         var walks = 0;
         fileSystem.Setup(f => f.GetFilesTreeAsync(It.IsAny<CancellationToken>()))
-            .Callback(() => Interlocked.Increment(ref walks))
+            .Callback(() => walks++)
             .ReturnsAsync([]);
+        var ui = new QueuedDispatcher();
         var vm = new MainWindowViewModel(
             sdkProviders: [],
             fileSystemService: fileSystem.Object,
             windowService: new Mock<IWindowService>().Object,
             prefs: CreatePrefsMock().Object,
             languageRegistry: new LanguageHostRegistry(),
-            watcherRefreshDebounce: TimeSpan.Zero); // the late pool-thread callback is the subject, not the wait
-        var uiDispatcher = Dispatcher.UIThread;
-        uiDispatcher.RunJobs();
-        var walksBefore = Volatile.Read(ref walks);
-        Assert.False(uiDispatcher.HasJobsWithPriority(DispatcherPriority.Default));
+            watcherRefreshDebounce: TimeSpan.Zero, // the post is the subject, not the wait
+            dispatcher: ui);
+        ui.RunPosted();
+        var walksBefore = walks;
 
-        var uiThreadField = typeof(Dispatcher).GetField("s_uiThread", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.NotNull(uiThreadField);
-        object? recreated;
-        bool posted;
-        try
-        {
-            uiThreadField.SetValue(null, null);
-            Task.Run(() => fileSystem.Raise(f => f.WatcherEvent += null,
-                new FileSystemEventArgs(WatcherChangeTypes.Changed, "/root", "a.inv")));
+        fileSystem.Raise(f => f.WatcherEvent += null, new FileSystemEventArgs(WatcherChangeTypes.Changed, "/root", "a.inv"));
+        var walksBeforeTheUiThreadRan = walks;
+        ui.RunPosted();
 
-            // Either outcome ends the wait: the callback posted to the captured dispatcher, or it read
-            // the static and recreated it on its own thread.
-            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
-            do
-            {
-                recreated = uiThreadField.GetValue(null);
-                posted = uiDispatcher.HasJobsWithPriority(DispatcherPriority.Default);
-                if (recreated is not null || posted) break;
-                Thread.Sleep(1);
-            }
-            while (DateTime.UtcNow < deadline);
-        }
-        finally
-        {
-            uiThreadField.SetValue(null, uiDispatcher);
-        }
-
-        Assert.Null(recreated);
-        Assert.True(posted, "the watcher callback never posted its refresh");
-        uiDispatcher.RunJobs();
-        Assert.True(Volatile.Read(ref walks) > walksBefore, "the posted refresh never ran on the UI dispatcher");
+        Assert.Equal(walksBefore, walksBeforeTheUiThreadRan);
+        Assert.Equal(walksBefore + 1, walks);
 
         vm.Dispose();
     }

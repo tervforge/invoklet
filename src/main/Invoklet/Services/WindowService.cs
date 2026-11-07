@@ -27,6 +27,7 @@ public sealed class WindowService : IWindowService
     private readonly Func<SecretStoreWindow>? _secretStoreWindowFactory;
     private readonly Func<ConnectionsWindow>? _connectionsWindowFactory;
     private readonly Func<AboutWindow>? _aboutWindowFactory;
+    private readonly Func<PathStoreWindow>? _pathStoreWindowFactory;
 
     // preferences: the text editor window's Save/Save As key gestures (the user's keyboard settings);
     // optional, like the Secret Store and Connections windows, so tests constructing a WindowService for other windows
@@ -38,7 +39,8 @@ public sealed class WindowService : IWindowService
         IPreferencesService? preferences = null,
         Func<SecretStoreWindow>? secretStoreWindowFactory = null,
         Func<ConnectionsWindow>? connectionsWindowFactory = null,
-        Func<AboutWindow>? aboutWindowFactory = null)
+        Func<AboutWindow>? aboutWindowFactory = null,
+        Func<PathStoreWindow>? pathStoreWindowFactory = null)
     {
         _dependenciesWindowFactory = dependenciesWindowFactory;
         _preferencesWindowFactory = preferencesWindowFactory;
@@ -47,6 +49,7 @@ public sealed class WindowService : IWindowService
         _secretStoreWindowFactory = secretStoreWindowFactory;
         _connectionsWindowFactory = connectionsWindowFactory;
         _aboutWindowFactory = aboutWindowFactory;
+        _pathStoreWindowFactory = pathStoreWindowFactory;
     }
 
     // The window in use owns a dialog: the window of a tab moved out of the main one, or a dialog that opens another. The main window when none is active
@@ -102,6 +105,9 @@ public sealed class WindowService : IWindowService
 
     public Task ShowSecretStoreAsync()
         => _secretStoreWindowFactory is { } factory ? ShowDialogAsync(factory()) : Task.CompletedTask;
+
+    public Task ShowPathStoreAsync()
+        => _pathStoreWindowFactory is { } factory ? ShowDialogAsync(factory()) : Task.CompletedTask;
 
     public Task ShowConnectionsAsync(string? connectionName = null)
     {

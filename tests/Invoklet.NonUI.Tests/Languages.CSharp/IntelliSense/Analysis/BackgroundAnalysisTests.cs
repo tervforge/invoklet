@@ -44,7 +44,11 @@ public sealed class BackgroundAnalysisTests
         // Arrange
         using var fixture = new BackgroundAnalysisFixture();
         var sut = fixture.CreateSut();
-        sut.SnapshotTakenForTests = fixture.Session.ContextChanged;
+        sut.SnapshotTakenForTests = () =>
+        {
+            fixture.Session.ContextChanged();
+            return Task.CompletedTask;
+        };
 
         // Act
         var current = await sut.AnalyzeAsync("int a = \"x\";", TestContext.Current.CancellationToken);
@@ -78,7 +82,11 @@ public sealed class BackgroundAnalysisTests
         // Arrange
         using var fixture = new BackgroundAnalysisFixture();
         var sut = fixture.CreateSut();
-        sut.SnapshotTakenForTests = sut.Stop;
+        sut.SnapshotTakenForTests = () =>
+        {
+            sut.Stop();
+            return Task.CompletedTask;
+        };
 
         // Act
         var current = await sut.AnalyzeAsync("int a = \"x\";", TestContext.Current.CancellationToken);

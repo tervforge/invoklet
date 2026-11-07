@@ -109,7 +109,7 @@ public partial class EditorsTabItemControl
             return;
         }
         // This control's own Dispatcher, as for the other debounces (see the constructor's note).
-        Dispatcher.Post(() =>
+        _ui.Post(() =>
         {
             if (!ct.IsCancellationRequested && !_disposed) UpdatePreviewNow();
         });

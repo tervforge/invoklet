@@ -550,7 +550,7 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
         if (_registry is not { } registry || language is not { } known || known == MdRunLanguage.Unknown) return null;
         var id = known.ToLanguageId();
 
-        var work = Task.Run(() => registry.CreateIntelliSense(id, cancellationToken), cancellationToken);
+        var work = registry.CreateIntelliSenseAsync(id, cancellationToken);
         // The tab must not wait for a creation that never ends or ignores the cancellation (a language's start-up that hangs would
         // keep the tab, and the splash screen behind it, for ever): after the timeout, or once the tab is closed, it goes on without
         // services, and whatever the creation returns later is disposed by whoever it reaches.
@@ -585,7 +585,13 @@ public partial class EditorTabsControl : UserControl, IDisposable, ITabDiskHost,
     // What a creation returns after nobody is waiting for it any more. A failure to dispose it is logged: nothing else can see it.
     private void DisposeLate(Task<IIntelliSenseService?> late, string language)
     {
-        if (!late.IsCompletedSuccessfully) return;
+        // Nobody awaits a creation the tab stopped waiting for: its failure is logged here, not left unobserved.
+        if (late.IsFaulted)
+        {
+            _runLogger?.LogWarning(late.Exception, "The editor services of {Language} that arrived late could not be created.", language);
+            return;
+        }
+        if (!late.IsCompletedSuccessfully) return; // cancelled
         try
         {
             late.Result?.Dispose();

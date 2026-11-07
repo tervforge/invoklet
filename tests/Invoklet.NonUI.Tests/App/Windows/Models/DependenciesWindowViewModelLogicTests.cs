@@ -568,31 +568,39 @@ public class DependenciesWindowViewModelLogicTests
     // UI jank report: the NuGet client does real synchronous work before its first await. The VM
     // must hand the call to the thread pool so typing (the caller = the UI thread) never waits on it.
     [Fact]
-    public async Task Search_Should_RunOffTheCallingThread_SoASlowClientNeverBlocksTyping()
+    public async Task Search_Should_NotBlockTyping_WhenTheClientHasSynchronousWork()
     {
-        using var gate = new ManualResetEventSlim();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var searchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSearch = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var search = new Mock<IPackageSearchService>();
         search.Setup(s => s.SearchAsync(It.IsAny<string>(), It.IsAny<PackageSearchOptions>(), It.IsAny<CancellationToken>()))
             .Returns(() =>
             {
-                started.TrySetResult();
-                gate.Wait(TimeSpan.FromSeconds(10)); // blocking, like the client's synchronous start
+                // Model synchronous work before the client's first await.
+                searchStarted.TrySetResult();
+                releaseSearch.Task.GetAwaiter().GetResult();
                 return Task.FromResult(Page(new PackageSearchResult("Json.Package", "1.0.0", "", 0)));
             });
         var cache = new Mock<ILocalPackageCacheService>();
         cache.Setup(c => c.GetCachedPackages()).Returns([]);
         var vm = new DependenciesWindowViewModel(search.Object, cache.Object, SourceStore().Object, TimeSpan.Zero);
 
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        vm.SearchText = "json";
-        watch.Stop();
+        var typing = Task.Run(() => vm.SearchText = "json");
+        try
+        {
+            await searchStarted.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"setting the text blocked for {watch.Elapsed}");
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-        Assert.True(vm.IsSearching);
-        gate.Set();
+            // The setter must return while the client is still doing synchronous work.
+            await typing.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            releaseSearch.TrySetResult();
+        }
+
+        await typing;
         await vm.PendingSearch;
+
         Assert.Equal(["Json.Package"], vm.OnlinePackages.Select(p => p.Id));
         vm.Dispose();
     }

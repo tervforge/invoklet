@@ -137,6 +137,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // once unset — after Avalonia.Headless resets it between isolated tests, a late callback from a
     // finished test made a thread-pool thread "the UI thread" and the next test's app setup failed
     // VerifyAccess (DefaultRenderLoop.Add). Same dispatcher in the real app; no behavior change there.
+    // A test hands its own, so work posted from another thread waits until the test runs it.
+    private readonly IDispatcher _ui;
 
     internal EditorsTabItemControl(
         EditorTabItemViewModel vm,
@@ -147,8 +149,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         IIntelliSenseService? intelliSense,
         IBuildCacheService buildCache, ILogger<EditorsTabItemControl>? runLogger = null,
         ConnectionDriverRegistry? connectionDrivers = null, ConnectionSchemas? connectionSchemas = null,
-        EditorTimings? timings = null)
+        EditorTimings? timings = null, IDispatcher? dispatcher = null)
     {
+        _ui = dispatcher ?? Dispatcher;
         _timings = timings ?? EditorTimings.Default;
         _connectionDrivers = connectionDrivers ?? new ConnectionDriverRegistry();
         _connectionSchemas = connectionSchemas;
@@ -638,7 +641,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             // run after normal completion has cleared RunningHost; generation still protects the
             // queued action from Stop/Restart and a replacement host.
             if (expectedHost is not null && !ReferenceEquals(expectedHost, s.RunningHost)) return;
-            Dispatcher.Post(() =>
+            _ui.Post(() =>
             {
                 if (!_disposed && _run.IsCurrent(generation)) action();
             });
@@ -1476,8 +1479,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         var document = new AvaloniaEdit.Document.TextDocument(il);
         document.SetOwnerThread(null);
-        if (Dispatcher.CheckAccess()) Adopt();
-        else Dispatcher.Post(Adopt);
+        if (_ui.CheckAccess()) Adopt();
+        else _ui.Post(Adopt);
 
         void Adopt()
         {
@@ -1676,7 +1679,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     internal bool ResultsWordWrapForTests => _resultsWordWrap;
 
     private void OnPreferencesChanged()
-        => Dispatcher.Post(() =>
+        => _ui.Post(() =>
         {
             // Posted before the tab closed: its editor services are gone by now.
             if (_disposed) return;
@@ -2172,7 +2175,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 var generated = frontMatter is null ? null
                     : GeneratedConnections.For(connections, language, packageIds, _connectionDrivers, _connectionSchemas?.Cache, scriptDirectory);
                 token.ThrowIfCancellationRequested();
-                intelliSense.ApplyExecutionContext(baseRequest with { Connections = generated }, token);
+                await intelliSense.ApplyExecutionContextAsync(baseRequest with { Connections = generated }, token);
                 if (shouldReanalyze)
                     await Dispatcher.InvokeAsync(() =>
                     {
@@ -2202,7 +2205,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // callback is enough: it reads the cache after the burst and refreshes the newest context.
         Volatile.Write(ref _connectionSchemaRefreshKey, key);
         if (Interlocked.Exchange(ref _connectionSchemaRefreshPosted, 1) != 0) return;
-        Dispatcher.Post(() =>
+        _ui.Post(() =>
         {
             try
             {

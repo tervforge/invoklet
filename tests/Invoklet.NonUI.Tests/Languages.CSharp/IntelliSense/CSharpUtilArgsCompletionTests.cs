@@ -57,7 +57,7 @@ public sealed class CSharpUtilArgsCompletionTests
     {
         var references = new CSharpReferenceService();
         using var service = CreateService(references);
-        service.UpdateExecutionContext(new ExecutionRequest
+        await service.UpdateExecutionContextAsync(new ExecutionRequest
         {
             Connections = new GeneratedConnections(
                 "public static partial class Connections { public static BillingClient Billing => null!; public static AuditClient Audit => null!; }",

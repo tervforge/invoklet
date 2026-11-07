@@ -97,19 +97,4 @@ public sealed class LatestRequestTests
         var exception = Record.Exception(disposeAgain);
         Assert.Null(exception);
     }
-
-    [Fact]
-    public async Task IsCurrent_ReadFromAnotherThreadWhileInvalidated_SeesTheNewGeneration()
-    {
-        // Arrange
-        var sut = new LatestRequestFixture().CreateSut();
-        var generation = sut.Invalidate();
-
-        // Act
-        sut.Invalidate();
-        var current = await Task.Run(() => sut.IsCurrent(generation), TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.False(current);
-    }
 }

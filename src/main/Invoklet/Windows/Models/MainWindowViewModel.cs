@@ -286,11 +286,10 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
     // Debounce state for watcher-triggered refreshes
     private volatile int _debounceVersion;
 
-    // The UI dispatcher, captured at construction for the watcher debounce's thread-pool continuation
-    // (same target as before). Reading the static Dispatcher.UIThread from that continuation instead
-    // would, after Avalonia.Headless resets it between isolated tests, make a thread-pool thread
-    // "the UI thread" and fail the next test's app setup (VerifyAccess).
-    private readonly Dispatcher _dispatcher = Dispatcher.UIThread;
+    // The UI dispatcher, taken at construction for the watcher debounce's continuation, which runs on another thread. Reading the
+    // static Dispatcher.UIThread there instead would, after Avalonia.Headless resets it between isolated tests, make that thread
+    // "the UI thread" and fail the next test's app setup (VerifyAccess). A test hands its own.
+    private readonly IDispatcher _dispatcher;
 
     // File-tree refresh ordering/lifetime. Each walk gets a version; only the result of
     // the LATEST requested walk is applied (or reported) — an older walk finishing late can't
@@ -454,6 +453,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
     public ReactiveCommand<Unit, Unit> OpenPreferencesCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenAboutCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSecretStoreCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenPathStoreCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenConnectionsCommand { get; }
     public ReactiveCommand<Unit, Unit> ImportLinqFileCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenAssemblyExplorerCommand { get; }
@@ -1134,8 +1134,10 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         ISessionSnapshotLoader? snapshotLoader = null,
         ISessionRecoveryCoordinator? recoveryCoordinator = null,
         IDiskOperations? disk = null,
-        TimeSpan? watcherRefreshDebounce = null)
+        TimeSpan? watcherRefreshDebounce = null,
+        IDispatcher? dispatcher = null)
     {
+        _dispatcher = dispatcher ?? Dispatcher.UIThread;
         _disk = disk ?? new DiskOperations();
         _watcherRefreshDebounce = watcherRefreshDebounce ?? DefaultWatcherRefreshDebounce;
         _fileSystemService = fileSystemService;
@@ -1178,6 +1180,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         OpenPreferencesCommand = ReactiveCommand.CreateFromTask(_windowService.ShowPreferencesAsync);
         OpenAboutCommand = ReactiveCommand.CreateFromTask(_windowService.ShowAboutAsync);
         OpenSecretStoreCommand = ReactiveCommand.CreateFromTask(_windowService.ShowSecretStoreAsync);
+        OpenPathStoreCommand = ReactiveCommand.CreateFromTask(_windowService.ShowPathStoreAsync);
         OpenConnectionsCommand = ReactiveCommand.CreateFromTask(() => OpenConnectionsAsync());
         ImportLinqFileCommand = ReactiveCommand.CreateFromTask(ImportLinqFileAsync);
         OpenAssemblyExplorerCommand = ReactiveCommand.CreateFromTask(
@@ -1190,6 +1193,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         OpenPreferencesCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenPreferencesCommand failed"));
         OpenAboutCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenAboutCommand failed"));
         OpenSecretStoreCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenSecretStoreCommand failed"));
+        OpenPathStoreCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenPathStoreCommand failed"));
         OpenConnectionsCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenConnectionsCommand failed"));
         ImportLinqFileCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "ImportLinqFileCommand failed"));
         OpenAssemblyExplorerCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenAssemblyExplorerCommand failed"));
@@ -1242,6 +1246,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         // Version-based debounce: capture current version, wait for the watcher refresh debounce,
         // then refresh only if no newer event arrived.
         var version = Interlocked.Increment(ref _debounceVersion);
+        // Synchronously: with no debounce the refresh is posted at once, otherwise from the timer's thread.
         Task.Delay(_watcherRefreshDebounce).ContinueWith(_ =>
         {
             if (_debounceVersion == version)
@@ -1250,7 +1255,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
                     RefreshNodes();
                     if (!_disposed) ScriptsFolderChanged?.Invoke();
                 });
-        });
+        }, TaskContinuationOptions.ExecuteSynchronously);
     }
 
     // Fire-and-forget wrapper for every call site that doesn't need to know when

@@ -37,16 +37,18 @@ public class EditorTabsControlResidencyTests
     {
         public bool FailReads { get; set; }
         public bool FailWrites { get; set; }
-        public ManualResetEventSlim? WritesWait { get; set; }
+        public TaskCompletionSource? WritesWait { get; set; }
 
-        // Set when a write has reached the disk (and waits there, if WritesWait is set): a test waits for it instead of pausing.
-        public ManualResetEventSlim WriteStarted { get; } = new(false);
+        // Complete when a write has reached the disk (and waits there, if WritesWait is set): a test waits for it instead of pausing.
+        public TaskCompletionSource WriteStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public bool TryWrite(Guid tab, ReleasedContent content)
+        public bool TryWrite(Guid tab, ReleasedContent content) => !FailWrites && inner.TryWrite(tab, content);
+
+        public async Task<bool> TryWriteAsync(Guid tab, ReleasedContent content)
         {
-            WriteStarted.Set();
-            WritesWait?.Wait(TimeSpan.FromSeconds(30));
-            return !FailWrites && inner.TryWrite(tab, content);
+            WriteStarted.TrySetResult();
+            if (WritesWait is { } wait) await wait.Task;
+            return TryWrite(tab, content);
         }
 
         public ReleasedContent? TryRead(Guid tab) => FailReads ? null : inner.TryRead(tab);
@@ -471,13 +473,13 @@ public class EditorTabsControlResidencyTests
         try
         {
             await AddTabsAsync(tabs, vm, 2);
-            spill.WritesWait = new ManualResetEventSlim(false);
+            spill.WritesWait = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             // The fourth tab makes this one the one to give up; its write waits at the disk.
             var count = vm.Tabs.Count;
             vm.NewMdRunFile();
             await tabs.TabsReadyForTests();
-            await TestWait.WhileAsync(() => !spill.WriteStarted.IsSet);
+            await spill.WriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
             // A run produced output and ended: its output is asked to be written, and the window goes on while the write waits.
             control.State.Output.Append("<div>new</div>");
@@ -487,7 +489,7 @@ public class EditorTabsControlResidencyTests
             Assert.True(dispatched);
             Assert.False(saving.IsCompleted);
 
-            spill.WritesWait.Set();
+            spill.WritesWait.TrySetResult();
             await saving.WaitAsync(TimeSpan.FromSeconds(30));
             await tabs.IdleForTests();
 
@@ -495,7 +497,7 @@ public class EditorTabsControlResidencyTests
             Assert.False(control.IsContentReleased);
             Assert.Equal("<div>old</div><div>new</div>", control.State.Output.Content);
         }
-        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+        finally { spill.WritesWait?.TrySetResult(); tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
     // Two running Invoklets opened one script while the index was locked: the second entered its folder, the tab of the first still had its own. The
@@ -579,27 +581,27 @@ public class EditorTabsControlResidencyTests
         var cache = new Mock<IBuildCacheService>();
         cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>())).Returns(Path.Combine(folder, "run"));
         var (runFolder, tabs, _, _, control) = await OpenSavedTabWithOutputAsync(folder, cache);
-        using var gate = new ManualResetEventSlim(false);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
             Assert.True(await tabs.FlushOutputWritesAsync(TimeSpan.FromSeconds(5))); // nothing is pending
-            _ = control.QueueOutputJobForTests(() => gate.Wait(TimeSpan.FromSeconds(30))); // a slow disk
+            _ = control.HoldOutputQueueForTests(gate.Task); // a slow disk
             _ = control.SaveRunOutputForTests();
             Assert.True(tabs.HasPendingOutputWrites());
 
-            Assert.False(await tabs.FlushOutputWritesAsync(TimeSpan.FromMilliseconds(100))); // given up after the limit
+            Assert.False(await tabs.FlushOutputWritesAsync(TimeSpan.Zero)); // given up after the limit
             var flushing = tabs.FlushOutputWritesAsync(TimeSpan.FromSeconds(30));
             var dispatched = false;
             await Dispatcher.UIThread.InvokeAsync(() => dispatched = true);
             Assert.True(dispatched);
             Assert.False(flushing.IsCompleted);
 
-            gate.Set();
+            gate.TrySetResult();
             Assert.True(await flushing);
             Assert.False(tabs.HasPendingOutputWrites());
             Assert.Equal("<div>old</div>", RunOutputFile.TryLoad(runFolder)!.Content);
         }
-        finally { gate.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+        finally { gate.TrySetResult(); tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]
@@ -680,7 +682,7 @@ public class EditorTabsControlResidencyTests
         await AddTabsAsync(tabs, vm, 2);
         var control = tabs.ControlForTests(first)!;
         control.State.Editor.Text = "var first = 1;";
-        spill.WritesWait = new ManualResetEventSlim(false);
+        spill.WritesWait = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // The fourth tab makes the first one the one to give up; its write waits.
         var count = vm.Tabs.Count;
@@ -698,16 +700,16 @@ public class EditorTabsControlResidencyTests
             var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
 
             // The UI thread is free (this test runs on it) and the tab still has its text while the write waits.
-            await TestWait.WhileAsync(() => !spill.WriteStarted.IsSet);
+            await spill.WriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
             Assert.False(control.IsContentReleased);
             Assert.Equal("var first = 1;", control.State.Editor.Text);
-            spill.WritesWait!.Set();
+            spill.WritesWait!.TrySetResult();
             await tabs.IdleForTests();
 
             Assert.True(control.IsContentReleased);
             Assert.False(tabs.IsLoadedForTests(first));
         }
-        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+        finally { spill.WritesWait?.TrySetResult(); tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]
@@ -719,14 +721,14 @@ public class EditorTabsControlResidencyTests
             var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
 
             control.State.Editor.Text = "var edited = 2;";
-            spill.WritesWait!.Set();
+            spill.WritesWait!.TrySetResult();
             await tabs.IdleForTests();
 
             Assert.False(control.IsContentReleased);
             Assert.True(tabs.IsLoadedForTests(first));
             Assert.Equal("var edited = 2;", control.State.Editor.Text);
         }
-        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+        finally { spill.WritesWait?.TrySetResult(); tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]
@@ -738,13 +740,13 @@ public class EditorTabsControlResidencyTests
             var (first, control) = await OpenThreeThenAFourthAsync(tabs, vm, spill);
 
             vm.ActiveTab = first;
-            spill.WritesWait!.Set();
+            spill.WritesWait!.TrySetResult();
             await tabs.IdleForTests();
 
             Assert.False(control.IsContentReleased);
             Assert.Equal("var first = 1;", control.State.Editor.Text);
         }
-        finally { spill.WritesWait?.Set(); tabs.Dispose(); Directory.Delete(folder, true); }
+        finally { spill.WritesWait?.TrySetResult(); tabs.Dispose(); Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]

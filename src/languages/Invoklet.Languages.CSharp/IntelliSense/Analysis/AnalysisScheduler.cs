@@ -9,7 +9,7 @@ namespace Invoklet.Languages.CSharp.IntelliSense.Analysis;
 /// <param name="debounce">Read at every notification, so it can be changed between two.</param>
 /// <param name="run">Starts the pass; the service wraps it in the culture its Roslyn messages are produced in.</param>
 /// <param name="onFailure">Told of what a pass threw, other than being cancelled; the scheduler goes on.</param>
-/// <param name="stopTimeout">How long <see cref="Stop"/> waits for a pass that does not notice its cancellation.</param>
+/// <param name="stopTimeout">How long <see cref="StopAsync"/> waits for a pass that does not notice its cancellation.</param>
 internal sealed class AnalysisScheduler(
     Func<TimeSpan> debounce, Func<Func<Task>, Task> run, Action<Exception> onFailure, TimeSpan stopTimeout)
 {
@@ -105,10 +105,10 @@ internal sealed class AnalysisScheduler(
     }
 
     /// <summary>
-    /// Cancels the pass in flight and waits for it, for at most the timeout: a pass that never checks its token must not be able
-    /// to hang the end of the editor for ever; a result published after this returns would reach a service that is gone.
+    /// Cancels the pass in flight; the task ends when the pass has, or after the timeout: a pass that never checks its token must
+    /// not be able to hold the end of the editor for ever. Nothing starts after this is called.
     /// </summary>
-    public void Stop()
+    public async Task StopAsync()
     {
         CancellationTokenSource? source;
         Task? pass;
@@ -122,11 +122,11 @@ internal sealed class AnalysisScheduler(
         source?.Cancel();
         try
         {
-            pass?.Wait(stopTimeout);
+            if (pass is not null) await pass.WaitAsync(stopTimeout);
         }
         catch
         {
-            // Already reported from inside the pass.
+            // Already reported from inside the pass, or the pass outlived the timeout.
         }
 
         source?.Dispose();

@@ -70,6 +70,9 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
     // A document is read whole into memory, and the 15 seconds bound only the time.
     private const long MaxDocumentBytes = 20 * 1024 * 1024;
 
+    // A redirect is not followed: the headers, credentials among them, must not go on to whatever host the server names.
+    internal static HttpClientHandler NewDefaultHandler() => new() { AllowAutoRedirect = false };
+
     public async Task<ConnectionSchema> FetchSchemaAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, ConnectionTools tools,
         CancellationToken cancellationToken)
     {
@@ -81,7 +84,7 @@ public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
             .Concat(DocumentPaths.Select(path => new Uri(root, path)))
             .Distinct().ToList();
 
-        using var client = new HttpClient(_handler?.Invoke() ?? new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: true)
+        using var client = new HttpClient(_handler?.Invoke() ?? NewDefaultHandler(), disposeHandler: true)
         {
             Timeout = TimeSpan.FromSeconds(15),
             MaxResponseContentBufferSize = MaxDocumentBytes,

@@ -144,7 +144,11 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         {
             // The reverse engineering is synchronous and can't be stopped: a caller that gives up stops waiting, and the next one joins the read
             // that is still going instead of starting another on the same database.
-            return await JoinRead(Id + "\n" + connectionString + "\n" + schema, () => EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel))
+            return await JoinRead(Id + "\n" + connectionString + "\n" + schema, async () =>
+                {
+                    if (ReadStartingForTests is { } starting) await starting().ConfigureAwait(false);
+                    return EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel);
+                })
                 .WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -161,7 +165,10 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
     private static readonly object ReadsLock = new();
     private static readonly Dictionary<string, Task<List<EfEntity>>> Reads = [];
 
-    private Task<List<EfEntity>> JoinRead(string key, Func<List<EfEntity>> read)
+    // Test-only: awaited when a read of a database starts, before it reads anything, so a test can hold a read that is going.
+    internal Func<Task>? ReadStartingForTests { get; set; }
+
+    private Task<List<EfEntity>> JoinRead(string key, Func<Task<List<EfEntity>>> read)
     {
         lock (ReadsLock)
         {

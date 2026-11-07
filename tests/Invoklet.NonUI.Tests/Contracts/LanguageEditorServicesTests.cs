@@ -76,15 +76,15 @@ public sealed class LanguageEditorServicesTests : IDisposable
     }
 
     [Fact]
-    public void TheRegistry_Should_CreateEditorServices_FromTheLanguage_AndNoneForAnUnknownOne()
+    public async Task TheRegistry_Should_CreateEditorServices_FromTheLanguage_AndNoneForAnUnknownOne()
     {
         using var service = new CSharpIntelliSenseService([], NullLogger<CSharpIntelliSenseService>.Instance);
         var fake = new FakeLanguage("fake") { Service = service };
         var registry = Registry(fake, new FakeLanguage("plain"));
 
-        Assert.Same(service, registry.CreateIntelliSense("fake", CancellationToken.None));
-        Assert.Null(registry.CreateIntelliSense("plain", CancellationToken.None));
-        Assert.Null(registry.CreateIntelliSense("unknown", CancellationToken.None));
+        Assert.Same(service, await registry.CreateIntelliSenseAsync("fake", CancellationToken.None));
+        Assert.Null(await registry.CreateIntelliSenseAsync("plain", CancellationToken.None));
+        Assert.Null(await registry.CreateIntelliSenseAsync("unknown", CancellationToken.None));
     }
 
     [Fact]

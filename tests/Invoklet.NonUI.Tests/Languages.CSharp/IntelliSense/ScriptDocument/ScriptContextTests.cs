@@ -114,7 +114,7 @@ public sealed class ScriptContextTests
     }
 
     [Fact]
-    public void ApplyExecutionContext_CancelledBeforeItStarts_Throws()
+    public async Task ApplyExecutionContext_CancelledBeforeItStarts_Throws()
     {
         // Arrange
         using var fixture = new ScriptContextFixture();
@@ -123,7 +123,7 @@ public sealed class ScriptContextTests
         cancelled.Cancel();
 
         // Act
-        var thrown = Record.Exception(() => sut.ApplyExecutionContext(new(), cancelled.Token));
+        var thrown = await Record.ExceptionAsync(() => sut.ApplyExecutionContextAsync(new(), cancelled.Token));
 
         // Assert
         Assert.IsType<OperationCanceledException>(thrown);

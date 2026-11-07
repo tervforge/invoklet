@@ -62,7 +62,7 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
     private sealed class SlowService
     {
         public readonly Mock<IIntelliSenseService> Mock = new();
-        public readonly ManualResetEventSlim Gate = new(true);
+        public readonly AsyncGate Gate = new(open: true);
         public readonly ConcurrentQueue<CancellationToken> Tokens = new();
         public readonly ConcurrentQueue<ExecutionRequest> Applied = new();
         public TaskCompletionSource<ExecutionRequest> AppliedSignal { get; private set; } = NewSignal<ExecutionRequest>();
@@ -89,16 +89,16 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
         public SlowService()
         {
             // The overload without a token is the one a UI-thread caller would use: it blocks too.
-            Mock.Setup(s => s.UpdateExecutionContext(It.IsAny<ExecutionRequest>()))
-                .Callback<ExecutionRequest>(_ => Gate.Wait(TimeSpan.FromSeconds(10)));
-            Mock.Setup(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()))
-                .Callback<ExecutionRequest, CancellationToken>((request, token) =>
+            Mock.Setup(s => s.UpdateExecutionContextAsync(It.IsAny<ExecutionRequest>()))
+                .Returns(() => Gate.WaitAsync());
+            Mock.Setup(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()))
+                .Returns(async (ExecutionRequest request, CancellationToken token) =>
                 {
                     Tokens.Enqueue(token);
                     Interlocked.Increment(ref _entered);
                     try
                     {
-                        Gate.Wait(TimeSpan.FromSeconds(10));
+                        await Gate.WaitAsync();
                         token.ThrowIfCancellationRequested();
                         Applied.Enqueue(request);
                         AppliedSignal.TrySetResult(request);
@@ -109,6 +109,9 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
                 .Callback(() => TextChangedSignal.TrySetResult(true));
         }
     }
+
+    // A schema is written on whatever thread read it; the tab catches up on its UI thread, a queue the test runs.
+    private readonly QueuedDispatcher _ui = new();
 
     private async Task<T> WithTabAsync<T>(SlowService service, Func<EditorsTabItemControl, ConnectionSchemas, Task<T>> body)
     {
@@ -132,7 +135,7 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
             null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var tab = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object,
             new Mock<ILanguageHostRegistry>().Object, prefs.Object, service.Mock.Object, new Mock<IBuildCacheService>().Object,
-            connectionDrivers: drivers, connectionSchemas: schemas);
+            connectionDrivers: drivers, connectionSchemas: schemas, dispatcher: _ui);
         var host = new Window { Content = tab };
         host.Show();
         try
@@ -188,7 +191,8 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
             await TestWait.WhileAsync(() => service.Entered < 1);
 
             // The schema changes while the first update is still working: the second sees V2.
-            await Task.Run(() => schemas.Cache.Put(Stock, Version(2)), TestContext.Current.CancellationToken);
+            schemas.Cache.Put(Stock, Version(2));
+            _ui.RunPosted();
             await TestWait.WhileAsync(() => service.Entered < 2);
             Assert.True(service.Tokens.First().IsCancellationRequested, "the older update was not cancelled");
 
@@ -208,12 +212,10 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
         await WithTabAsync(service, async (tab, schemas) =>
         {
             service.Gate.Reset();
-            await Task.Run(() =>
-            {
-                schemas.Cache.Put(Stock, Version(2));
-                schemas.Cache.Put(Stock, Version(3));
-                schemas.Cache.Put(Stock, Version(4));
-            }, TestContext.Current.CancellationToken);
+            schemas.Cache.Put(Stock, Version(2));
+            schemas.Cache.Put(Stock, Version(3));
+            schemas.Cache.Put(Stock, Version(4));
+            _ui.RunPosted();
             // Overtaken updates are cancelled and merged, so the number of entries is not fixed:
             // wait until they stop arriving.
             await TestWait.SettleAsync(() => service.Entered);

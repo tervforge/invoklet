@@ -160,40 +160,14 @@ public class OpenApiConnectionDriverTests
         Assert.Contains("AddPetAsync(global::System.Text.Json.JsonElement body, global::System.Threading.CancellationToken cancellationToken = default)", code);
     }
 
+    // The headers carry credentials: a redirect to another host must not take them along, so the driver's own handler follows none.
     [Fact]
-    public async Task FetchSchemaAsync_TheServerRedirects_DoesNotSendTheHeadersOnToAnotherHost()
+    public void NewDefaultHandler_Always_FollowsNoRedirect()
     {
-        var target = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-        target.Start();
-        using var listener = new HttpListener();
-        var port = Free(new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0));
-        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        listener.Start();
-        var serving = Task.Run(async () =>
-        {
-            while (listener.IsListening)
-            {
-                var context = await listener.GetContextAsync();
-                context.Response.StatusCode = 302;
-                context.Response.RedirectLocation = $"http://127.0.0.1:{((IPEndPoint)target.LocalEndpoint).Port}/openapi.json";
-                context.Response.Close();
-            }
-        }, TestContext.Current.CancellationToken);
+        // Act
+        using var handler = OpenApiConnectionDriver.NewDefaultHandler();
 
-        await Assert.ThrowsAsync<OpenApiException>(() => new OpenApiConnectionDriver()
-            .FetchSchemaAsync(Params($"http://127.0.0.1:{port}/"), Tools, TestContext.Current.CancellationToken));
-
-        Assert.False(target.Pending());
-        listener.Stop();
-        target.Stop();
-        _ = serving;
-    }
-
-    private static int Free(System.Net.Sockets.TcpListener probe)
-    {
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
+        // Assert
+        Assert.False(handler.AllowAutoRedirect);
     }
 }

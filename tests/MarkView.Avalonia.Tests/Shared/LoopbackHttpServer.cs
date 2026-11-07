@@ -22,7 +22,8 @@ internal sealed class LoopbackHttpServer : IDisposable
         _baseUri = new Uri($"http://localhost:{GetFreePort()}/");
         _listener.Prefixes.Add(_baseUri.ToString());
         _listener.Start();
-        _ = Task.Run(AcceptLoopAsync);
+        // Asynchronous throughout: it waits for each request without holding a thread.
+        _ = AcceptLoopAsync();
     }
 
     public string Url(string path) => new Uri(_baseUri, path).ToString();

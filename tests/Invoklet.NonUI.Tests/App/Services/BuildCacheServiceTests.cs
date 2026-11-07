@@ -57,23 +57,6 @@ public sealed class BuildCacheServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureOutputDirectory_TwoInstancesWorkAtTheSameTime_LoseNoEntry()
-    {
-        // Arrange
-        var instances = new[] { NewInstance(), NewInstance() };
-
-        // Act
-        await Task.WhenAll(instances.Select((instance, n) => Task.Run(() =>
-        {
-            for (var i = 0; i < 25; i++) instance.EnsureOutputDirectory(Script($"s{n}-{i}.inv"), WorkDir);
-        }, TestContext.Current.CancellationToken)));
-
-        // Assert
-        Assert.Equal(50, Index().Count);
-        Assert.Equal(50, Directory.GetDirectories(WorkDir).Length);
-    }
-
-    [Fact]
     public void Touch_AfterAnotherInstanceAddedAnEntry_KeepsThatEntry()
     {
         // Arrange

@@ -19,6 +19,9 @@ public interface IWindowService
     /// <summary>Tools → Secret Store: the user's named secrets for <c>Util.GetSecret</c>.</summary>
     Task ShowSecretStoreAsync();
 
+    /// <summary>Tools → Path Store: the user's named paths for <c>Util.GetPath</c>.</summary>
+    Task ShowPathStoreAsync();
+
     /// <summary>Tools → Connections: the user's own database, HTTP and gRPC connections.</summary>
     /// <summary>Opens the Connections editor, with the named connection selected when it is in the list.</summary>
     Task ShowConnectionsAsync(string? connectionName = null);

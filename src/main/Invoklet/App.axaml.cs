@@ -38,6 +38,7 @@ using Windows_AboutWindow = Invoklet.Windows.AboutWindow;
 using Windows_ConnectionsWindow = Invoklet.Windows.ConnectionsWindow;
 using Windows_DependenciesWindow = Invoklet.Windows.DependenciesWindow;
 using Windows_MainWindow = Invoklet.Windows.MainWindow;
+using Windows_PathStoreWindow = Invoklet.Windows.PathStoreWindow;
 using Windows_PreferencesWindow = Invoklet.Windows.PreferencesWindow;
 using Windows_SecretStoreWindow = Invoklet.Windows.SecretStoreWindow;
 using Windows_SetupWizardWindow = Invoklet.Windows.SetupWizardWindow;
@@ -292,6 +293,7 @@ public class App : Application
             ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             // A secret a script asked the user for (Util.GetSecret) is kept in the Secret Store.
             var secrets = sp.GetRequiredService<ISecretStore>();
+            var paths = sp.GetRequiredService<IPathStore>();
             // A script asks for the value of a secret and gets only that: the store's key stays here. The keychain, which may ask the user
             // to unlock it, is opened only then, and a store still in plain text is encrypted at that point.
             LanguageHostRegistry registry = new()
@@ -303,6 +305,8 @@ public class App : Application
                     (secrets as FileSecretStore)?.EncryptIfPlain();
                     return secrets.Read(name);
                 },
+                // Util.GetPath: the script gets the one path it names, never the store.
+                PathReader = paths.Read,
             };
             var runtimeReferences = sp.GetRequiredService<IRuntimeReferenceLocator>();
             registry.Register(new CSharpLanguageHostFactory(loggerFactory, runtimeReferences));
@@ -323,8 +327,11 @@ public class App : Application
         services.AddTransient<Windows_PreferencesWindow>();
         services.AddTransient<Windows_DependenciesWindow>();
         services.AddSingleton<ISecretStore>(_ => new FileSecretStore());
+        services.AddSingleton<IPathStore>(_ => new FilePathStore());
         services.AddTransient<SecretStoreWindowViewModel>();
         services.AddTransient<Windows_SecretStoreWindow>();
+        services.AddTransient<PathStoreWindowViewModel>();
+        services.AddTransient<Windows_PathStoreWindow>();
         // Connection drivers are part of Invoklet for now, registered here like the languages above.
         services.AddSingleton(_ =>
         {
@@ -359,6 +366,7 @@ public class App : Application
         services.AddSingleton<Func<Windows_DependenciesWindow>>(sp => () => sp.GetRequiredService<Windows_DependenciesWindow>());
         services.AddSingleton<Func<Windows_PreferencesWindow>>(sp => () => sp.GetRequiredService<Windows_PreferencesWindow>());
         services.AddSingleton<Func<Windows_SecretStoreWindow>>(sp => () => sp.GetRequiredService<Windows_SecretStoreWindow>());
+        services.AddSingleton<Func<Windows_PathStoreWindow>>(sp => () => sp.GetRequiredService<Windows_PathStoreWindow>());
         services.AddSingleton<Func<Windows_ConnectionsWindow>>(sp => () =>
         {
             var window = sp.GetRequiredService<Windows_ConnectionsWindow>();

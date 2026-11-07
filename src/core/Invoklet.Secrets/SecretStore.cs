@@ -251,57 +251,21 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
         return (name, value) => SecretKeys.Decrypt(key, name, value);
     }
 
-    public string Save(IReadOnlyList<Secret> secrets, string? expectedVersion)
-    {
-        // A store that is a symbolic link (into a synced or shared folder, say) stays one: the file it
-        // points to is replaced, not the link.
-        var fullPath = StoreTarget(Path.GetFullPath(FilePath));
-        var folder = Path.GetDirectoryName(fullPath)!;
-        Directory.CreateDirectory(folder);
-        // Keep this lock file: deleting it would let concurrent writers lock different inodes.
-        var lockOptions = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
-        if (!OperatingSystem.IsWindows()) lockOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        using var writer = WhileInUse(() => new FileStream(fullPath + ".lock", lockOptions));
-        DeleteLeftoverTemps(folder, Path.GetFileName(fullPath));
-        var current = ReadBytes(fullPath);
-        var currentVersion = current is null ? null : VersionOf(current);
-        if (!string.Equals(expectedVersion, currentVersion, StringComparison.Ordinal))
-            throw new SecretStoreConflictException();
-        var windows = OperatingSystem.IsWindows();
-        // Under the lock, so two Invoklets never create two keys for one store.
-        var key = KeyForSave(current is not null && SecretKeys.IsEncrypted(fullPath));
-        var file = new StoreFile
+    public string Save(IReadOnlyList<Secret> secrets, string? expectedVersion) =>
+        AtomicStoreFile.Replace(FilePath, expectedVersion, (fullPath, current) =>
         {
-            Version = FormatVersion,
-            Protection = key is not null ? SecretKeys.Protection : windows ? Dpapi : NoProtection,
-            Secrets = secrets.ToDictionary(s => s.Name,
-                string? (s) => key is not null ? SecretKeys.Encrypt(key, s.Name, s.Value) : OperatingSystem.IsWindows() ? Protect(s.Value) : s.Value,
-                StringComparer.OrdinalIgnoreCase),
-        };
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(file, WriteOptions);
-
-        // Written next to the store and moved over it, so a failed write never leaves half a store;
-        // created readable by its owner only, before any secret is in it. Named after the store, so
-        // one left by a process killed before the move is recognised and removed by the next save.
-        var temp = Path.Combine(folder, TempPrefix(Path.GetFileName(fullPath)) + Guid.NewGuid().ToString("N") + ".tmp");
-        try
-        {
-            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
-            if (!windows) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            using (var stream = new FileStream(temp, options))
+            // Under the lock, so two Invoklets never create two keys for one store.
+            var key = KeyForSave(current is not null && SecretKeys.IsEncrypted(fullPath));
+            var file = new StoreFile
             {
-                stream.Write(bytes);
-                stream.Flush(flushToDisk: true);
-            }
-            ReplaceStore(temp, fullPath);
-            return VersionOf(bytes);
-        }
-        finally
-        {
-            try { if (File.Exists(temp)) File.Delete(temp); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        }
-    }
+                Version = FormatVersion,
+                Protection = key is not null ? SecretKeys.Protection : OperatingSystem.IsWindows() ? Dpapi : NoProtection,
+                Secrets = secrets.ToDictionary(s => s.Name,
+                    string? (s) => key is not null ? SecretKeys.Encrypt(key, s.Name, s.Value) : OperatingSystem.IsWindows() ? Protect(s.Value) : s.Value,
+                    StringComparer.OrdinalIgnoreCase),
+            };
+            return JsonSerializer.SerializeToUtf8Bytes(file, WriteOptions);
+        }, () => new SecretStoreConflictException(), ex => new SecretStoreBusyException(ex));
 
     // An encrypted store keeps its key: one that can't be read stops the save rather than replace
     // values nobody could decrypt any more. A plain one gets a key, or stays plain without a keychain.
@@ -327,91 +291,9 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
     private static string Unencrypted(SecretKeyUnavailableException ex) =>
         $"Secrets are saved unencrypted, readable by your user account only. {ex.Message}";
 
-    // The file a store path finally points to, following symbolic links; the path itself otherwise.
-    private static string StoreTarget(string path)
-    {
-        try
-        {
-            return new FileInfo(path).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? path;
-        }
-        catch (IOException)
-        {
-            return path; // a link cycle: writing over the link reports the problem itself
-        }
-    }
+    private static string VersionOf(byte[] bytes) => AtomicStoreFile.VersionOf(bytes);
 
-    private static string TempPrefix(string storeName) => storeName + ".";
-
-    // Called under the lock, so no other save is between writing and moving its own temp file.
-    private static void DeleteLeftoverTemps(string folder, string storeName)
-    {
-        foreach (var path in Directory.EnumerateFiles(folder, TempPrefix(storeName) + "*.tmp"))
-        {
-            try { File.Delete(path); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        }
-    }
-
-    // On Windows a script reading the store (Util.GetSecret) keeps it open for a moment, and replacing
-    // an open file fails; it is retried like the lock. Access denied persisting with the file free is a
-    // real permission problem and is reported as such.
-    private static void ReplaceStore(string temp, string target) => WhileInUse(() =>
-    {
-        try
-        {
-            File.Move(temp, target, overwrite: true);
-        }
-        catch (UnauthorizedAccessException ex) when (OperatingSystem.IsWindows() && IsOpenElsewhere(target))
-        {
-            throw new IOException(ex.Message, unchecked((int)0x80070020)); // ERROR_SHARING_VIOLATION
-        }
-        return true;
-    });
-
-    private static bool IsOpenElsewhere(string path)
-    {
-        try
-        {
-            using var probe = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            return false;
-        }
-        catch (IOException ex) when (IsInUse(ex)) { return true; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
-    }
-
-    // Retries for under a second while the file is held by another writer or reader, then gives up
-    // with SecretStoreBusyException; any other failure is thrown at once.
-    private static T WhileInUse<T>(Func<T> action)
-    {
-        const int attempts = 6;
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                return action();
-            }
-            catch (IOException ex) when (IsInUse(ex))
-            {
-                if (attempt == attempts) throw new SecretStoreBusyException(ex);
-                Thread.Sleep(50 * attempt);
-            }
-        }
-    }
-
-    // A sharing or lock violation on Windows; on macOS and Linux, .NET's FileShare.None lock failing
-    // with EWOULDBLOCK (35 on macOS and the BSDs, 11 on Linux).
-    private static bool IsInUse(IOException ex) => OperatingSystem.IsWindows()
-        ? (ex.HResult & 0xFFFF) is 32 or 33
-        : ex.HResult is 11 or 35;
-
-    private static string VersionOf(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
-
-    private static byte[]? ReadBytes(string path)
-    {
-        try { return File.ReadAllBytes(path); }
-        catch (FileNotFoundException) { return null; }
-        catch (DirectoryNotFoundException) { return null; }
-    }
+    private static byte[]? ReadBytes(string path) => AtomicStoreFile.Read(path);
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static string Protect(string value) => Convert.ToBase64String(

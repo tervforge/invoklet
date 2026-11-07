@@ -64,8 +64,8 @@ public sealed class SessionDraftLifecycleTests : IDisposable
             registry.Setup(r => r.Create(It.IsAny<string>(), It.IsAny<ExecutionRequest>()))
                 .Callback<string, ExecutionRequest>((_, r) => Runs.Add(r)).Returns(host.Object);
             var intelliSense = new Mock<IIntelliSenseService>();
-            intelliSense.Setup(i => i.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()))
-                .Callback<ExecutionRequest, CancellationToken>((r, _) => EditorContexts.Add(r));
+            intelliSense.Setup(i => i.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>()))
+                .Callback<ExecutionRequest, CancellationToken>((r, _) => EditorContexts.Add(r)).Returns(Task.CompletedTask);
             var cache = new Mock<IBuildCacheService>();
             cache.Setup(c => c.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(() => Directory.CreateDirectory(Path.Combine(root, "build")).FullName);
@@ -193,7 +193,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task FailedCheckpoint_Should_KeepWindowAndDirtyTextOpen_AndAllowRetry()
     {
         var fail = true;
-        using var store = new DiskRecoveryStore(RecoveryRoot, step => { if (fail && step == "payload") throw new IOException("injected"); });
+        using var store = new DiskRecoveryStore(RecoveryRoot, step => fail && step == "payload" ? throw new IOException("injected") : Task.CompletedTask);
         using var session = new Session(_root, store);
         await session.Ready();
         var tab = session.Vm.Tabs.Single();

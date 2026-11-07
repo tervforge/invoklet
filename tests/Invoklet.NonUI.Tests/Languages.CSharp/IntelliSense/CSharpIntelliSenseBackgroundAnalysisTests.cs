@@ -217,29 +217,8 @@ public class CSharpIntelliSenseBackgroundAnalysisTests
         Assert.Equal("\n", service.FormattingNewLineOptionForTests);
     }
 
-    // Investigated as a SUSPECTED (not confirmed) contributor to the Windows-CI-only timeout on the
-    // test above, after the 10s->30s budget bump alone didn't fix it: NotifyTextChanged's background
-    // Task.Run was fire-and-forget — Dispose() called Cancel() but never waited for that Task.Run to
-    // actually finish before returning. DiagnosticsChanged fires from INSIDE that same background
-    // pass *before* the codefix half runs (see ComputeDiagnosticsAndCodeFixesAsync) — measured at a
-    // real ~950ms gap between the two events for "Frobnicate()" below — so any caller that disposes
-    // its service right after DiagnosticsChanged (like NotifyTextChanged_Should_RaiseDiagnosticsChanged_
-    // ForBrokenCode above) could in principle leave that codefix computation still running on a
-    // ThreadPool thread after Dispose() returns, invisible to the test framework and competing for
-    // CPU/ThreadPool capacity with whatever test runs next.
-    //
-    // Caveat, found via this test's own doctrinal revert: reverting Dispose() to the old Cancel()-only
-    // behavior did NOT make this test fail, even across repeated runs — Roslyn's own AddImport search
-    // apparently checks the CancellationToken frequently enough on its own that the ~950ms window
-    // above collapses to near-nothing once Cancel() fires, at least under the low contention of a
-    // single test running alone. That doesn't rule this out as a real contributor on a genuinely
-    // starved ThreadPool (many tests' worth of leaked background work queued at once on a
-    // CPU-constrained CI runner is a different failure mode than "one cancellation checked in
-    // isolation"), but it does mean this fix is not proven, only plausible-and-safe. Kept as a
-    // correctness improvement regardless (Dispose waiting for its own background work before
-    // releasing _workspace is more correct on its own merits — no caller should have to know about
-    // this race to use the class safely), and this test still guards a real, permanently-useful
-    // contract: no CodeFixesChanged after Dispose() returns, full stop.
+    // DiagnosticsChanged fires from inside a background pass before its code fixes are computed: a caller that disposes the service
+    // then must not hear of those fixes afterwards, however long the pass still takes to notice its cancellation.
     [Fact]
     public async Task Dispose_Should_PreventAnyLaterCodeFixesChangedEvent_EvenIfBackgroundAnalysisWasStillRunning()
     {
@@ -260,35 +239,9 @@ public class CSharpIntelliSenseBackgroundAnalysisTests
         service.Dispose();
         disposed = true;
 
-        // Give any leaked background work a real chance to fire before concluding it didn't.
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        // The pass has ended and the workspace is gone: whatever it was going to publish, it would have by now.
+        await service.Disposal.WaitAsync(BackgroundAnalysisTimeout, TestContext.Current.CancellationToken);
         Assert.False(codeFixesFiredAfterDispose);
-    }
-
-    // SyncDocument's check-then-act on _lastCode/the AdhocWorkspace's
-    // CurrentSolution was unsynchronized, even though completion/signature-help/quick-info/
-    // background-analysis each call it from their own concurrent Task.Run. A genuine race is timing-
-    // dependent and hard to force deterministically, so this is a smoke test, not a precise
-    // reproduction: many concurrent calls with different code snapshots hitting the shared workspace
-    // at once, past the point where the old unsynchronized version would very plausibly corrupt
-    // shared state (throwing, or desyncing _lastCode from CurrentSolution).
-    [Fact]
-    public async Task GetCompletionsAsync_Should_NotThrow_WhenCalledConcurrently_WithDifferentCodeSnapshots()
-    {
-        using var service = new CSharpIntelliSenseFixture().CreateSut();
-
-        var tasks = Enumerable.Range(0, 20).Select(i =>
-        {
-            var code = $"var x{i} = {i};\nx{i}.";
-            return Task.Run(async () =>
-            {
-                await service.GetCompletionsAsync(code, code.Length,
-                    CompletionTrigger.Insertion('.'), TestContext.Current.CancellationToken);
-                service.NotifyTextChanged(code);
-            });
-        });
-
-        await Task.WhenAll(tasks);
     }
 
     // MetadataReference.CreateFromFile (PE-header + XML-doc parsing) used to

@@ -47,12 +47,12 @@ public class StartupWorkspaceReadyTests
             new EditorTheme("Test", TextMateSharp.Grammars.ThemeName.DarkPlus, true)));
 
         // The last tab's language services take a while: its header can't be there before they are.
-        using var lastTab = new ManualResetEventSlim();
+        var lastTab = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var created = 0;
         var editorTabs = new EditorTabsControl(theme.Object, new Mock<IWindowService>().Object,
-            new Mock<ILanguageHostRegistry>().WithCSharpIntelliSense(() =>
+            new Mock<ILanguageHostRegistry>().WithCSharpIntelliSense(async () =>
             {
-                if (Interlocked.Increment(ref created) == paths.Length) lastTab.Wait(TimeSpan.FromSeconds(10));
+                if (Interlocked.Increment(ref created) == paths.Length) await lastTab.Task;
                 return new Mock<IIntelliSenseService>().Object;
             }),
             prefs.Object, new Mock<IBuildCacheService>().Object);
@@ -71,7 +71,7 @@ public class StartupWorkspaceReadyTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(ready.IsCompleted);
 
-            lastTab.Set();
+            lastTab.SetResult();
             await ready.WaitAsync(TimeSpan.FromSeconds(10));
             var tabs = window.FindControl<ContentControl>("EditorTabsHost")!.Content as EditorTabsControl;
             var fileTabs = tabs!.FindControl<TabControl>("FileTabControl")!;

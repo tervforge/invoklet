@@ -68,11 +68,9 @@ public sealed class RecoveryStoreTests : IDisposable
     [Fact]
     public async Task Commit_Should_NotDependOnTheCallersSynchronizationContext()
     {
-        using var release = new ManualResetEventSlim();
-        using var store = new DiskRecoveryStore(_root, stage =>
-        {
-            if (stage == "payload") release.Wait(TestContext.Current.CancellationToken);
-        });
+        // The checkpoint is held while it writes, so it is still in flight when the caller's context is gone.
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var store = new DiskRecoveryStore(_root, stage => stage == "payload" ? release.Task : Task.CompletedTask);
         await store.LoadAsync();
         var original = SynchronizationContext.Current;
         var context = new TrackingContext();
@@ -82,7 +80,7 @@ public sealed class RecoveryStoreTests : IDisposable
             SynchronizationContext.SetSynchronizationContext(context);
             commit = store.CommitAsync(Snapshot(1));
         }
-        finally { SynchronizationContext.SetSynchronizationContext(original); release.Set(); }
+        finally { SynchronizationContext.SetSynchronizationContext(original); release.SetResult(); }
         await commit.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal(0, context.Posts);
     }
@@ -144,7 +142,7 @@ public sealed class RecoveryStoreTests : IDisposable
     public async Task ACrashBetweenTheImportingCheckpointAndTheMarker_Should_NotImportTwice()
     {
         var (own, other) = await TwoClosedSessionsAsync();
-        using (var next = new DiskRecoveryStore(_root, stage => { if (stage == "committed") throw new IOException("crash"); }))
+        using (var next = new DiskRecoveryStore(_root, stage => stage == "committed" ? throw new IOException("crash") : Task.CompletedTask))
         {
             await next.LoadAsync();
             var tab = Assert.Single(Assert.Single(next.Imports).Tabs);
@@ -303,21 +301,21 @@ public sealed class RecoveryStoreTests : IDisposable
         using (var initial = new DiskRecoveryStore(_root)) await initial.CommitAsync(Snapshot(1));
         var cancellation = TestContext.Current.CancellationToken;
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var store = new DiskRecoveryStore(_root, stage =>
         {
-            if (stage != "locked") return;
+            if (stage != "locked") return Task.CompletedTask;
             entered.SetResult();
-            release.Wait(TimeSpan.FromSeconds(5), cancellation);
+            return release.Task;
         });
         var loading = store.LoadAsync();
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellation);
-        var disposing = Task.Run(store.Dispose, cancellation);
+        var disposing = store.DisposeAsync().AsTask();
         try
         {
             Assert.False(disposing.IsCompleted);
         }
-        finally { release.Set(); }
+        finally { release.SetResult(); }
         await loading;
         await disposing;
         using var next = new DiskRecoveryStore(_root);
@@ -577,10 +575,11 @@ public sealed class RecoveryStoreTests : IDisposable
         {
             using var later = new DiskRecoveryStore(_root, stage =>
             {
-                if (stage != "import-retired") return;
+                if (stage != "import-retired") return Task.CompletedTask;
                 newOwner = new FileStream(Path.Combine(source, "owner.lock"),
                     FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                 File.WriteAllText(newPayload, "new owner's draft");
+                return Task.CompletedTask;
             });
             var restored = (await later.LoadAsync())!;
             await later.CommitAsync(restored with { Revision = 3 });

@@ -92,12 +92,12 @@ public sealed class CSharpIntelliSenseReferenceFreshnessTests : IDisposable
         BuildLibrary(older, "FromOlder", modifiedSecondsAgo: 60);
         BuildLibrary(newer, "FromNewer", modifiedSecondsAgo: 60);
         var olderHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         service.ExecutionContextResolvedForTests = request =>
         {
-            if (!request.References.Contains(older)) return;
+            if (!request.References.Contains(older)) return Task.CompletedTask;
             olderHeld.TrySetResult();
-            Assert.True(release.Wait(Patience));
+            return release.Task;
         };
         ExecutionRequest Request(string library, string member) => new()
         {
@@ -107,10 +107,10 @@ public sealed class CSharpIntelliSenseReferenceFreshnessTests : IDisposable
         };
 
         // Act: the older request is held before it applies anything; the newer one is applied whole; then the older one goes on.
-        var slow = Task.Run(() => service.UpdateExecutionContext(Request(older, "Stock")), TestContext.Current.CancellationToken);
+        var slow = service.UpdateExecutionContextAsync(Request(older, "Stock"));
         await olderHeld.Task.WaitAsync(Patience, TestContext.Current.CancellationToken);
-        service.UpdateExecutionContext(Request(newer, "Audit"));
-        release.Set();
+        await service.UpdateExecutionContextAsync(Request(newer, "Audit"));
+        release.TrySetResult();
         await slow.WaitAsync(Patience, TestContext.Current.CancellationToken);
 
         // Assert: references and connections are all of the newer request.

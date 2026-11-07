@@ -86,12 +86,12 @@ public sealed class GrpcScriptFixture : IAsyncLifetime
     }
 
     /// <summary>An editor that knows the connection, built against <paramref name="outputDirectory"/> when given (its contract, once built).</summary>
-    public CSharpIntelliSenseService Editor(string? outputDirectory = null, bool withConnection = true)
+    public async Task<CSharpIntelliSenseService> EditorAsync(string? outputDirectory = null, bool withConnection = true)
     {
         var references = new CSharpReferenceService();
         var editor = new CSharpIntelliSenseService(references.GetDefault().Append(references.GetExtensionReference()),
             NullLogger<CSharpIntelliSenseService>.Instance);
-        editor.UpdateExecutionContext(new ExecutionRequest
+        await editor.UpdateExecutionContextAsync(new ExecutionRequest
         {
             Platform = outputDirectory is null ? null : Sdk,
             OutputDirectory = outputDirectory,

@@ -1,0 +1,118 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewModels="clr-namespace:Invoklet.Windows.Models"
+        x:Class="Invoklet.Windows.PathStoreWindow"
+        x:DataType="viewModels:PathStoreWindowViewModel"
+        Title="Path Store"
+        Icon="/Assets/icon.ico"
+        Width="640" Height="460"
+        MinWidth="480" MinHeight="380"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Invoklet.Panel.BackgroundBrush}"
+        Foreground="{DynamicResource Invoklet.Text.PrimaryBrush}">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+        </Style>
+        <Style Selector="StackPanel.side > Button">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="*,Auto,Auto,Auto" Margin="16">
+
+        <!-- Each path: its name, the full path a script gets, and whether anything is there now. -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <Border Grid.Column="0"
+                    BorderBrush="{DynamicResource Invoklet.Separator.BackgroundBrush}"
+                    BorderThickness="1" CornerRadius="{DynamicResource Invoklet.Radius.Control}">
+                <Panel>
+                <ListBox x:Name="PathList"
+                         ItemsSource="{Binding Paths}"
+                         SelectedItem="{Binding SelectedPath}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         AutomationProperties.Name="Paths"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="viewModels:PathItemViewModel">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Classes="hint" Text="{Binding Resolved}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Classes="hint" Text="(not found)" IsVisible="{Binding IsMissing}"
+                                               Foreground="{DynamicResource Invoklet.Diagnostic.WarningBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Text="No paths yet. Use Add to create one." Classes="hint" Margin="16" VerticalAlignment="Center" IsVisible="{Binding IsEmpty}"/>
+                </Panel>
+            </Border>
+
+            <StackPanel Grid.Column="1" Classes="side" Spacing="6" Margin="8,0,0,0" Width="110">
+                <Button Classes="secondary" x:Name="AddButton" Content="Add" Command="{Binding AddCommand}"/>
+                <Button Classes="secondary" x:Name="RemoveButton" Content="Remove" Command="{Binding RemoveCommand}"/>
+                <Button Classes="secondary" x:Name="CopyButton" Content="Copy Path" IsEnabled="{Binding SelectedPath.Resolved, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" Click="Copy_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Editor for the selected path; edits apply to the list directly, Save writes the store. -->
+        <Grid Grid.Row="1"
+              Margin="0,12,0,0"
+              ColumnDefinitions="Auto,*"
+              RowDefinitions="Auto,Auto"
+              RowSpacing="8"
+              IsEnabled="{Binding HasSelection}">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="Name:"/>
+            <TextBox Classes="form-field" x:Name="NameBox" Grid.Row="0" Grid.Column="1"
+                     Text="{Binding SelectedPath.Name, FallbackValue=''}"
+                     AutomationProperties.Name="Path name"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" Text="Path:"/>
+            <TextBox Classes="form-field" x:Name="PathBox" Grid.Row="1" Grid.Column="1"
+                     Text="{Binding SelectedPath.Path, FallbackValue=''}"
+                     AutomationProperties.Name="Path"/>
+        </Grid>
+
+        <TextBlock x:Name="StoreError" Grid.Row="2"
+                   Margin="0,10,0,0"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource Invoklet.Status.ErrorBrush}"
+                   Text="{Binding StoreError}"
+                   IsVisible="{Binding HasStoreError}"/>
+
+        <Grid Grid.Row="3" RowDefinitions="Auto,Auto" Margin="0,12,0,0">
+            <TextBlock Grid.Row="0" Margin="0,0,0,8"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Invoklet.Status.ErrorBrush}"
+                       Text="{Binding ValidationError}"
+                       IsVisible="{Binding HasValidationError}"/>
+            <StackPanel Grid.Row="1" Spacing="8">
+                <Expander Header="Storage and usage" HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="hint" Text="Scripts read a path with Util.GetPath(&quot;name&quot;) and get the full path. ~ is your home folder. Kept in plain text for your user account."/>
+                        <SelectableTextBlock FontSize="12" TextWrapping="Wrap" Text="{Binding StorePath}"/>
+                    </StackPanel>
+                </Expander>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Classes="secondary" x:Name="CancelButton" Content="Cancel" MinWidth="{DynamicResource Invoklet.Size.DialogButton}" IsCancel="True" Click="Cancel_Click"/>
+                    <Button x:Name="OkButton" Classes="primary" Content="Save" MinWidth="{DynamicResource Invoklet.Size.DialogButton}" IsEnabled="{Binding CanSave}" Click="Ok_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

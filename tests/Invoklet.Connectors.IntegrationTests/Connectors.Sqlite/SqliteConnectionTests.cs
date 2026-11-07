@@ -140,7 +140,7 @@ public sealed class SqliteConnectionTests : IDisposable
         using (var service = new CSharpIntelliSenseService(
                    referenceService.GetDefault().Append(referenceService.GetExtensionReference()), NullLogger<CSharpIntelliSenseService>.Instance))
         {
-            service.UpdateExecutionContext(new ExecutionRequest { Packages = packages, Connections = generated });
+            await service.UpdateExecutionContextAsync(new ExecutionRequest { Packages = packages, Connections = generated });
             const string code = "Connections.Shop.";
             var members = await service.GetCompletionsAsync(code, code.Length, ct: TestContext.Current.CancellationToken);
             Assert.Contains(members!.Items, i => i.DisplayText == "Customers");

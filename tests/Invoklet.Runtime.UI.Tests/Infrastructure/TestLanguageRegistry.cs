@@ -14,8 +14,13 @@ internal static class TestLanguageRegistry
     // C# tabs get what create returns; tabs in any other language get none, as with the real modules.
     // C# tabs are highlighted as C#, with an otherwise empty editor profile.
     public static ILanguageHostRegistry WithCSharpIntelliSense(this Mock<ILanguageHostRegistry> registry, Func<IIntelliSenseService> create)
+        => registry.WithCSharpIntelliSense(() => Task.FromResult(create()));
+
+    // The same, for services that come when a task the test holds completes: a slow start-up without a thread waiting for it.
+    public static ILanguageHostRegistry WithCSharpIntelliSense(this Mock<ILanguageHostRegistry> registry, Func<Task<IIntelliSenseService>> create)
     {
-        registry.Setup(r => r.CreateIntelliSense("csharp", It.IsAny<CancellationToken>())).Returns(create);
+        registry.Setup(r => r.CreateIntelliSenseAsync("csharp", It.IsAny<CancellationToken>()))
+            .Returns(async (string _, CancellationToken _) => (IIntelliSenseService?)await create());
         registry.Setup(r => r.GetEditorProfile("csharp")).Returns(new EditorLanguageProfile { SourceFileExtension = ".cs" });
         return registry.Object;
     }
@@ -24,14 +29,14 @@ internal static class TestLanguageRegistry
     // (DotnetPackageReferenceContext), so a test can check the references and target it ends up with.
     public static Mock<IIntelliSenseService> ForwardingExecutionContext(this Mock<IIntelliSenseService> service)
     {
-        service.Setup(s => s.ApplyExecutionContext(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>())).Callback<ExecutionRequest, CancellationToken>((request, _) =>
+        service.Setup(s => s.ApplyExecutionContextAsync(It.IsAny<ExecutionRequest>(), It.IsAny<CancellationToken>())).Callback<ExecutionRequest, CancellationToken>((request, _) =>
         {
             var packages = request.Packages.ToDictionary(p => p.Key, p => new Package(p.Value));
             if (DotnetPackageReferenceContext.For(request) is { } context)
                 service.Object.UpdatePackageReferences(packages, context);
             else
                 service.Object.UpdatePackageReferences(packages);
-        });
+        }).Returns(Task.CompletedTask);
         return service;
     }
 

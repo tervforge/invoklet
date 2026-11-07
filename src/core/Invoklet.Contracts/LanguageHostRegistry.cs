@@ -51,8 +51,8 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
     public string? GetCodeForKind(string language, string code, MdRunKind kind, string indent = "    ") =>
         _factories.TryGetValue(language, out var factory) ? factory.CodeForKind(code, kind, indent) : null;
 
-    public IIntelliSenseService? CreateIntelliSense(string language, CancellationToken cancellationToken) =>
-        _factories.TryGetValue(language, out var factory) ? factory.CreateIntelliSense(cancellationToken) : null;
+    public Task<IIntelliSenseService?> CreateIntelliSenseAsync(string language, CancellationToken cancellationToken) =>
+        _factories.TryGetValue(language, out var factory) ? factory.CreateIntelliSenseAsync(cancellationToken) : Task.FromResult<IIntelliSenseService?>(null);
 
     public void WarmUpIntelliSense()
     {
@@ -68,6 +68,9 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
     /// <summary>Given to every host this registry creates (see <see cref="LanguageHostBase.SecretAccessApprover"/>).</summary>
     public Func<SecretAccess, CancellationToken, Task<bool>>? SecretAccessApprover { get; set; }
 
+    /// <summary>Given to every host this registry creates (see <see cref="LanguageHostBase.PathReader"/>).</summary>
+    public Func<string, string?>? PathReader { get; set; }
+
     public ILanguageHost Create(string language, ILanguageHostOptions? options = null) =>
         WithSecretSaver(GetFactory(language).Create(options));
 
@@ -81,6 +84,7 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
             hostBase.SecretSaver = SecretSaver;
             hostBase.SecretReader = SecretReader;
             hostBase.SecretAccessApprover = SecretAccessApprover;
+            hostBase.PathReader = PathReader;
         }
         return host;
     }
