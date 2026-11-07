@@ -155,16 +155,8 @@ public sealed class ProgramSelectionExecutionTests : IDisposable
         var text = ctrl.State.Editor.Text;
         ctrl.State.Editor.Select(text.IndexOf(selected, StringComparison.Ordinal), selected.Length);
         var sdk = new DotnetSdkProvider().Get().First();
+        // The run's task is its boundary: once it is done, its status and output are on the tab and nothing writes to its folder any more.
         await ctrl.RunSelectionAsync(sdk).WaitAsync(TimeSpan.FromMinutes(3));
-        await TestWait.EventuallyAsync(() =>
-        {
-            Dispatcher.UIThread.RunJobs();
-            Assert.NotEqual("Process", ctrl.State.ExecStatusText);
-            Assert.NotEmpty(ctrl.State.Output.Content);
-        });
-        // The output of the run is written to the script's build folder after it ends, in a queue of its own: what is asked now is written
-        // after it, so once this is done nothing writes to the folder the test removes.
-        await ctrl.SaveRunOutputForTests();
     }
 
     // A real compile and process: the selected statement inside Main runs, with the script's args;

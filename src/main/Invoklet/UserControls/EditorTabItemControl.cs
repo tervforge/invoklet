@@ -493,7 +493,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         }
     }
 
-    // All UI entry points await this boundary, including errors before execution and in cleanup.
+    // All UI entry points await this boundary, including errors before execution and in cleanup. When it completes, the run's final status
+    // and output are on the tab (the host's output is posted before the run's own continuation) and its output is written to its folder.
     internal Task RunAsync(bool debug, DotnetSdk platform)
     {
         return _run.Start(() => RunSafeAsync(debug, platform, null));
@@ -681,6 +682,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         }
 
         var cancelled = false;
+        var failureShown = Task.CompletedTask;
         RunResult? runResult = null; // stays null for a debug run — DAP doesn't report an exit code here yet
         ILanguageHost? runHost = null;
         try
@@ -761,6 +763,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         }
         finally
         {
+            // What the host posted before it returned comes first: its output, its IL, the stage it reached. A host that finishes at once
+            // leaves the run's continuation on this thread without a turn of the queue, and its end would be shown before them.
+            await Dispatcher.InvokeAsync(() => { }).GetTask();
+
             // A debuggee can terminate without going through ResumeDebug/Stop. Invalidate the
             // snapshot and remove any tooltip before the session is torn down.
             InvalidateHoverTooltip();
@@ -793,7 +799,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                                 SetStatus($"Unhandled {DebugPanelViewModel.ShortTypeName(s.UnhandledDebugException!)}", "Invoklet.Status.ErrorBrush");
                                 break;
                             case RunEnd.Failed:
-                                ReportRunFailure(runResult!, selection is not null, generation);
+                                failureShown = ReportRunFailure(runResult!, selection is not null, generation);
                                 break;
                             case RunEnd.Succeeded:
                                 SetStatus("Success", "Invoklet.Status.SuccessBrush");
@@ -811,8 +817,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 if (ReferenceEquals(s.RunCts, runCts)) s.RunCts = null;
                 runCts.Dispose();
                 _run.End();
-                _ = SaveRunOutput();
             }
+            // The run is over when what it says about its end is shown and its output is kept (off the UI thread, in the queue of the writes).
+            await failureShown;
+            await SaveRunOutput();
         }
     }
 
@@ -1460,9 +1468,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // The run's status follows the script's real exit code (and a failed compile/start),
     // not "Success" whenever no exception reached the UI. The message is posted like the script's own
     // output, so it lands after the last lines the script wrote.
-    private void ReportRunFailure(RunResult result, bool selection, int generation)
+    // Done when the message is in the output.
+    private Task ReportRunFailure(RunResult result, bool selection, int generation)
     {
-        if (_disposed || !_run.IsCurrent(generation)) return;
+        if (_disposed || !_run.IsCurrent(generation)) return Task.CompletedTask;
         _vm.HadRunError = true;
         var (message, status) = result.Outcome switch
         {
@@ -1481,13 +1490,13 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             _ => ($"Process exited with code {result.ExitCode}.", $"Exit code {result.ExitCode}"),
         };
         SetStatus(status, "Invoklet.Status.ErrorBrush");
-        Dispatcher.Post(() =>
+        return Dispatcher.InvokeAsync(() =>
         {
             if (_disposed || !_run.IsCurrent(generation)) return;
             if (message is not null)
                 State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(message)}</div>");
             UpdateOutputUi();
-        });
+        }).GetTask();
     }
 
     // Shows the stage a run has reached; the status keeps its running color until the run ends.
@@ -1552,20 +1561,22 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     }
 
     // Safe on any thread: builds the line index here, then the UI thread only adopts the finished document
-    // (and highlights it) — and only if no newer run has started meanwhile.
+    // (and highlights it) — and only if no newer run has started meanwhile. On the UI thread, as after a build, it is adopted at once,
+    // so that the IL is there when the run's task is done.
     internal void AttachIlDocument(string il, int generation)
     {
         var document = new AvaloniaEdit.Document.TextDocument(il);
         document.SetOwnerThread(null);
-        Dispatcher.Post(() =>
+        if (Dispatcher.CheckAccess()) Adopt();
+        else Dispatcher.Post(Adopt);
+
+        void Adopt()
         {
-            if (!_disposed && _run.IsCurrent(generation))
-            {
-                document.SetOwnerThread(Thread.CurrentThread);
-                IlOutput.Document = document;
-                EnsureIlHighlighting();
-            }
-        });
+            if (_disposed || !_run.IsCurrent(generation)) return;
+            document.SetOwnerThread(Thread.CurrentThread);
+            IlOutput.Document = document;
+            EnsureIlHighlighting();
+        }
     }
 
     private IlHighlighting? _ilHighlighting;
