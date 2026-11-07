@@ -71,6 +71,13 @@ public abstract class LanguageHostBase : ILanguageHost
     /// </summary>
     public Func<SecretAccess, CancellationToken, Task<bool>>? SecretAccessApprover { get; set; }
 
+    /// <summary>
+    /// Reads a named path a running script asks for (<c>Util.GetPath</c>), by a valid name in any letter case; null when the store has none.
+    /// It throws <see cref="IOException"/> (<see cref="InvalidDataException"/> among them) when the store can't be read. The script gets only
+    /// that path, never the store. Null: every path is missing.
+    /// </summary>
+    public Func<string, string?>? PathReader { get; set; }
+
     // --- Debug: virtual, throws if capability not declared ---
 
     public virtual Task RunDebugAsync(

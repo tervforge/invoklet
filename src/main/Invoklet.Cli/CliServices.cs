@@ -33,7 +33,8 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
     {
         var runtimeReferences = new DotnetRuntimeReferenceLocator();
         // The window's Secret Store, read and written the same way: a script asks for one value or saves one (Util.SetSecret).
-        var registry = new LanguageHostRegistry { SecretReader = Secrets.Read, SecretSaver = Secrets.Put };
+        // Its Path Store too, read only: a script asks for one path (Util.GetPath).
+        var registry = new LanguageHostRegistry { SecretReader = Secrets.Read, SecretSaver = Secrets.Put, PathReader = Paths.Read };
         registry.Register(new CSharpLanguageHostFactory(NullLoggerFactory.Instance, runtimeReferences));
         registry.Register(new VbLanguageHostFactory(NullLoggerFactory.Instance, runtimeReferences));
         var connectionDrivers = new ConnectionDriverRegistry();
@@ -49,6 +50,8 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
     }
 
     private static readonly FileSecretStore Secrets = new();
+
+    private static readonly FilePathStore Paths = new();
 
     // The Secret Store's value for a connection's schema; a missing or unreadable one is null, which the schema reports as missing.
     private static string? Secret(string name) => Secrets.Find(name);

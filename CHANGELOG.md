@@ -3,6 +3,13 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Added
+
+- Path Store (Tools → Path Store): named paths on this machine, such as a workspace or a data folder, that a script
+  reads with `Util.GetPath("name")` instead of keeping the path in the script. Works from the window and the command line.
+
 ## [0.11.9] — 2026-11-07
 
 ### Added

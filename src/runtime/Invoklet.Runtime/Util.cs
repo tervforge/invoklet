@@ -610,6 +610,41 @@ public static partial class Util
         }
     }
 
+    /// <summary>
+    /// The path named <paramref name="name"/> (letter case aside) in Invoklet's Path Store (Tools → Path Store): where something is on
+    /// this machine, such as a workspace, a tool or a data folder, so the script names it instead of holding a path only this machine
+    /// has. Always a full path; it need not exist. The script asks Invoklet for it, so it works in a script Invoklet or the invoklet
+    /// command line runs.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The store has no path of that name.</exception>
+    /// <exception cref="ArgumentException">The name isn't valid: letters, digits, '_', '-' and '.' only.</exception>
+    /// <exception cref="InvalidDataException">The store can't be read.</exception>
+    /// <exception cref="InvalidOperationException">The script wasn't started by Invoklet, which answers.</exception>
+    public static string GetPath(string name)
+    {
+        if (name is null) throw new ArgumentNullException(nameof(name));
+        if (Environment.GetEnvironmentVariable(InputEnvVar) != "1")
+            throw new InvalidOperationException("Util.GetPath asks Invoklet for the path: run the script from Invoklet or the invoklet command line.");
+        // Invoklet answers a digit, with a text (Base64) after it for some: 1 and the path, 0 for none, 2 and why the store can't be
+        // read, 4 and why the name isn't valid.
+        var json = "{\"Path\":" + JsonString(name) + ",\"Read\":true}";
+        Console.WriteLine(InputRequestPrefixChar + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
+        var answer = Console.In.ReadLine();
+        if (answer is null || answer.Length == 0) throw new InvalidOperationException("Util.GetPath: the run ended before Invoklet answered.");
+        var payload = answer.Length > 1 ? Encoding.UTF8.GetString(Convert.FromBase64String(answer.Substring(1))) : "";
+        return answer[0] switch
+        {
+            '1' => payload,
+            '0' => throw new KeyNotFoundException(
+                $"{ScriptName()} needs the path '{name}', and Invoklet's Path Store has none of that name. Add it in Tools → Path Store."),
+            '4' => throw new ArgumentException(payload, nameof(name)),
+            _ => throw new InvalidDataException(payload),
+        };
+    }
+
+    private static string ScriptName() =>
+        CurrentQueryPath is { Length: > 0 } script ? $"The script '{Path.GetFileName(script)}'" : "This unsaved script";
+
     // Only where Invoklet answers input; null when it can't be asked, or the run ended instead.
     private static string? AskForSecret(string name)
     {

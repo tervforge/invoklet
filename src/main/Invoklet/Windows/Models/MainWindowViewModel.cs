@@ -453,6 +453,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
     public ReactiveCommand<Unit, Unit> OpenPreferencesCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenAboutCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSecretStoreCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenPathStoreCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenConnectionsCommand { get; }
     public ReactiveCommand<Unit, Unit> ImportLinqFileCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenAssemblyExplorerCommand { get; }
@@ -1179,6 +1180,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         OpenPreferencesCommand = ReactiveCommand.CreateFromTask(_windowService.ShowPreferencesAsync);
         OpenAboutCommand = ReactiveCommand.CreateFromTask(_windowService.ShowAboutAsync);
         OpenSecretStoreCommand = ReactiveCommand.CreateFromTask(_windowService.ShowSecretStoreAsync);
+        OpenPathStoreCommand = ReactiveCommand.CreateFromTask(_windowService.ShowPathStoreAsync);
         OpenConnectionsCommand = ReactiveCommand.CreateFromTask(() => OpenConnectionsAsync());
         ImportLinqFileCommand = ReactiveCommand.CreateFromTask(ImportLinqFileAsync);
         OpenAssemblyExplorerCommand = ReactiveCommand.CreateFromTask(
@@ -1191,6 +1193,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable, IEditorTabActions
         OpenPreferencesCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenPreferencesCommand failed"));
         OpenAboutCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenAboutCommand failed"));
         OpenSecretStoreCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenSecretStoreCommand failed"));
+        OpenPathStoreCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenPathStoreCommand failed"));
         OpenConnectionsCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenConnectionsCommand failed"));
         ImportLinqFileCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "ImportLinqFileCommand failed"));
         OpenAssemblyExplorerCommand.ThrownExceptions.Subscribe(ex => _logger.LogError(ex, "OpenAssemblyExplorerCommand failed"));

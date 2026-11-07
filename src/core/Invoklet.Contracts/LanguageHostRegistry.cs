@@ -68,6 +68,9 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
     /// <summary>Given to every host this registry creates (see <see cref="LanguageHostBase.SecretAccessApprover"/>).</summary>
     public Func<SecretAccess, CancellationToken, Task<bool>>? SecretAccessApprover { get; set; }
 
+    /// <summary>Given to every host this registry creates (see <see cref="LanguageHostBase.PathReader"/>).</summary>
+    public Func<string, string?>? PathReader { get; set; }
+
     public ILanguageHost Create(string language, ILanguageHostOptions? options = null) =>
         WithSecretSaver(GetFactory(language).Create(options));
 
@@ -81,6 +84,7 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
             hostBase.SecretSaver = SecretSaver;
             hostBase.SecretReader = SecretReader;
             hostBase.SecretAccessApprover = SecretAccessApprover;
+            hostBase.PathReader = PathReader;
         }
         return host;
     }

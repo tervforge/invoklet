@@ -15,7 +15,8 @@ internal sealed class UtilSecretRequestFixture : IDisposable
     // A name no other test has used, so nothing is remembered between tests.
     public string Name { get; } = "test-" + Guid.NewGuid().ToString("N");
 
-    /// <summary>Invoklet answers with these lines, one per request: "1"+Base64 value, "0", "2"+Base64 reason, "3".</summary>
+    /// <summary>Invoklet answers with these lines, one per request: "1"+Base64 value, "0", "2"+Base64 reason, "3",
+    /// "4"+Base64 reason.</summary>
     public UtilSecretRequestFixture(params string[] answers)
     {
         Environment.SetEnvironmentVariable(Util.InputEnvVar, "1");
@@ -26,6 +27,11 @@ internal sealed class UtilSecretRequestFixture : IDisposable
     public static string Found(string value) => "1" + Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
 
     public static string Unreadable(string reason) => "2" + Convert.ToBase64String(Encoding.UTF8.GetBytes(reason));
+
+    public static string Invalid(string reason) => "4" + Convert.ToBase64String(Encoding.UTF8.GetBytes(reason));
+
+    /// <summary>The script was started some other way: nothing answers its requests.</summary>
+    public void NotStartedByInvoklet() => Environment.SetEnvironmentVariable(Util.InputEnvVar, null);
 
     /// <summary>The first request the script wrote, as JSON.</summary>
     public JsonDocument FirstRequest()

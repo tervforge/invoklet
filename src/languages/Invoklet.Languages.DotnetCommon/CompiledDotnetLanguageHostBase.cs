@@ -529,6 +529,11 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
                     break;
                 default:
                     var request = ParseInputRequest(payload);
+                    if (request is { Path: { } pathName, Read: true })
+                    {
+                        _ = AnswerPathAsync(pathName); // Util.GetPath: the script gets one path, never the store
+                        break;
+                    }
                     if (request is { Secret: { } read, Read: true })
                     {
                         _ = AnswerSecretAsync(read); // Util.GetSecret: read here, so the store's key stays in this process
@@ -662,7 +667,45 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
         catch (Exception ex) when (ex is not OutOfMemoryException) { return false; }
     }
 
-    private static (string? Prompt, bool IsPassword, string? Secret, string? Value, bool Remove, bool Read) ParseInputRequest(string base64)
+    // Util.GetPath: 1 and the path, 0 for none, 2 and why the store can't be read, or 4 and why the name isn't valid (Base64 after the
+    // digit), on the script's stdin. Reading needs nobody's say: a path is no secret, and the script gets only the one it names.
+    private async Task AnswerPathAsync(string name)
+    {
+        if (_currentInputStream is not { } stream) return;
+        string answer;
+        try
+        {
+            var valid = PathStoreRules.Name(name);
+            answer = await Task.Run(() => PathReader?.Invoke(valid)) is { } path ? "1" + Base64(path) : "0";
+        }
+        catch (ArgumentException ex)
+        {
+            answer = "4" + Base64(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _loggerFactory.CreateLogger<CompiledDotnetLanguageHostBase>().LogWarning(ex, "Could not read the path '{Name}' from the Path Store", name);
+            answer = "2" + Base64($"Invoklet's Path Store can't be read: {ex.Message}");
+        }
+        await AnswerAsync(stream, answer);
+    }
+
+    private static string Base64(string text) => Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
+
+    private static async Task AnswerAsync(Stream stream, string answer)
+    {
+        try
+        {
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(answer + "\n"));
+            await stream.FlushAsync();
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // The script ended meanwhile.
+        }
+    }
+
+    private static (string? Prompt, bool IsPassword, string? Secret, string? Value, bool Remove, bool Read, string? Path) ParseInputRequest(string base64)
     {
         try
         {
@@ -677,11 +720,12 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             var value = root.TryGetProperty("Value", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
             var remove = root.TryGetProperty("Remove", out var r) && r.ValueKind == JsonValueKind.True;
             var read = root.TryGetProperty("Read", out var rd) && rd.ValueKind == JsonValueKind.True;
-            return (prompt, isPassword, secret, value, remove, read);
+            var path = root.TryGetProperty("Path", out var pa) && pa.ValueKind == JsonValueKind.String ? pa.GetString() : null;
+            return (prompt, isPassword, secret, value, remove, read, path);
         }
         catch (Exception)
         {
-            return (null, false, null, null, false, false);
+            return (null, false, null, null, false, false, null);
         }
     }
 

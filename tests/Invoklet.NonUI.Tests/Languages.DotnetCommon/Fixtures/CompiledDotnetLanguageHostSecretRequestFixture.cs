@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Invoklet.NonUI.Tests.Languages.DotnetCommon.Fixtures;
 
-// A host whose script writes one request for a secret on its stdout and then waits; what the host reads, saves and asks is recorded,
+// A host whose script writes one request for a secret or a path on its stdout and then waits; what the host reads, saves and asks is recorded,
 // and its answer is what it writes on the script's stdin. The build folder is the fixture's own and goes with it.
 internal sealed class CompiledDotnetLanguageHostSecretRequestFixture : IAsyncDisposable
 {
@@ -21,16 +21,20 @@ internal sealed class CompiledDotnetLanguageHostSecretRequestFixture : IAsyncDis
     public FakeChildProcess Process { get; private set; } = new("");
 
     public List<string> Read { get; } = [];
+    public List<string> ReadPaths { get; } = [];
     public List<(string Name, string? Value)> Saved { get; } = [];
     public List<SecretAccess> Asked { get; } = [];
     public bool Prompted { get; private set; }
 
     // What the store holds for the secret read: a value, null for none, or a failure.
     public Func<string?> Store { get; set; } = () => "p@ss";
+
+    // What the Path Store holds for the path read: a path, null for none, or a failure.
+    public Func<string?> Paths { get; set; } = () => "/work/data";
     public bool HasSaver { get; set; } = true;
     public bool Allowed { get; set; } = true;
 
-    /// <summary>The script's request, as Util.GetSecret or Util.SetSecret writes it.</summary>
+    /// <summary>The script's request, as Util.GetSecret, Util.SetSecret or Util.GetPath writes it.</summary>
     public static string Request(string json) => "\x1f" + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)) + "\n";
 
     public CSharpLanguageHost CreateSut(string request)
@@ -58,6 +62,11 @@ internal sealed class CompiledDotnetLanguageHostSecretRequestFixture : IAsyncDis
             {
                 Read.Add(name);
                 return Store();
+            },
+            PathReader = name =>
+            {
+                ReadPaths.Add(name);
+                return Paths();
             },
             SecretAccessApprover = (access, _) =>
             {
