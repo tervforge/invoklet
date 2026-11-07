@@ -10,6 +10,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - The results use the same kind of code font as the editor, instead of Courier New on macOS and Linux.
 - Copying a string from the results copies its value, without the quotes shown around it, and the cells of a
   table are separated by tabs, so they stay in their columns when pasted into a spreadsheet.
+- The arrow and the menu of each table in the results can be reached with Tab and used with Enter or Space.
 - Text in the results is drawn evenly: long lines wrap between words, and only a token too long for a line is broken.
 
 ### Fixed

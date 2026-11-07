@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Invoklet.Avalonia.HtmlRenderer;
@@ -41,6 +44,7 @@ public partial class OutputHtmlView : UserControl
             {
                 _scrollToRestore = null;
                 OutputHtml.ScrollToPoint(offset.X, offset.Y);
+                PlaceFocusRing(false);
                 return;
             }
             if (!_scrollToEndPending) return;
@@ -49,6 +53,11 @@ public partial class OutputHtmlView : UserControl
         };
 
         OutputHtml.LinkClicked += OnLinkClicked;
+        OutputHtml.AddHandler(KeyDownEvent, OnKeyDownInPanel, RoutingStrategies.Tunnel);
+        OutputHtml.AddHandler(PointerPressedEvent, (_, _) => MoveKeyboardFocus(null), RoutingStrategies.Tunnel);
+        OutputHtml.PointerWheelChanged += (_, _) => Dispatcher.UIThread.Post(() => PlaceFocusRing(false));
+        OutputHtml.LostFocus += (_, _) => KeyboardFocusRing.IsVisible = false;
+        OutputHtml.GotFocus += (_, _) => PlaceFocusRing(false);
         OutputHtml.Container.ExtraContextMenuItems.Add(("Save results as HTML...", () => SaveHtmlRequested?.Invoke()));
 
         DataContextChanged += (_, _) => Rebind();
@@ -173,31 +182,96 @@ public partial class OutputHtmlView : UserControl
 
     private void OnLinkClicked(object? sender, HtmlRendererRoutedEventArgs<HtmlLinkClickedEventArgs> e)
     {
-        if (e.Event is not { } link) return;
-        if (ResultsBoxes.ToggleOf(link.Link) is { } toggle)
-        {
-            link.Handled = true;
-            if (!_toggledBoxes.Remove(toggle)) _toggledBoxes.Add(toggle);
-            ShowAgainInPlace();
-        }
-        else if (ResultsBoxes.TableLinkOf(link.Link) is { } box)
-        {
-            link.Handled = true;
-            ShowExportMenu(() => ExportBoxRequested?.Invoke(box));
-        }
-        else if (ResultsTables.TableOf(link.Link) is { } table)
-        {
-            link.Handled = true;
-            ShowExportMenu(() => ExportTableRequested?.Invoke(table));
-        }
+        if (e.Event is { } link && Activate(link.Link, atPointer: true)) link.Handled = true;
     }
 
-    private void ShowExportMenu(Action export)
+    // What a click on a link does, and Enter on it. False for a link of no table.
+    private bool Activate(string link, bool atPointer)
+    {
+        if (ResultsBoxes.ToggleOf(link) is { } toggle)
+        {
+            if (!_toggledBoxes.Remove(toggle)) _toggledBoxes.Add(toggle);
+            ShowAgainInPlace();
+            PlaceFocusRing(false);
+        }
+        else if (ResultsBoxes.TableLinkOf(link) is { } box)
+        {
+            ShowExportMenu(() => ExportBoxRequested?.Invoke(box), atPointer);
+        }
+        else if (ResultsTables.TableOf(link) is { } table)
+        {
+            ShowExportMenu(() => ExportTableRequested?.Invoke(table), atPointer);
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+
+    private void ShowExportMenu(Action export, bool atPointer)
     {
         var item = new MenuItem { Header = "Export to CSV..." };
         item.Click += (_, _) => export();
-        new MenuFlyout { Items = { item } }.ShowAt(OutputHtml, showAtPointer: true);
+        new MenuFlyout { Items = { item } }.ShowAt(atPointer ? OutputHtml : KeyboardFocusRing, showAtPointer: atPointer);
     }
+
+    private void OnKeyDownInPanel(object? sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Tab when e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift:
+                var next = ResultsBoxes.NextLink(OutputHtml.Container.GetLinks().Select(l => l.Href), _keyboardLink, e.KeyModifiers == KeyModifiers.None);
+                MoveKeyboardFocus(next);
+                // Past the last one the key leaves the panel, as it would any control.
+                e.Handled = next is not null;
+                break;
+            case Key.Enter or Key.Space when _keyboardLink is { } link && e.KeyModifiers == KeyModifiers.None:
+                e.Handled = Activate(link, atPointer: false);
+                break;
+            default:
+                // The panel scrolls on these keys, after this.
+                if (_keyboardLink is not null) Dispatcher.UIThread.Post(() => PlaceFocusRing(false));
+                break;
+        }
+    }
+
+    private void MoveKeyboardFocus(string? link)
+    {
+        _keyboardLink = link;
+        AutomationProperties.SetName(OutputHtml, link is null ? "Results"
+            : ResultsBoxes.ToggleOf(link) is not null ? "Results: fold or open this table" : "Results: table actions");
+        PlaceFocusRing(true);
+    }
+
+    // The ring on the link the keyboard is on, wherever the page lies now. A link the page no longer has takes the ring away.
+    private void PlaceFocusRing(bool bringIntoView)
+    {
+        var target = _keyboardLink is null ? null : OutputHtml.Container.GetLinks().FirstOrDefault(l => l.Href == _keyboardLink);
+        if (target is null || !OutputHtml.IsFocused)
+        {
+            if (target is null) _keyboardLink = null;
+            KeyboardFocusRing.IsVisible = false;
+            return;
+        }
+
+        var rect = target.Rectangle;
+        var scroll = OutputHtml.Container.ScrollOffset;
+        if (bringIntoView && (rect.Top + scroll.Y < 0 || rect.Bottom + scroll.Y > OutputHtml.Bounds.Height))
+        {
+            OutputHtml.ScrollToPoint(-scroll.X, Math.Max(0, rect.Top - 8));
+            scroll = OutputHtml.Container.ScrollOffset;
+        }
+        KeyboardFocusRing.Margin = new Thickness(rect.Left + scroll.X - 2, rect.Top + scroll.Y - 2, 0, 0);
+        KeyboardFocusRing.Width = rect.Width + 4;
+        KeyboardFocusRing.Height = rect.Height + 4;
+        KeyboardFocusRing.IsVisible = true;
+    }
+
+    private string? _keyboardLink;
+
+    internal bool KeyboardRingShownForTests => KeyboardFocusRing.IsVisible;
+    internal string? KeyboardLinkForTests => _keyboardLink;
 
     // Names of boxes are not reused by a later run, so what is here for an earlier one does no harm.
     private readonly HashSet<string> _toggledBoxes = [];

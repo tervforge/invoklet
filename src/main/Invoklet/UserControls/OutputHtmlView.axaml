@@ -3,13 +3,22 @@
              xmlns:htmlRenderer="clr-namespace:Invoklet.Avalonia.HtmlRenderer;assembly=Invoklet.Avalonia.HtmlRenderer"
              x:Class="Invoklet.UserControls.OutputHtmlView">
 
-    <htmlRenderer:HtmlPanel x:Name="OutputHtml"
-                            Background="{DynamicResource Invoklet.Output.BackgroundBrush}">
-        <ToolTip.Tip>
-            <ToolTip BorderBrush="Transparent" Padding="0" ShowDelay="5000">
-                <htmlRenderer:HtmlLabel x:Name="HtmlTooltipLabel"/>
-            </ToolTip>
-        </ToolTip.Tip>
-    </htmlRenderer:HtmlPanel>
+    <Panel>
+        <htmlRenderer:HtmlPanel x:Name="OutputHtml"
+                                Background="{DynamicResource Invoklet.Output.BackgroundBrush}">
+            <ToolTip.Tip>
+                <ToolTip BorderBrush="Transparent" Padding="0" ShowDelay="5000">
+                    <htmlRenderer:HtmlLabel x:Name="HtmlTooltipLabel"/>
+                </ToolTip>
+            </ToolTip.Tip>
+        </htmlRenderer:HtmlPanel>
+        <!-- Where the keyboard is among a table's arrow and "…": over the page, which would otherwise have to be laid out again at each key. -->
+        <Border x:Name="KeyboardFocusRing"
+                IsVisible="False" IsHitTestVisible="False"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                BorderThickness="2"
+                BorderBrush="{DynamicResource Invoklet.Focus.BorderBrush}"
+                CornerRadius="{DynamicResource Invoklet.Radius.Control}"/>
+    </Panel>
 
 </UserControl>
