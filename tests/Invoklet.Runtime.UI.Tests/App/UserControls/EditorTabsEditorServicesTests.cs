@@ -13,6 +13,7 @@ using Invoklet.Services.Preferences;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows.Models;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -102,7 +103,10 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         }
     }
 
-    private (EditorTabsControl Tabs, MainWindowViewModel Shell, Window Host) Open(params ILanguageHostFactory[] languages)
+    private (EditorTabsControl Tabs, MainWindowViewModel Shell, Window Host) Open(params ILanguageHostFactory[] languages) =>
+        Open(null, languages);
+
+    private (EditorTabsControl Tabs, MainWindowViewModel Shell, Window Host) Open(ILogger<EditorsTabItemControl>? logger, params ILanguageHostFactory[] languages)
     {
         var prefs = new Mock<IPreferencesService>();
         prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -123,7 +127,7 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
         foreach (var language in languages) registry.Register(language);
         var shell = new MainWindowViewModel([], fileSystem.Object, new Mock<IWindowService>().Object, prefs.Object, new LanguageHostRegistry());
         var tabs = new EditorTabsControl(theme.Object, new Mock<IWindowService>().Object, registry, prefs.Object,
-            new Mock<IBuildCacheService>().Object);
+            new Mock<IBuildCacheService>().Object, logger);
         var host = new Window { Width = 900, Height = 700, Content = tabs };
         host.Show();
         return (tabs, shell, host);
@@ -294,6 +298,32 @@ public sealed class EditorTabsEditorServicesTests : IDisposable
 
             Assert.Null(ctrl.IntelliSenseForTests);
             Assert.Empty(csharp.Created);
+        }
+        finally { host.Close(); }
+    }
+
+    // A creation the tab stopped waiting for that fails later: nobody awaits it, so its failure is logged with the exception.
+    [AvaloniaFact]
+    public async Task ALateCreationThatFails_Should_BeLogged()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var csharp = new GatedLanguage("csharp", gate) { Throws = true };
+        var logged = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new Mock<ILogger<EditorsTabItemControl>>();
+        logger.Setup(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(), It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("arrived late")),
+                It.IsAny<Exception?>(), It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+            .Callback(new InvocationAction(call => logged.TrySetResult((Exception?)call.Arguments[3])));
+        var (tabs, shell, host) = Open(logger.Object, csharp);
+        try
+        {
+            tabs.ServiceCreationTimeout = TimeSpan.Zero;
+            tabs.Attach(shell);
+            await ShownAsync(tabs, shell.Tabs[0]);
+
+            gate.TrySetResult();
+            var exception = await logged.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
+
+            Assert.Contains("the language failed to start", exception?.ToString());
         }
         finally { host.Close(); }
     }
