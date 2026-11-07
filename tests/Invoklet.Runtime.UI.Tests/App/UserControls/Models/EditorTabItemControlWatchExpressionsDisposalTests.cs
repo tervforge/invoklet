@@ -47,7 +47,7 @@ public class EditorTabItemControlWatchExpressionsDisposalTests
     {
         var prefs = MakePrefs();
         var vm = new EditorTabItemViewModel(
-            filePath: null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            filePath: null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var registry = new Mock<ILanguageHostRegistry>();
         var buildCache = new Mock<IBuildCacheService>();
 

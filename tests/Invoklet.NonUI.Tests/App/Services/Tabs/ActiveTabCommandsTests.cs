@@ -265,7 +265,7 @@ public sealed class ActiveTabCommandsTests
     {
         // Arrange
         var fixture = new ActiveTabCommandsFixture();
-        fixture.Activate(fixture.CreateTab("/scripts/a.inv"));
+        fixture.Activate(fixture.CreateTab());
         var sut = fixture.CreateSut();
 
         // Act
@@ -351,7 +351,7 @@ public sealed class ActiveTabCommandsTests
     {
         // Arrange
         var fixture = new ActiveTabCommandsFixture();
-        var tab = fixture.CreateTab("/scripts/a.inv");
+        var tab = fixture.CreateTab();
         fixture.Activate(tab);
         var sut = fixture.CreateSut();
 

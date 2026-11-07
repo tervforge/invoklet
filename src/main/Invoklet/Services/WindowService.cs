@@ -26,6 +26,7 @@ public sealed class WindowService : IWindowService
 
     private readonly Func<SecretStoreWindow>? _secretStoreWindowFactory;
     private readonly Func<ConnectionsWindow>? _connectionsWindowFactory;
+    private readonly Func<AboutWindow>? _aboutWindowFactory;
 
     // preferences: the text editor window's Save/Save As key gestures (the user's keyboard settings);
     // optional, like the Secret Store and Connections windows, so tests constructing a WindowService for other windows
@@ -36,7 +37,8 @@ public sealed class WindowService : IWindowService
         IThemeService themeService,
         IPreferencesService? preferences = null,
         Func<SecretStoreWindow>? secretStoreWindowFactory = null,
-        Func<ConnectionsWindow>? connectionsWindowFactory = null)
+        Func<ConnectionsWindow>? connectionsWindowFactory = null,
+        Func<AboutWindow>? aboutWindowFactory = null)
     {
         _dependenciesWindowFactory = dependenciesWindowFactory;
         _preferencesWindowFactory = preferencesWindowFactory;
@@ -44,6 +46,7 @@ public sealed class WindowService : IWindowService
         _preferences = preferences;
         _secretStoreWindowFactory = secretStoreWindowFactory;
         _connectionsWindowFactory = connectionsWindowFactory;
+        _aboutWindowFactory = aboutWindowFactory;
     }
 
     // The same lookup, repeated verbatim 6 times below.
@@ -90,7 +93,7 @@ public sealed class WindowService : IWindowService
         => ShowDialogAsync(new ErrorDialog(title, message));
 
     public Task ShowAboutAsync()
-        => ShowDialogAsync(new AboutWindow());
+        => ShowDialogAsync(_aboutWindowFactory?.Invoke() ?? new AboutWindow());
 
     public Task ShowSecretStoreAsync()
         => _secretStoreWindowFactory is { } factory ? ShowDialogAsync(factory()) : Task.CompletedTask;

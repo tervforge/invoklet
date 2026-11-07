@@ -101,7 +101,7 @@ public class EditorTabItemControlPreviewTests
     {
         var prefs = sharedPrefs ?? MakePrefs();
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var theme = new Mock<IThemeService>();
         theme.Setup(t => t.CurrentTheme).Returns(Theme(TextMateSharp.Grammars.ThemeName.DarkPlus));
         // The real theme gives the preview a background, which also makes its gaps between blocks

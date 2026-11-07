@@ -48,7 +48,7 @@ public class TextMateHighlighterTests
     [Fact]
     public void Highlight_with_DarkPlus_theme_produces_colored_tokens()
     {
-        var highlighter = new TextMateHighlighter(ThemeName.DarkPlus);
+        var highlighter = new TextMateHighlighter();
         var result = highlighter.Highlight("var x = 1;".AsMemory(), "csharp");
         Assert.NotNull(result);
         // At least one token should have a non-null brush
@@ -59,7 +59,7 @@ public class TextMateHighlighterTests
     public void Highlight_tokens_cover_the_line_exactly_without_empty_tokens()
     {
         const string line = "var x = 1; // done";
-        var tokens = new TextMateHighlighter(ThemeName.DarkPlus).Highlight(line.AsMemory(), "csharp")!;
+        var tokens = new TextMateHighlighter().Highlight(line.AsMemory(), "csharp")!;
 
         Assert.All(tokens, t => Assert.NotEmpty(t.Text));
         Assert.Equal(line, string.Concat(tokens.Select(t => t.Text)));
@@ -68,7 +68,7 @@ public class TextMateHighlighterTests
     [Fact]
     public void Highlight_empty_line_returns_no_tokens()
     {
-        var tokens = new TextMateHighlighter(ThemeName.DarkPlus).Highlight(ReadOnlyMemory<char>.Empty, "csharp");
+        var tokens = new TextMateHighlighter().Highlight(ReadOnlyMemory<char>.Empty, "csharp");
 
         Assert.NotNull(tokens);
         Assert.Empty(tokens);

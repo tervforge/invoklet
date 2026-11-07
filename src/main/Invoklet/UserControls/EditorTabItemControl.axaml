@@ -11,7 +11,9 @@
 
     <UserControl.Resources>
         <DataTemplate x:Key="TabHeaderTemplate" x:DataType="vm:EditorTabItemViewModel">
-            <StackPanel Orientation="Horizontal" Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="4"
+                        ToolTip.Tip="{Binding StatusText}"
+                        AutomationProperties.HelpText="{Binding StatusText}">
                 <StackPanel.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Save As..." Command="{Binding SaveAsCommand}">
@@ -36,12 +38,33 @@
                            Classes.dirty="{Binding IsDirty}"
                            VerticalAlignment="Center"
                            FontSize="12"/>
-                <Button Classes="TabClose"
-                        Command="{Binding CloseCommand}"
-                        VerticalAlignment="Center">
-                    <PathIcon Data="{StaticResource Icon.Close}"
-                              Width="10" Height="10"/>
-                </Button>
+                <!-- One slot, so a tab keeps its width when it is chosen or its state changes. The status is no action: a click selects the tab. -->
+                <Panel Width="14" Height="14" VerticalAlignment="Center">
+                    <Button Classes="TabClose"
+                            Command="{Binding CloseCommand}"
+                            VerticalAlignment="Center">
+                        <PathIcon Data="{StaticResource Icon.Close}"
+                                  Width="10" Height="10"/>
+                    </Button>
+                    <Panel Classes="TabStatus" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{DynamicResource Invoklet.Text.SecondaryBrush}"
+                                 IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.None}}"/>
+                        <Ellipse Width="7" Height="7" Fill="{DynamicResource Invoklet.Tab.DirtyBrush}"
+                                 IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Unsaved}}"/>
+                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Play}"
+                                  Foreground="{DynamicResource Invoklet.Status.RunningBrush}"
+                                  IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Running}}"/>
+                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Play}"
+                                  Foreground="{DynamicResource Invoklet.Status.RunningBrush}"
+                                  IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Debugging}}"/>
+                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Pause}"
+                                  Foreground="{DynamicResource Invoklet.Status.PausedBrush}"
+                                  IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Paused}}"/>
+                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Warning}"
+                                  Foreground="{DynamicResource Invoklet.Status.ErrorBrush}"
+                                  IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Failed}}"/>
+                    </Panel>
+                </Panel>
             </StackPanel>
         </DataTemplate>
 
@@ -255,6 +278,8 @@
                                         <StackPanel x:Name="OutputSettingsPanel" Spacing="6" MaxWidth="320">
                                             <TextBlock Text="Output settings" FontWeight="SemiBold"/>
                                             <CheckBox x:Name="ResultsWrapCheckBox" Content="Wrap long lines in results"/>
+                                            <CheckBox x:Name="ResultsLabelsCheckBox" Content="Head a dump with its expression"/>
+                                            <CheckBox x:Name="ResultsKeepCheckBox" Content="Keep the last output after closing"/>
                                             <Separator Margin="0,2"/>
                                             <TextBlock Text="When debugging" Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
                                             <CheckBox IsChecked="{Binding DebugPanel.BreakOnUncaughtExceptions, Mode=TwoWay}"

@@ -28,6 +28,8 @@ public partial class EditorsTabItemControl : ITabCommandTarget
     {
         State.Output.Clear();
         State.DumpContainerBlocks.Clear();
+        // A run in progress still needs what it reported, to end with the right status.
+        if (_vm.EnableRunButton) _vm.HadRunError = false;
         UpdateOutputUi();
     }
 

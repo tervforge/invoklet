@@ -65,7 +65,7 @@ public partial class EditorsTabItemControl
             // The output has changed since it was taken (a run ended, the output was cleared): this release is out of date.
             if (Volatile.Read(ref _outputVersion) != generation) return false;
             // The output of a run waits in the folder of that run; only an output without one goes to the spill.
-            var keptInFolder = folder is not null && SaveRunOutputOf(folder, output);
+            var keptInFolder = _prefs.Editor.ResultsKeepOutput && folder is not null && SaveRunOutputOf(folder, output);
             return store.TryWrite(id, new ReleasedContent(text, viewState, keptInFolder ? null : output));
         });
         if (!written || _disposed || _contentReleased || HasRunningProcess || !stillWanted()
@@ -173,6 +173,7 @@ public partial class EditorsTabItemControl
     {
         FollowTheFolderOfTheIndex();
         if (State.OutputDirectory is not { } folder) return Task.CompletedTask;
+        if (!_prefs.Editor.ResultsKeepOutput) return InOutputQueue(() => { RunOutputFile.Delete(folder); return true; });
         var output = CaptureOutput();
         return InOutputQueue(() => SaveRunOutputOf(folder, output));
     }
@@ -222,6 +223,11 @@ public partial class EditorsTabItemControl
     private void LoadRunOutput()
     {
         if (State.Output.Content.Length > 0 || State.OutputDirectory is not { } folder) return;
+        if (!_prefs.Editor.ResultsKeepOutput)
+        {
+            _ = InOutputQueue(() => { RunOutputFile.Delete(folder); return true; });
+            return;
+        }
         if (RunOutputFile.TryLoad(folder) is { } output) RestoreOutput(output);
     }
 
@@ -252,14 +258,14 @@ public partial class EditorsTabItemControl
     }
 
     private TabOutputState CaptureOutput()
-        => new(State.Output.Content, State.HadRunError, new Dictionary<string, string>(State.DumpContainerBlocks));
+        => new(State.Output.Content, _vm.HadRunError, new Dictionary<string, string>(State.DumpContainerBlocks));
 
     private void RestoreOutput(TabOutputState? output)
     {
         if (output is null) return;
         State.Output.Clear();
         State.Output.Append(output.Content);
-        State.HadRunError = output.HadRunError;
+        _vm.HadRunError = output.HadRunError;
         State.DumpContainerBlocks.Clear();
         foreach (var (id, block) in output.DumpContainerBlocks) State.DumpContainerBlocks[id] = block;
     }

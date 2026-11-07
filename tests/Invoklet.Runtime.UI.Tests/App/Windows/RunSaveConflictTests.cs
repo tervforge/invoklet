@@ -89,7 +89,7 @@ public class RunSaveConflictTests : IDisposable
         buildCache.Setup(b => b.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>()))
             .Returns(() => Directory.CreateDirectory(Path.Combine(_root, "build")).FullName);
 
-        var vm = new EditorTabItemViewModel(_script, [Sdk], prefs.Object, shell, MdRunLanguage.CSharp, MdRunKind.Statements);
+        var vm = new EditorTabItemViewModel(_script, [Sdk], prefs.Object, shell);
         var ctrl = new EditorsTabItemControl(vm, theme.Object, _windows.Object, registry.Object, prefs.Object,
             intelliSense: null, buildCache.Object);
         var window = new Window { Content = ctrl };

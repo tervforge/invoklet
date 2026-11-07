@@ -248,7 +248,7 @@ internal sealed class GraphicsAdapter : RGraphics
             var g = new StreamGeometry();
             using (var context = g.Open())
             {
-                context.BeginFigure(Utils.Convert(points[0]), true);
+                context.BeginFigure(Utils.Convert(points[0]));
                 for (int i = 1; i < points.Length; i++)
                     context.LineTo(Utils.Convert(points[i]));
                 context.EndFigure(false);

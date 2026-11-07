@@ -21,7 +21,10 @@ internal static class ResultsTables
     /// with no rows has none, and keeps its number. (The panel loses the text of a cell that an inline link follows, and lays a link out on a
     /// line of its own; two cells of a table inside the cell lay out right.)
     /// </summary>
-    public static string WithMenus(string html)
+    public static string WithMenus(string html) => WithMenus(html, table => LinkPrefix + table);
+
+    /// <summary>The same, with <paramref name="linkOf"/> giving the address of the button of each table by its number.</summary>
+    public static string WithMenus(string html, Func<int, string> linkOf)
     {
         var result = new StringBuilder(html.Length + 128);
         var depth = 0;
@@ -56,7 +59,7 @@ internal static class ResultsTables
                         result.Append(html, copied, lastCell.Start - copied)
                             .Append("<table class=\"dp-menuhost\"><tr><td class=\"dp-menutext\">")
                             .Append(html, lastCell.Start, lastCell.End - lastCell.Start)
-                            .Append("</td><td class=\"dp-menubtn\"><a class=\"dp-tablemenu\" href=\"").Append(LinkPrefix).Append(count)
+                            .Append("</td><td class=\"dp-menubtn\"><a class=\"dp-tablemenu\" href=\"").Append(linkOf(count))
                             .Append("\" title=\"Table actions\">&nbsp;&hellip;&nbsp;</a></td></tr></table>");
                         copied = lastCell.End;
                     }
@@ -111,7 +114,7 @@ internal static class ResultsTables
                 case "style" or "script" or "summary": // the panel's "(click to expand)" is not a result
                     if (!closing) skipping = name;
                     break;
-                case "div" when !closing && ClassOf(tag) == "dp-count": // "Person[] — 3 items"
+                case "div" when !closing && ClassOf(tag) == "dp-count": // "Person[3]"
                     skipping = name;
                     break;
                 case "table":

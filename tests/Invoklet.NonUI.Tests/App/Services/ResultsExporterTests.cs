@@ -114,6 +114,39 @@ public sealed class ResultsExporterTests
     private const string TwoTables = "<table><tr><th>A</th></tr><tr><td>1</td></tr></table><table><tr><th>B</th></tr><tr><td>2, 3</td></tr></table>";
 
     [Fact]
+    public async Task ExportBoxCsvAsync_AFoldedBox_WritesItsRows()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture
+        {
+            Content = """<div class="dp-box" data-dp-node="a" data-dp-collapsed="1"><table><tr><td>Ann</td></tr></table></div>""",
+        };
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportBoxCsvAsync("a", TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowSaveCsvFileDialogAsync("Report.csv", "scripts"), Times.Once);
+        Assert.Contains("Ann", Assert.Single(fixture.WrittenCsv).Item2);
+    }
+
+    [Fact]
+    public async Task ExportBoxCsvAsync_ABoxNoLongerThere_SaysSoAndWritesNothing()
+    {
+        // Arrange
+        var fixture = new ResultsExporterFixture();
+        var sut = fixture.CreateSut();
+
+        // Act
+        await sut.ExportBoxCsvAsync("gone", TestContext.Current.CancellationToken);
+
+        // Assert
+        fixture.Windows.Verify(w => w.ShowErrorAsync("Export Table", It.IsAny<string>()), Times.Once);
+        Assert.Empty(fixture.WrittenCsv);
+    }
+
+    [Fact]
     public async Task ExportTableCsvAsync_TheSecondOfTwoTables_IsOfferedNumberedAndWrittenAsCsv()
     {
         // Arrange

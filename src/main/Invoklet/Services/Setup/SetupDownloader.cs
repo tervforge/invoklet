@@ -10,7 +10,7 @@ public sealed class SetupDownloader : ISetupDownloader, IDisposable
     private readonly HttpClient _client;
 
     // GitHub's API refuses a request without a User-Agent; a plain name of the client, nothing about the user.
-    public SetupDownloader() : this(new HttpClient { DefaultRequestHeaders = { { "User-Agent", "Invoklet-setup" } } })
+    public SetupDownloader() : this(new HttpClient { DefaultRequestHeaders = { { "User-Agent", "Invoklet" } } })
     {
     }
 
@@ -18,6 +18,8 @@ public sealed class SetupDownloader : ISetupDownloader, IDisposable
     // against a fake HttpMessageHandler instead of a real network call — DI (App.axaml.cs) only ever
     // sees the public parameterless constructor above.
     internal SetupDownloader(HttpClient client) => _client = client;
+
+    public Task<string> ReadTextAsync(Uri url, CancellationToken ct) => _client.GetStringAsync(url, ct);
 
     public async Task DownloadFileAsync(Uri url, string destinationPath, IProgress<double>? percent, CancellationToken ct)
     {

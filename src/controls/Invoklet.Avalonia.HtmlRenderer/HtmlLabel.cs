@@ -37,7 +37,7 @@ public class HtmlLabel : HtmlControl
     public static readonly StyledProperty<bool> AutoSizeProperty =
         AvaloniaProperty.Register<HtmlLabel, bool>("AutoSize", true);
     public static readonly StyledProperty<bool> AutoSizeHeightOnlyProperty =
-        AvaloniaProperty.Register<HtmlLabel, bool>("AutoSizeHeightOnly", false);
+        AvaloniaProperty.Register<HtmlLabel, bool>("AutoSizeHeightOnly");
 
     #endregion
 

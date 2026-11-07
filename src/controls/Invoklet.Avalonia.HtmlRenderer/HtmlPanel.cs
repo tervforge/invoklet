@@ -57,14 +57,14 @@ public class HtmlPanel : HtmlControl
     {
         _verticalScrollBar = new ScrollBar();
         _verticalScrollBar.Orientation = Orientation.Vertical;
-        _verticalScrollBar.Width = 18;
+        _verticalScrollBar.Width = 12;
         _verticalScrollBar.Scroll += OnScrollBarScroll;
         VisualChildren.Add(_verticalScrollBar);
         LogicalChildren.Add(_verticalScrollBar);
 
         _horizontalScrollBar = new ScrollBar();
         _horizontalScrollBar.Orientation = Orientation.Horizontal;
-        _horizontalScrollBar.Height = 18;
+        _horizontalScrollBar.Height = 12;
         _horizontalScrollBar.Scroll += OnScrollBarScroll;
         VisualChildren.Add(_horizontalScrollBar);
         LogicalChildren.Add(_horizontalScrollBar);
@@ -315,7 +315,7 @@ public class HtmlPanel : HtmlControl
     /// <summary>
     /// Set the control scroll offset to the given values.
     /// </summary>
-    private void ScrollToPoint(double x, double y)
+    public void ScrollToPoint(double x, double y)
     {
         _horizontalScrollBar.Value = x;
         _verticalScrollBar.Value = y;

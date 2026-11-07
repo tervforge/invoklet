@@ -15,9 +15,8 @@ internal static class DumpHtmlSpectreRenderer
 {
     public static IRenderable Render(string html)
     {
-        // DumpRenderer emits exactly one entity outside its own Encode() (which only ever produces
-        // the five entities XML understands natively) — &mdash; in RenderEnumerable's item-count
-        // line — so this one substitution is enough to make the payload valid XML.
+        // DumpRenderer's Encode() only ever produces the five entities XML understands natively; a
+        // dump of an earlier runtime can also hold &mdash; in its item-count line.
         var root = XElement.Parse("<root>" + html.Replace("&mdash;", "—") + "</root>");
         return Combine(root.Nodes().Select(RenderNode));
     }

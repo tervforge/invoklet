@@ -12,6 +12,7 @@ using Invoklet.Desktop;
 using Invoklet.Format.MdRun;
 using Invoklet.Services.Desktop;
 using Invoklet.Services.Preferences;
+using Invoklet.Services.Updates;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows.Healpers;
@@ -25,6 +26,9 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     private readonly IPreferencesService _prefs;
     private readonly EditorTabsControl _editorTabs;
     private readonly IDisposable _restoreStateSubscription;
+    private readonly IUpdateCheckService? _updateCheck;
+    private readonly CancellationTokenSource _updateCheckCancellation = new();
+    private Uri? _availableReleaseUri;
 
     private readonly IReadOnlyList<StartupStep> _startupSteps;
     IReadOnlyList<StartupStep> IStartupWindow.StartupSteps => _startupSteps;
@@ -43,11 +47,13 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
         IPreferencesService prefs,
         EditorTabsControl editorTabsCtrl,
         MainWindowViewModel viewModel,
-        IDesktopIntegration? desktop = null)
+        IDesktopIntegration? desktop = null,
+        IUpdateCheckService? updateCheck = null)
     {
         _prefs = prefs;
         _desktop = desktop ?? DesktopIntegration.Current;
         _editorTabs = editorTabsCtrl;
+        _updateCheck = updateCheck;
 
         DataContext = viewModel;
         _startupSteps =
@@ -110,10 +116,35 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
         };
 
         Closing += OnClosing;
+        Opened += CheckForUpdatesAfterStartup;
         // The window owns the per-window view model and controls. Dispose them on every
         // successful close so a recreated MainWindow cannot retain subscriptions or tabs.
         Closed += (_, _) => Dispose();
     }
+
+    private async void CheckForUpdatesAfterStartup(object? sender, EventArgs e)
+    {
+        if (_updateCheck is null) return;
+        var ct = _updateCheckCancellation.Token;
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            var current = typeof(MainWindow).Assembly.GetName().Version ?? new Version();
+            var available = (await _updateCheck.CheckDailyAsync(current, DateTimeOffset.UtcNow, ct)).Available;
+            if (available is null || _disposed) return;
+            _availableReleaseUri = available.ReleaseUri;
+            UpdateNoticeText.Text = $"Invoklet {available.Version.ToString(3)} is available.";
+            UpdateNoticeBar.IsVisible = true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    private async void OpenUpdate_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_availableReleaseUri is { } uri) await Launcher.LaunchUriAsync(uri);
+    }
+
+    private void DismissUpdate_Click(object? sender, RoutedEventArgs e) => UpdateNoticeBar.IsVisible = false;
 
     // Quitting the app used to skip the per-tab
     // unsaved-changes confirmation entirely, discarding every unsaved untitled tab's content at
@@ -770,6 +801,8 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     {
         if (_disposed) return;
         _disposed = true;
+        _updateCheckCancellation.Cancel();
+        _updateCheckCancellation.Dispose();
         GetViewModel().RecentFilesChanged -= OnRecentFilesChanged;
         _prefs.Changed -= OnPreferencesChanged;
         _restoreStateSubscription.Dispose();

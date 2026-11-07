@@ -53,7 +53,7 @@ public class ResultsOutputSettingsTests
         registry.Setup(r => r.Create(It.IsAny<string>(), It.IsAny<ExecutionRequest>())).Returns(host.Object);
 
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var ctrl = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object, registry.Object, prefs.Object,
             intelliSense: null, new Mock<IBuildCacheService>().Object);
         new Window { Content = ctrl }.Show();
@@ -70,7 +70,7 @@ public class ResultsOutputSettingsTests
 
         var boxes = ctrl.OutputSettingsPanel.Children.OfType<CheckBox>().Select(c => c.Content as string).ToList();
         Assert.Equal(
-            new[] { "Wrap long lines in results", "Break on unhandled exceptions", "Break on all exceptions (including caught)" },
+            new[] { "Wrap long lines in results", "Head a dump with its expression", "Keep the last output after closing", "Break on unhandled exceptions", "Break on all exceptions (including caught)" },
             boxes);
         Assert.True(ctrl.ResultsWrapCheckBox.IsChecked); // the setting's default
 
@@ -95,6 +95,33 @@ public class ResultsOutputSettingsTests
         ctrl.ResultsWrapCheckBox.IsChecked = true;
         Assert.True(editor.ResultsWordWrap);
         Assert.Contains(".out        { white-space:pre-wrap;", ctrl.State.Output.Css);
+    }
+
+    [AvaloniaFact]
+    public void TheLabelsToggle_Should_SaveThePreference_AndChangeWhatThisTabShows()
+    {
+        var (ctrl, prefs, editor) = Create();
+        Assert.False(ctrl.ResultsLabelsCheckBox.IsChecked);
+
+        ctrl.ResultsLabelsCheckBox.IsChecked = true;
+
+        Assert.True(editor.ResultsShowGeneratedLabels);
+        Assert.True(ctrl.ResultsOutput.ShowGeneratedLabels);
+        prefs.Verify(p => p.Save(), Times.Once);
+    }
+
+    [AvaloniaFact]
+    public void TheKeepToggle_Should_SaveThePreference_AndLeaveTheOutputOnScreen()
+    {
+        var (ctrl, prefs, editor) = Create();
+        Assert.True(ctrl.ResultsKeepCheckBox.IsChecked);
+        ctrl.State.Output.Append("<div>shown</div>");
+
+        ctrl.ResultsKeepCheckBox.IsChecked = false;
+
+        Assert.False(editor.ResultsKeepOutput);
+        prefs.Verify(p => p.Save(), Times.Once);
+        Assert.Contains("shown", ctrl.State.Output.Content);
     }
 
     [AvaloniaFact]

@@ -26,6 +26,7 @@ using Invoklet.Services.Scaling;
 using Invoklet.Services.Secrets;
 using Invoklet.Services.Setup;
 using Invoklet.Services.Tabs;
+using Invoklet.Services.Updates;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows;
@@ -33,6 +34,7 @@ using Invoklet.Windows.Healpers;
 using Invoklet.Windows.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Windows_AboutWindow = Invoklet.Windows.AboutWindow;
 using Windows_ConnectionsWindow = Invoklet.Windows.ConnectionsWindow;
 using Windows_DependenciesWindow = Invoklet.Windows.DependenciesWindow;
 using Windows_MainWindow = Invoklet.Windows.MainWindow;
@@ -278,6 +280,8 @@ public class App : Application
         services.AddSingleton<TabLifecycleManager>();
         services.AddSingleton<IPrerequisiteService, PrerequisiteService>();
         services.AddSingleton<ISetupDownloader, SetupDownloader>();
+        services.AddSingleton<IReleaseMetadataReader, ReleaseMetadataReader>();
+        services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
         services.AddSingleton<ISetupProcessRunner, SetupProcessRunner>();
         services.AddSingleton<ISetupInstallerService, SetupInstallerService>();
 
@@ -307,6 +311,7 @@ public class App : Application
         });
 
         services.AddTransient<Windows_MainWindow>();
+        services.AddTransient<Windows_AboutWindow>();
         services.AddSingleton(_ => new DiskRecoveryStore(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "recovery", "v1")));
         services.AddSingleton<IRecoveryStore>(sp => sp.GetRequiredService<DiskRecoveryStore>());
@@ -361,6 +366,7 @@ public class App : Application
             window.OpenSource = (text, line, title) => windows.ShowDefinitionInAssemblyExplorerAsync(new DecompiledMemberResult(text, line, title), null);
             return window;
         });
+        services.AddSingleton<Func<Windows_AboutWindow>>(sp => () => sp.GetRequiredService<Windows_AboutWindow>());
 
         var provider = services.BuildServiceProvider();
 

@@ -15,6 +15,7 @@ internal sealed class SecretStoreWindowViewModelRevokeFixture
     public SecretsSettings Settings { get; } = new()
     {
         AllowedScripts = ["/a/report.inv", "/a/other.inv"],
+        WritableScripts = ["/a/report.inv"],
         AllowedScriptHashes = new() { ["/a/report.inv"] = "AAAA", ["/a/other.inv"] = "BBBB" },
     };
 

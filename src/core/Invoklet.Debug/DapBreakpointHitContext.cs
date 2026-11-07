@@ -33,7 +33,7 @@ public sealed class DapBreakpointHitContext : IBreakpointHitContext
     {
         if (RunToCursorFunc is { } f)
             await f(line, ct);
-        Resume(DebugAction.Continue);
+        Resume();
     }
 
     public void Resume(DebugAction action = DebugAction.Continue)

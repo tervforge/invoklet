@@ -194,8 +194,8 @@ public class CodeFixMargin : AbstractMargin
 
     internal static string SeverityBrushKey(CodeFixSeverity severity) => severity switch
     {
-        CodeFixSeverity.Error => "Invoklet.Margin.CodeFixErrorBrush",
-        CodeFixSeverity.Warning => "Invoklet.Margin.CodeFixWarningBrush",
+        CodeFixSeverity.Error => "Invoklet.Diagnostic.ErrorBrush",
+        CodeFixSeverity.Warning => "Invoklet.Diagnostic.WarningBrush",
         _ => "Invoklet.Margin.DebugArrowBrush",
     };
 

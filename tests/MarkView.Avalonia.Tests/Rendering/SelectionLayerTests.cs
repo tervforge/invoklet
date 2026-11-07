@@ -21,8 +21,8 @@ public class SelectionLayerTests
     public void SelectAll_covers_all_registered_entries()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
-        layer.Register(new IndexEntry(MakeBlock("World"), "World", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
+        layer.Register(new IndexEntry(MakeBlock("World"), "World"));
 
         layer.SelectAll();
 
@@ -34,7 +34,7 @@ public class SelectionLayerTests
     public void ClearSelection_returns_empty_text()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
         layer.SelectAll();
         layer.ClearSelection();
 
@@ -47,7 +47,7 @@ public class SelectionLayerTests
     public void GetSelectedText_single_entry_partial()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello World"), "Hello World", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello World"), "Hello World"));
 
         // AbsStart=0, select chars 0..5 = "Hello"
         layer.SetSelectionForTest(0, 5);
@@ -59,7 +59,7 @@ public class SelectionLayerTests
     public void GetSelectedText_empty_when_anchor_equals_focus()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
 
         layer.SetSelectionForTest(2, 2);
 
@@ -74,8 +74,8 @@ public class SelectionLayerTests
         // "Hello\n" = offsets 0-5 text, 5 = '\n' separator
         // "World"   = offsets 6-10
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
-        layer.Register(new IndexEntry(MakeBlock("World"), "World", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
+        layer.Register(new IndexEntry(MakeBlock("World"), "World"));
 
         // select from offset 3 ("lo") through offset 9 ("Wor")
         layer.SetSelectionForTest(3, 9);
@@ -89,8 +89,8 @@ public class SelectionLayerTests
         // "Hello\n" = 0-5 text; separator at 5
         // "World"   = 6-10
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
-        layer.Register(new IndexEntry(MakeBlock("World"), "World", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
+        layer.Register(new IndexEntry(MakeBlock("World"), "World"));
 
         // select exactly "Hello" (0..5) — focus is at AbsEnd of first entry, before separator
         layer.SetSelectionForTest(0, 5);
@@ -107,7 +107,7 @@ public class SelectionLayerTests
         // Offsets: Alice=0..4(text), 5='\t'; 30=6..7(text), 8='\n'
         var layer = new DocumentSelectionLayer();
         layer.Register(new IndexEntry(MakeBlock("Alice"), "Alice", "\t"));
-        layer.Register(new IndexEntry(MakeBlock("30"), "30", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("30"), "30"));
 
         layer.SelectAll(); // selects 0..7 (AbsEnd of last entry = 7)
 
@@ -121,9 +121,9 @@ public class SelectionLayerTests
         // Row 2: "Bob"\t"25"\n    → offsets 9..11, 13..14
         var layer = new DocumentSelectionLayer();
         layer.Register(new IndexEntry(MakeBlock("Alice"), "Alice", "\t"));
-        layer.Register(new IndexEntry(MakeBlock("30"), "30", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("30"), "30"));
         layer.Register(new IndexEntry(MakeBlock("Bob"), "Bob", "\t"));
-        layer.Register(new IndexEntry(MakeBlock("25"), "25", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("25"), "25"));
 
         layer.SelectAll();
 
@@ -136,7 +136,7 @@ public class SelectionLayerTests
         // Row 1: Alice(0-4)\t(5) 30(6-7)\n(8)
         var layer = new DocumentSelectionLayer();
         layer.Register(new IndexEntry(MakeBlock("Alice"), "Alice", "\t"));
-        layer.Register(new IndexEntry(MakeBlock("30"), "30", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("30"), "30"));
 
         // Select only "30" (offsets 6..8, which is AbsStart=6, AbsEnd=8)
         layer.SetSelectionForTest(6, 8);
@@ -152,7 +152,7 @@ public class SelectionLayerTests
         var layer = new DocumentSelectionLayer();
         layer.Register(new IndexEntry(MakeBlock("A"), "A", "\t")); // AbsStart=0, AbsEnd=1, AbsEndWithSep=2
         layer.Register(new IndexEntry(MakeBlock(""), "", "\t")); // AbsStart=2, AbsEnd=2, AbsEndWithSep=3
-        layer.Register(new IndexEntry(MakeBlock("C"), "C", "\n")); // AbsStart=3, AbsEnd=4, AbsEndWithSep=5
+        layer.Register(new IndexEntry(MakeBlock("C"), "C")); // AbsStart=3, AbsEnd=4, AbsEndWithSep=5
 
         layer.SelectAll(); // selects 0..4 (AbsEnd of last entry)
 
@@ -165,8 +165,8 @@ public class SelectionLayerTests
     public void GetSelectedText_reversed_selection_same_as_forward()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
-        layer.Register(new IndexEntry(MakeBlock("World"), "World", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
+        layer.Register(new IndexEntry(MakeBlock("World"), "World"));
 
         // anchor > focus — should produce same result as 3..9 forward
         layer.SetSelectionForTest(9, 3);
@@ -180,8 +180,8 @@ public class SelectionLayerTests
     public void Register_stamps_AbsStart_on_entries()
     {
         var layer = new DocumentSelectionLayer();
-        var e1 = new IndexEntry(MakeBlock("Hi"), "Hi", "\n"); // 0..1, sep='\n' → next=3
-        var e2 = new IndexEntry(MakeBlock("There"), "There", "\n"); // 3..7
+        var e1 = new IndexEntry(MakeBlock("Hi"), "Hi"); // 0..1, sep='\n' → next=3
+        var e2 = new IndexEntry(MakeBlock("There"), "There"); // 3..7
 
         layer.Register(e1);
         layer.Register(e2);
@@ -198,7 +198,7 @@ public class SelectionLayerTests
     public void OnPointerPressed_clears_existing_selection()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
         layer.SetSelectionForTest(0, 5);
 
         // Point that won't hit (no visual tree) → HitTestOffset returns null
@@ -212,7 +212,7 @@ public class SelectionLayerTests
     public void OnPointerMoved_with_no_anchor_does_nothing()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
 
         // No anchor set → must not throw, selection stays empty
         layer.OnPointerMoved(new Point(0, 0));
@@ -224,7 +224,7 @@ public class SelectionLayerTests
     public void OnPointerMoved_with_anchor_but_no_layout_preserves_focus()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
         layer.SetSelectionForTest(0, 3); // anchor=0, focus=3
 
         // HitTestOffset returns null (no visual tree) → focus unchanged
@@ -247,8 +247,8 @@ public class SelectionLayerTests
     public void HitTestOffset_returns_null_when_entries_have_no_layout()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
-        layer.Register(new IndexEntry(MakeBlock("World"), "World", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
+        layer.Register(new IndexEntry(MakeBlock("World"), "World"));
 
         // TextBlocks are not in a visual tree → TranslatePoint returns null
         Assert.Null(layer.HitTestOffset(new Point(10, 10)));
@@ -265,7 +265,7 @@ public class SelectionLayerTests
     public void HitTestEntry_returns_null_when_entries_have_no_layout()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello", "\n"));
+        layer.Register(new IndexEntry(MakeBlock("Hello"), "Hello"));
 
         // TextBlock not in visual tree → TranslatePoint returns null → no entry found
         Assert.Null(layer.HitTestEntry(new Point(10, 10)));

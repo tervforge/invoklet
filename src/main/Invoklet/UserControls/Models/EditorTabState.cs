@@ -15,7 +15,6 @@ internal sealed class EditorTabState
     // EditorsTabItemControl's constructor), so setting Output.Content/Output.Css here is itself the
     // "please redraw" signal; nothing here needs to also call back into the view.
     public OutputHtmlViewModel Output { get; } = new();
-    public bool HadRunError { get; set; }
 
     // Maps a DumpContainer's stable id (data-dp-id) to the exact wrapped block currently sitting in
     // Output.Content, so a later update from the same container can be found and replaced in place

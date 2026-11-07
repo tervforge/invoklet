@@ -54,7 +54,7 @@ public class EditorTabItemControlRefactoringsTests
     {
         var prefs = MakePrefs();
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var registry = new Mock<ILanguageHostRegistry>();
         var buildCache = new Mock<IBuildCacheService>();
         var intelliSense = new Mock<IIntelliSenseService>();

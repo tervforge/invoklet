@@ -189,6 +189,6 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         await fixture.AnswerAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.None)], fixture.Asked);
+        Assert.Equal([new SecretAccess(null, "db", true)], fixture.Asked);
     }
 }

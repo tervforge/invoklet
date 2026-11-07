@@ -140,7 +140,7 @@ public sealed class ScriptDocumentWriterTests
         var fixture = new ScriptDocumentWriterFixture();
         var sut = fixture.CreateSut();
         var document = fixture.CreateDocument(references: ["lib/a.dll"]);
-        var from = ScriptDocumentWriterFixture.ScriptIn("old", "a.inv");
+        var from = ScriptDocumentWriterFixture.ScriptIn("old");
         var to = ScriptDocumentWriterFixture.ScriptIn("old", "b.inv");
 
         // Act

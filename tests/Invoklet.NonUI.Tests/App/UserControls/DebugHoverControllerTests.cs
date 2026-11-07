@@ -76,7 +76,7 @@ public sealed class DebugHoverControllerTests
         var controller = new DebugHoverController();
         var parent = new Variable("root", "T", "{}", hasChildren: true, variablesReference: 1);
 
-        Assert.Empty(await controller.LoadChildrenAsync(context, new Variable("empty", "T", "", true, 0), TestContext.Current.CancellationToken));
+        Assert.Empty(await controller.LoadChildrenAsync(context, new Variable("empty", "T", "", true), TestContext.Current.CancellationToken));
         Assert.Equal(DebugHoverController.MaxChildren,
             (await controller.LoadChildrenAsync(context, parent, TestContext.Current.CancellationToken)).Count);
         Assert.Equal(1, context.Calls);

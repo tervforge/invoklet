@@ -743,7 +743,7 @@ public class AssemblyExplorerWindowViewTests
         await window.SearchAsync("Alpha");
         Assert.NotEmpty(Results(window));
 
-        window.RemoveAssembly(AssemblyRow(window, 0));
+        window.RemoveAssembly(AssemblyRow(window));
         await window.WhenIdleAsync();
 
         Assert.Single(window.Tree.Items);

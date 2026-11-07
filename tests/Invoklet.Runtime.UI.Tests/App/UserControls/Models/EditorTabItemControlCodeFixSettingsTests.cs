@@ -62,7 +62,7 @@ public class EditorTabItemControlCodeFixSettingsTests
         Mock<IPreferencesService> prefs, IIntelliSenseService intelliSense)
     {
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, MdRunLanguage.CSharp, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
         var registry = new Mock<ILanguageHostRegistry>();
         var buildCache = new Mock<IBuildCacheService>();
 

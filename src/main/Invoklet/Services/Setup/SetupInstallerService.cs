@@ -1,7 +1,6 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace Invoklet.Services.Setup;
@@ -10,8 +9,12 @@ namespace Invoklet.Services.Setup;
 // sources (live report 2026-07-25: verified against the actual dotnet-install.sh/.ps1 scripts
 // and the real Samsung/netcoredbg GitHub releases API, not guessed) instead of leaving the user to
 // find and install both themselves before Invoklet's Run/Debug buttons do anything useful.
-public sealed partial class SetupInstallerService(ISetupDownloader downloader, ISetupProcessRunner processRunner) : ISetupInstallerService
+public sealed partial class SetupInstallerService(
+    ISetupDownloader downloader,
+    ISetupProcessRunner processRunner,
+    IReleaseMetadataReader? metadataReader = null) : ISetupInstallerService
 {
+    private readonly IReleaseMetadataReader _metadataReader = metadataReader ?? new ReleaseMetadataReader(downloader);
     // InstallNetcoredbgAsync wipes and recreates this directory — tests pass their own temp directory
     // through the internal constructor so they never touch the user's real installation.
     private readonly string _netcoredbgInstallDir = Path.Combine(
@@ -26,7 +29,7 @@ public sealed partial class SetupInstallerService(ISetupDownloader downloader, I
 
     public async Task<SetupInstallPlan> PlanDotnetSdkAsync(CancellationToken ct)
     {
-        var version = await TryReadAsync(new Uri(SetupConstants.DotnetReleaseMetadataUrl), json => json.GetProperty("latest-sdk").GetString(), ct);
+        var version = await _metadataReader.ReadStringAsync(new Uri(SetupConstants.DotnetReleaseMetadataUrl), "latest-sdk", ct);
         return new SetupInstallPlan(".NET SDK", version is not null && DotnetVersion().IsMatch(version) ? version : null,
             ResolveDotnetInstallDir(CurrentPlatform()), "Microsoft (dot.net)", ReplacesExisting: false);
     }
@@ -34,35 +37,9 @@ public sealed partial class SetupInstallerService(ISetupDownloader downloader, I
     public async Task<SetupInstallPlan> PlanNetcoredbgAsync(CancellationToken ct)
     {
         var tag = PinnedNetcoredbgTag(CurrentPlatform(), RuntimeInformation.OSArchitecture)
-            ?? await TryReadAsync(new Uri(SetupConstants.NetcoredbgLatestReleaseApi), json => json.GetProperty("tag_name").GetString(), ct);
+            ?? await _metadataReader.ReadStringAsync(new Uri(SetupConstants.NetcoredbgLatestReleaseApi), "tag_name", ct);
         return new SetupInstallPlan("netcoredbg", tag is not null && ReleaseTag().IsMatch(tag) ? tag : null,
             _netcoredbgInstallDir, "GitHub (Samsung/netcoredbg)", ReplacesExisting: Directory.Exists(_netcoredbgInstallDir));
-    }
-
-    // What a release list says, or null when it can't be read: the install then takes the latest, as the plan says.
-    private async Task<string?> TryReadAsync(Uri url, Func<JsonElement, string?> read, CancellationToken ct)
-    {
-        var work = Directory.CreateTempSubdirectory("Invoklet-setup-");
-        try
-        {
-            var path = Path.Combine(work.FullName, "answer.json");
-            await downloader.DownloadFileAsync(url, path, null, ct);
-            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(path, ct));
-            return read(json.RootElement) is { Length: > 0 } value ? value : null;
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return null; // the request's own timeout
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or KeyNotFoundException or InvalidOperationException)
-        {
-            return null;
-        }
-        finally
-        {
-            try { work.Delete(recursive: true); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        }
     }
 
     // What a version or a tag from the network may look like before it goes into the installer's arguments or a download address.

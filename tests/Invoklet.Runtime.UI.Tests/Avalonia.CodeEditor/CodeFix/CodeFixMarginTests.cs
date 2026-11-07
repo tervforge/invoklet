@@ -100,8 +100,8 @@ public class CodeFixMarginTests
     }
 
     [Theory]
-    [InlineData(CodeFixSeverity.Error, "Invoklet.Margin.CodeFixErrorBrush")]
-    [InlineData(CodeFixSeverity.Warning, "Invoklet.Margin.CodeFixWarningBrush")]
+    [InlineData(CodeFixSeverity.Error, "Invoklet.Diagnostic.ErrorBrush")]
+    [InlineData(CodeFixSeverity.Warning, "Invoklet.Diagnostic.WarningBrush")]
     [InlineData(CodeFixSeverity.Info, "Invoklet.Margin.DebugArrowBrush")]
     public void SeverityBrushKey_Should_MapEachSeverityToItsOwnThemeResourceKey(
         CodeFixSeverity severity, string expectedKey)

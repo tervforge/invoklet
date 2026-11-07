@@ -33,6 +33,18 @@ internal static class RunOutputFile
         }
     }
 
+    /// <summary>Takes the output out of the folder, when it is not to be kept. A file that cannot be removed now goes at a later run.</summary>
+    internal static void Delete(string outputDirectory)
+    {
+        try
+        {
+            File.Delete(Path.Combine(outputDirectory, FileName));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+        }
+    }
+
     /// <summary>Null when the folder holds no output, or one that cannot be read.</summary>
     internal static TabOutputState? TryLoad(string outputDirectory)
     {

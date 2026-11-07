@@ -32,8 +32,7 @@ public sealed class TabRecoveryTests : IDisposable
         var theme = new Mock<IThemeService>();
         theme.Setup(t => t.CurrentTheme).Returns(new ActiveTheme(new InterfaceTheme("Test", ThemeVariant.Dark, true),
             new EditorTheme("Test", TextMateSharp.Grammars.ThemeName.DarkPlus, true)));
-        var vm = new EditorTabItemViewModel(path, [], prefs.Object, new Mock<IEditorTabActions>().Object,
-            MdRunLanguage.CSharp, MdRunKind.Statements)
+        var vm = new EditorTabItemViewModel(path, [], prefs.Object, new Mock<IEditorTabActions>().Object)
         { RestoredRecovery = snapshot };
         var ctrl = new EditorsTabItemControl(vm, theme.Object, _windows.Object, new Mock<ILanguageHostRegistry>().Object,
             prefs.Object, null, new Mock<IBuildCacheService>().Object);

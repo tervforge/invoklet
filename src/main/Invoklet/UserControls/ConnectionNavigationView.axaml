@@ -67,7 +67,7 @@
                                           Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
                                 <PathIcon x:Name="StaleBadge" Data="{StaticResource Icon.Warning}" Width="12" Height="12"
                                           IsVisible="{Binding IsStale}"
-                                          Foreground="{DynamicResource Invoklet.Margin.CodeFixWarningBrush}"/>
+                                          Foreground="{DynamicResource Invoklet.Diagnostic.WarningBrush}"/>
                                 <PathIcon x:Name="ProblemBadge" Data="{StaticResource Icon.Warning}" Width="12" Height="12"
                                           IsVisible="{Binding ShowsProblem}"
                                           Foreground="{DynamicResource Invoklet.Status.ErrorBrush}"/>

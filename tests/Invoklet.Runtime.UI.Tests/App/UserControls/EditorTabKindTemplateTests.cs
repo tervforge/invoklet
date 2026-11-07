@@ -49,7 +49,7 @@ public class EditorTabKindTemplateTests
         var (mainVm, editorTabs, tmpDir) = CreateTabs();
         try
         {
-            mainVm.NewMdRunFile(MdRunLanguage.CSharp, MdRunKind.Statements);
+            mainVm.NewMdRunFile();
             var ctrl = await ActiveControlAsync(mainVm, editorTabs);
 
             Assert.Equal("", ctrl.State.Editor.Text);

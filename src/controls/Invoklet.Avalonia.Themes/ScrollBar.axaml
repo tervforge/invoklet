@@ -1,0 +1,108 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:scrolling="using:Invoklet.Avalonia.Themes.Scrolling">
+    <!-- Every scroll bar of the application: a short translucent thumb, about two centimetres long whatever the size of the content, so
+         the track has no ViewportSize and the thumb sets its own length; it hides when there is nothing to scroll. It has no arrows or a track of its own, lying over the content.
+         It is still the platform's ScrollBar and Track, so dragging, paging and the wheel work as they always do. The thumb takes
+         its colour from the text, so that it reads on every theme without a brush per theme. What may be restyled per place is
+         set here, not in the template: a value in a template outranks a style. -->
+    <!-- The sizes below hang on :vertical and :horizontal, and a style with such a condition outranks one without: a place that wants
+         another size, such as the tab strip, has to name the orientation in its selector too. -->
+
+    <ControlTheme x:Key="Invoklet.ScrollBarThumb" TargetType="Thumb">
+        <Setter Property="Background" Value="{DynamicResource Invoklet.Text.PrimaryBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource Invoklet.Radius.Control}"/>
+        <Setter Property="Padding" Value="2"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <!-- The whole width of the bar can be grabbed, however thin the thumb looks. -->
+                <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                    <Border Name="PART_ThumbFace"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^ /template/ Border#PART_ThumbFace">
+            <Setter Property="Opacity" Value="0.3"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.1"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="^:pointerover /template/ Border#PART_ThumbFace">
+            <Setter Property="Opacity" Value="0.5"/>
+        </Style>
+        <Style Selector="^:pressed /template/ Border#PART_ThumbFace">
+            <Setter Property="Opacity" Value="0.65"/>
+        </Style>
+    </ControlTheme>
+
+    <!-- The part of the bar beside the thumb: invisible, a click there still pages. -->
+    <ControlTheme x:Key="Invoklet.ScrollBarPage" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="Transparent"/>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Style Selector="^:vertical">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="ScrollBar">
+                    <Border Background="{TemplateBinding Background}">
+                        <Track Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}"
+                               Orientation="{TemplateBinding Orientation}"
+                               IsDirectionReversed="True">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource Invoklet.ScrollBarPage}"/>
+                            </Track.DecreaseButton>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource Invoklet.ScrollBarPage}"/>
+                            </Track.IncreaseButton>
+                            <Thumb Name="thumb" Theme="{StaticResource Invoklet.ScrollBarThumb}"
+                                   MaxHeight="{Binding $parent[ScrollBar].Bounds.Height, Converter={x:Static scrolling:ScrollBarConverters.Half}}"
+                                   IsVisible="{TemplateBinding Maximum, Converter={x:Static scrolling:ScrollBarConverters.HasRange}}"/>
+                        </Track>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Thumb#thumb">
+                <Setter Property="Height" Value="76"/>
+            </Style>
+        </Style>
+        <Style Selector="^:horizontal">
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="ScrollBar">
+                    <Border Background="{TemplateBinding Background}">
+                        <Track Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}"
+                               Orientation="{TemplateBinding Orientation}">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource Invoklet.ScrollBarPage}"/>
+                            </Track.DecreaseButton>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource Invoklet.ScrollBarPage}"/>
+                            </Track.IncreaseButton>
+                            <Thumb Name="thumb" Theme="{StaticResource Invoklet.ScrollBarThumb}"
+                                   MaxWidth="{Binding $parent[ScrollBar].Bounds.Width, Converter={x:Static scrolling:ScrollBarConverters.Half}}"
+                                   IsVisible="{TemplateBinding Maximum, Converter={x:Static scrolling:ScrollBarConverters.HasRange}}"/>
+                        </Track>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^ /template/ Thumb#thumb">
+                <Setter Property="Width" Value="76"/>
+            </Style>
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>

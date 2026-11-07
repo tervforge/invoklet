@@ -380,7 +380,7 @@ internal sealed class SelectionMouseHandler : ITextAreaInputHandler
         {
             bool draggedInsideSingleDocument = (dragDescriptor == TextArea.Document.UndoStack.LastGroupDescriptor);
             if (draggedInsideSingleDocument)
-                TextArea.Document.UndoStack.StartContinuedUndoGroup(null);
+                TextArea.Document.UndoStack.StartContinuedUndoGroup();
             TextArea.Document.BeginUpdate();
             try
             {

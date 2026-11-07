@@ -37,6 +37,12 @@ public partial class OutputHtmlView : UserControl
         // ApplyPendingContent call, consumed by the very next layout pass that follows it.
         OutputHtml.LayoutUpdated += (_, _) =>
         {
+            if (_scrollToRestore is { } offset)
+            {
+                _scrollToRestore = null;
+                OutputHtml.ScrollToPoint(offset.X, offset.Y);
+                return;
+            }
             if (!_scrollToEndPending) return;
             _scrollToEndPending = false;
             OutputHtml.ScrollToEnd();
@@ -108,12 +114,43 @@ public partial class OutputHtmlView : UserControl
 
         ApplyCount++;
         _scrollToEndPending = true;
-        OutputHtml.Text = $"""
-                           <html>
-                           <head><style>{vm.Css}</style></head>
-                           <body>{ResultsTables.WithMenus(vm.Content)}</body>
-                           </html>
-                           """;
+        OutputHtml.Text = PageOf(vm);
+    }
+
+    // Older output, kept from a version before the boxes, has tables without them.
+    private string PageOf(OutputHtmlViewModel vm)
+    {
+        var content = vm.Content;
+        var body = ResultsBoxes.Show(content, _toggledBoxes, ShowGeneratedLabels);
+        if (!ResultsBoxes.AnyIn(content)) body = ResultsTables.WithMenus(body);
+        return $"""
+                <html>
+                <head><style>{vm.Css}</style></head>
+                <body>{body}</body>
+                </html>
+                """;
+    }
+
+    // Folding a box or turning the labels shows the same results: the reader stays where they are.
+    private void ShowAgainInPlace()
+    {
+        if (_boundModel is not { } vm) return;
+        var offset = OutputHtml.Container.ScrollOffset;
+        _scrollToRestore = new Point(-offset.X, -offset.Y);
+        ApplyCount++;
+        OutputHtml.Text = PageOf(vm);
+    }
+
+    /// <summary>Whether a label made from a script's source text shows; one the script gave always does.</summary>
+    internal bool ShowGeneratedLabels
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            ShowAgainInPlace();
+        }
     }
 
     /// <summary>"Save results as HTML..." was chosen in the context menu.</summary>
@@ -122,14 +159,40 @@ public partial class OutputHtmlView : UserControl
     /// <summary>The "…" above a table was clicked and "Export to CSV" chosen; the number of the table (see <see cref="ResultsTables"/>).</summary>
     public event Action<int>? ExportTableRequested;
 
+    /// <summary>The "…" of a box was clicked and "Export to CSV" chosen; the name of the box (see <see cref="ResultsBoxes"/>).</summary>
+    public event Action<string>? ExportBoxRequested;
+
     private void OnLinkClicked(object? sender, HtmlRendererRoutedEventArgs<HtmlLinkClickedEventArgs> e)
     {
-        if (e.Event is not { } link || ResultsTables.TableOf(link.Link) is not { } table) return;
-        link.Handled = true;
-        var export = new MenuItem { Header = "Export to CSV..." };
-        export.Click += (_, _) => ExportTableRequested?.Invoke(table);
-        new MenuFlyout { Items = { export } }.ShowAt(OutputHtml, showAtPointer: true);
+        if (e.Event is not { } link) return;
+        if (ResultsBoxes.ToggleOf(link.Link) is { } toggle)
+        {
+            link.Handled = true;
+            if (!_toggledBoxes.Remove(toggle)) _toggledBoxes.Add(toggle);
+            ShowAgainInPlace();
+        }
+        else if (ResultsBoxes.TableLinkOf(link.Link) is { } box)
+        {
+            link.Handled = true;
+            ShowExportMenu(() => ExportBoxRequested?.Invoke(box));
+        }
+        else if (ResultsTables.TableOf(link.Link) is { } table)
+        {
+            link.Handled = true;
+            ShowExportMenu(() => ExportTableRequested?.Invoke(table));
+        }
     }
+
+    private void ShowExportMenu(Action export)
+    {
+        var item = new MenuItem { Header = "Export to CSV..." };
+        item.Click += (_, _) => export();
+        new MenuFlyout { Items = { item } }.ShowAt(OutputHtml, showAtPointer: true);
+    }
+
+    // Names of boxes are not reused by a later run, so what is here for an earlier one does no harm.
+    private readonly HashSet<string> _toggledBoxes = [];
+    private Point? _scrollToRestore;
 
     internal string? RenderedHtml => OutputHtml.Text;
 

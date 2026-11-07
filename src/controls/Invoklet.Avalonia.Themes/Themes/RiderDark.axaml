@@ -109,8 +109,9 @@
                     <SolidColorBrush x:Key="Invoklet.Margin.DebugArrowBrush"           Color="#FFD040" />
                     <SolidColorBrush x:Key="Invoklet.Margin.DebugLineBrush"            Color="#3CFFD000" />
                     <SolidColorBrush x:Key="Invoklet.Margin.LineNumberBrush"          Color="#67696B" />
-                    <SolidColorBrush x:Key="Invoklet.Margin.CodeFixErrorBrush"     Color="#F14C4C" />
-                    <SolidColorBrush x:Key="Invoklet.Margin.CodeFixWarningBrush"   Color="#D7A544" />
+                    <SolidColorBrush x:Key="Invoklet.Diagnostic.ErrorBrush" Color="#E8707D" />
+                    <SolidColorBrush x:Key="Invoklet.Diagnostic.WarningBrush" Color="#E0BB65" />
+                    <SolidColorBrush x:Key="Invoklet.Diagnostic.InfoBrush" Color="#6FA8DC" />
                     <SolidColorBrush x:Key="Invoklet.Folding.ChevronBrush"            Color="#6B6B6B" />
                     <SolidColorBrush x:Key="Invoklet.Folding.ChevronHoverBrush"       Color="#BDBDBD" />
                     <SolidColorBrush x:Key="Invoklet.Folding.LineBrush"               Color="#3A3D41" />
@@ -120,6 +121,8 @@
                     <SolidColorBrush x:Key="Invoklet.Editor.ActiveScopeGuideBrush"     Color="#8E6BB8" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableHeaderBrush"           Color="#2D5FAD" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableHeaderForegroundBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="Invoklet.Dump.ColumnHeaderBrush" Color="#43454A" />
+                    <SolidColorBrush x:Key="Invoklet.Dump.ColumnHeaderForegroundBrush" Color="#E6E7EA" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableBorderBrush"           Color="#43454A" />
                     <SolidColorBrush x:Key="Invoklet.Dump.TableEvenRowBrush"          Color="#252729" />
                     <SolidColorBrush x:Key="Invoklet.Dump.StringBrush"                Color="#CE9178" />

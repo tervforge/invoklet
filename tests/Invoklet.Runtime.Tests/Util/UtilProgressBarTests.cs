@@ -80,7 +80,7 @@ public class UtilProgressBarTests
         {
             var sw = new StringWriter();
             Console.SetOut(sw);
-            var pb = new Util.ProgressBar(0);
+            var pb = new Util.ProgressBar();
             pb.Dump();
 
             pb.PercentComplete = 80;
@@ -103,7 +103,7 @@ public class UtilProgressBarTests
         {
             var sw = new StringWriter();
             Console.SetOut(sw);
-            var pb = new Util.ProgressBar(0);
+            var pb = new Util.ProgressBar();
 
             pb.PercentComplete = 50;
 

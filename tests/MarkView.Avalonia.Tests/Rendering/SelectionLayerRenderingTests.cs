@@ -135,7 +135,7 @@ public class SelectionLayerRenderingTests
     public void Render_skips_blocks_that_are_not_in_the_layer_visual_tree()
     {
         var layer = new DocumentSelectionLayer();
-        layer.Register(new IndexEntry(new TextBlock { Text = "Detached" }, "Detached", "\n"));
+        layer.Register(new IndexEntry(new TextBlock { Text = "Detached" }, "Detached"));
         layer.SetSelectionForTest(0, 4);
 
         Assert.Empty(RecordHighlights(layer));

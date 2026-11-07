@@ -185,6 +185,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (e.PropertyName == nameof(OutputHtmlViewModel.Content)) Interlocked.Increment(ref _outputVersion);
         };
         ResultsOutput.SaveHtmlRequested += () => _ = ExportResultsAsync();
+        ResultsOutput.ShowGeneratedLabels = prefs.Editor.ResultsShowGeneratedLabels;
+        ResultsOutput.ExportBoxRequested += box => _ = _resultsExporter?.ExportBoxCsvAsync(box);
         ResultsOutput.ExportTableRequested += table => _ = _resultsExporter?.ExportTableCsvAsync(table);
         _resultsWordWrap = prefs.Editor.ResultsWordWrap;
         State.Output.Css = HtmlThemeStylesheet.Generate(themeService.CurrentTheme.Interface.Variant,
@@ -192,6 +194,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // Results wrapping is set in the output's own settings menu, not in Preferences.
         ResultsWrapCheckBox.IsChecked = _resultsWordWrap;
         ResultsWrapCheckBox.IsCheckedChanged += OnResultsWrapCheckBoxChanged;
+        ResultsLabelsCheckBox.IsChecked = prefs.Editor.ResultsShowGeneratedLabels;
+        ResultsLabelsCheckBox.IsCheckedChanged += OnResultsLabelsCheckBoxChanged;
+        ResultsKeepCheckBox.IsChecked = prefs.Editor.ResultsKeepOutput;
+        ResultsKeepCheckBox.IsCheckedChanged += OnResultsKeepCheckBoxChanged;
         OutputSettingsButton.Flyout!.Opened += OnOutputSettingsFlyoutOpened;
 
         _viewScale = ViewScale.For(prefs);
@@ -449,7 +455,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             State.RunCts?.Cancel();
             if (State.RunningHost is { } runningHost)
                 _ = TerminateHostAsync(runningHost);
-            State.CurrentDebugCtx?.Resume(DebugAction.Continue);
+            State.CurrentDebugCtx?.Resume();
             InvalidateHoverTooltip();
             State.CurrentDebugCtx = null;
             _vm.DebugPanel.ClearStop();
@@ -589,7 +595,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 return;
             case RunBlockedByArguments arguments:
                 s.Output.Clear();
-                s.HadRunError = true;
+                _vm.HadRunError = true;
                 s.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(arguments.Message)}</div>");
                 SetStatus("Error", "Invoklet.Status.ErrorBrush");
                 UpdateOutputUi();
@@ -605,7 +611,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _vm.RunState = debug ? RunState.RunDebug : RunState.Run;
         s.Output.Clear();
         s.DumpContainerBlocks.Clear();
-        s.HadRunError = false;
+        _vm.HadRunError = false;
         s.UnhandledDebugException = null;
         _vm.DebugPanel.ClearStop();
         s.ElapsedText = "";
@@ -777,13 +783,13 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
                         _vm.DebugPanel.ClearStop();
                         switch (RunEndDecision.Of(cancelled, s.UnhandledDebugException is not null,
-                                    runResult is { Succeeded: false }, s.HadRunError))
+                                    runResult is { Succeeded: false }, _vm.HadRunError))
                         {
                             case RunEnd.Cancelled:
                                 SetStatus("Cancelled", "Invoklet.Status.CancelledBrush");
                                 break;
                             case RunEnd.UnhandledException:
-                                s.HadRunError = true;
+                                _vm.HadRunError = true;
                                 SetStatus($"Unhandled {DebugPanelViewModel.ShortTypeName(s.UnhandledDebugException!)}", "Invoklet.Status.ErrorBrush");
                                 break;
                             case RunEnd.Failed:
@@ -827,6 +833,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             _editorAttachedHandler = null;
         }
         ResultsWrapCheckBox.IsCheckedChanged -= OnResultsWrapCheckBoxChanged;
+        ResultsLabelsCheckBox.IsCheckedChanged -= OnResultsLabelsCheckBoxChanged;
+        ResultsKeepCheckBox.IsCheckedChanged -= OnResultsKeepCheckBoxChanged;
         OutputSettingsButton.Flyout!.Opened -= OnOutputSettingsFlyoutOpened;
         IlOutput.AttachedToVisualTree -= OnIlOutputAttachedToVisualTree;
         _editorInteractionSubscriptions?.Dispose();
@@ -1455,7 +1463,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private void ReportRunFailure(RunResult result, bool selection, int generation)
     {
         if (_disposed || !_run.IsCurrent(generation)) return;
-        State.HadRunError = true;
+        _vm.HadRunError = true;
         var (message, status) = result.Outcome switch
         {
             // The compiler's own errors are already in the output; for a selection, say why a name
@@ -1502,7 +1510,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void AppendError(Exception ex, string status = "Error")
     {
-        State.HadRunError = true;
+        _vm.HadRunError = true;
         // A message of several lines (what failed, why, where) keeps its lines.
         State.Output.Append($"\n<div class=\"error\">{HttpUtility.HtmlEncode(ex.Message).Replace("\n", "<br>")}</div>");
         if (ex.StackTrace is { } st)
@@ -1568,7 +1576,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         => StatusLine.Text = $"Line {State.Editor.TextArea.Caret.Line}  Col {State.Editor.TextArea.Caret.Column}";
 
     private void OnOutputSettingsFlyoutOpened(object? sender, EventArgs e)
-        => ResultsWrapCheckBox.IsChecked = _prefs.Editor.ResultsWordWrap;
+    {
+        ResultsWrapCheckBox.IsChecked = _prefs.Editor.ResultsWordWrap;
+        ResultsLabelsCheckBox.IsChecked = _prefs.Editor.ResultsShowGeneratedLabels;
+        ResultsKeepCheckBox.IsChecked = _prefs.Editor.ResultsKeepOutput;
+    }
 
     private void OnIlOutputAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         => EnsureIlHighlighting();
@@ -1576,6 +1588,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private void OnEditorDocumentChanged(object? sender, EventArgs e)
     {
         _squiggleRenderer?.Update(State.Editor.Document, []);
+        State.Editor.UpdateScrollMarkers([]);
         _semanticHighlighter?.Update(State.Editor.Document, []);
         _inlayHintRenderer?.Update(State.Editor.Document, []);
     }
@@ -1758,6 +1771,24 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         ApplyResultsWordWrap(wrap);
     }
 
+    private void OnResultsLabelsCheckBoxChanged(object? sender, RoutedEventArgs e)
+    {
+        var show = ResultsLabelsCheckBox.IsChecked == true;
+        ResultsOutput.ShowGeneratedLabels = show;
+        if (show == _prefs.Editor.ResultsShowGeneratedLabels) return;
+        _prefs.Editor.ResultsShowGeneratedLabels = show;
+        _prefs.Save();
+    }
+
+    // What the tab shows stays; only what is kept on disk changes, at the next run or opening of the script.
+    private void OnResultsKeepCheckBoxChanged(object? sender, RoutedEventArgs e)
+    {
+        var keep = ResultsKeepCheckBox.IsChecked == true;
+        if (keep == _prefs.Editor.ResultsKeepOutput) return;
+        _prefs.Editor.ResultsKeepOutput = keep;
+        _prefs.Save();
+    }
+
     // Only a changed value regenerates the stylesheet, so unrelated settings don't reload the results view.
     private void ApplyResultsWordWrap(bool wrap)
     {
@@ -1777,6 +1808,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (_disposed) return;
             EditorSettingsApplier.ApplyEditorSettings(State.Editor, _prefs.Editor, _viewScale.CodeZoom);
             ApplyResultsWordWrap(_prefs.Editor.ResultsWordWrap);
+            ResultsOutput.ShowGeneratedLabels = _prefs.Editor.ResultsShowGeneratedLabels;
 
             _intelliSense?.UpdateIndentation(_prefs.Editor.UseTabs, _prefs.Editor.IndentationSize);
             _prefs.Keyboard.ApplyTo(State.Editor);
@@ -1932,6 +1964,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 if (_disposed) return;
                 if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
                 squiggleRenderer.Update(editor.Document, diagnostics);
+                editor.UpdateScrollMarkers(DiagnosticScrollMarkers.Of(editor.Document, diagnostics));
                 editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
             });
 

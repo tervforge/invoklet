@@ -66,7 +66,7 @@ public class EditorTabRunResultTests
             .Returns(host.Object);
 
         var vm = new EditorTabItemViewModel(
-            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, language, MdRunKind.Statements);
+            null, [], prefs.Object, new Mock<IEditorTabActions>().Object, language);
         var ctrl = new EditorsTabItemControl(vm, theme.Object, new Mock<IWindowService>().Object, registry.Object, prefs.Object,
             intelliSense: null, new Mock<IBuildCacheService>().Object, logger,
             connectionDrivers, connectionSchemas);

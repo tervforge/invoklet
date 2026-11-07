@@ -96,8 +96,8 @@ internal sealed class FoldingMargin : AbstractMargin
         // ── Pass 1: thin vertical scope line for each expanded fold ──────────
         if (lineBrush is not null)
         {
-            var linePen = new Pen(lineBrush, 1.0);
-            var activePen = new Pen(activeBrush, 1.0);
+            var linePen = new Pen(lineBrush);
+            var activePen = new Pen(activeBrush);
             var cx = Math.Floor(W / 2.0) + 0.5; // pixel-aligned centre
 
             foreach (var section in _manager.AllFoldings)

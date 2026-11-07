@@ -10,7 +10,7 @@ internal sealed class PackageSearchRunnerFixture
 
     public TimeSpan Debounce { get; set; } = TimeSpan.Zero;
 
-    public static PackageSearchOptions Options { get; } = new("nuget.org", false, 0);
+    public static PackageSearchOptions Options { get; } = new("nuget.org");
 
     public PackageSearchRunner CreateSut() => new(Search.Object, Debounce);
 }

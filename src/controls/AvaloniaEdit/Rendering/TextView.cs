@@ -1111,7 +1111,7 @@ public class TextView : Control, ITextEditorComponent, ILogicalScrollable
                     int indentVisualColumn = GetIndentationVisualColumn(visualLine);
                     if (indentVisualColumn > 0 && indentVisualColumn < textOffset)
                     {
-                        indentation = textLine.GetDistanceFromCharacterHit(new CharacterHit(indentVisualColumn, 0));
+                        indentation = textLine.GetDistanceFromCharacterHit(new CharacterHit(indentVisualColumn));
                     }
                 }
                 indentation += options.WordWrapIndentation;

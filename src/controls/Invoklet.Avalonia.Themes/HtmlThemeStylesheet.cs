@@ -23,6 +23,8 @@ public static class HtmlThemeStylesheet
 
         var dpTh = GetColor("Invoklet.Dump.TableHeaderBrush", variant, isDark ? "#1B4F7D" : "#3A6DAD");
         var dpThFg = GetColor("Invoklet.Dump.TableHeaderForegroundBrush", variant, "#FFFFFF");
+        var dpColumn = GetColor("Invoklet.Dump.ColumnHeaderBrush", variant, isDark ? "#43454A" : "#DDDFE3");
+        var dpColumnFg = GetColor("Invoklet.Dump.ColumnHeaderForegroundBrush", variant, isDark ? "#E6E7EA" : "#22252A");
         var dpBorder = GetColor("Invoklet.Dump.TableBorderBrush", variant, isDark ? "#3C3C3C" : "#A8B4C8");
         var dpEven = GetColor("Invoklet.Dump.TableEvenRowBrush", variant, isDark ? "#252525" : "#EDF2FB");
         var dpAccent = GetColor("Invoklet.Tab.AccentBrush", variant, isDark ? "#569CD6" : "#0078D4");
@@ -51,17 +53,28 @@ public static class HtmlThemeStylesheet
             .error      { color:{{errFg}}; {{lines}} }
             .stacktrace { color:{{stackFg}}; font-size:0.85em; }
             .dp-dump    { margin:8px 0; padding:4px 6px 4px 10px; border-left:3px solid {{dpAccent}}; background-color:{{dpDumpBg}}; border-radius:0 2px 2px 0; }
+            .dp-dump-plain { margin:8px 0; }
             .dp-label   { color:{{fgSec}}; font-size:0.85em; margin-bottom:3px; font-style:italic; }
             .dp-heading { color:{{fg}}; font-weight:bold; margin-bottom:3px; }
             .dp-highlight { background-color:{{highlightBg}}; color:{{highlightFg}}; padding:0 3px; }
             .dp-type    { color:{{fgSec}}; font-size:0.82em; margin-bottom:2px; }
             .dp-count   { color:{{fgSec}}; font-size:0.82em; margin-bottom:4px; }
+            .dp-box        { margin:2px 0; }
+            .dp-boxed      { border:2px solid {{dpTh}}; margin:0; }
+            .dp-boxstrip   { padding:0; background-color:{{dpTh}}; border:none; }
+            .dp-boxtitle-open { width:100%; }
+            .dp-boxtitle   { border:none; border-collapse:collapse; background-color:{{dpTh}}; color:{{dpThFg}}; font-size:12px; }
+            .dp-boxarrow   { border:none; padding:1px 2px 1px 6px; width:14px; vertical-align:middle; }
+            .dp-boxtoggle  { color:{{dpThFg}}; text-decoration:none; }
+            .dp-boxtext    { border:none; padding:1px 6px; font-weight:bold; vertical-align:middle; }
+            .dp-box .dp-menubtn { background-color:transparent; width:24px; padding:1px 3px; vertical-align:middle; }
+            .dp-box .dp-tablemenu { color:{{dpThFg}}; }
             .dp-menuhost  { border:none; border-collapse:collapse; }
             .dp-menutext  { border:none; padding:2px 12px 0 0; background-color:transparent; vertical-align:middle; }
             .dp-menubtn   { border:none; padding:0 3px; background-color:{{panel}}; text-align:center; vertical-align:middle; }
             .dp-tablemenu { color:{{dpAccent}}; text-decoration:none; font-weight:bold; }
             .dp-table   { border-collapse:collapse; font-size:12px; margin:2px 0; border:1px solid {{dpBorder}}; }
-            .dp-th      { background-color:{{dpTh}}; color:{{dpThFg}}; padding:3px 10px; text-align:left; border:1px solid {{dpBorder}}; border-bottom:2px solid {{dpBorder}}; font-weight:600; white-space:nowrap; }
+            .dp-th      { background-color:{{dpColumn}}; color:{{dpColumnFg}}; padding:3px 10px; text-align:left; border:1px solid {{dpBorder}}; border-bottom:2px solid {{dpBorder}}; font-weight:600; white-space:nowrap; }
             .dp-td      { padding:2px 10px; border:1px solid {{dpBorder}}; vertical-align:top; }
             .dp-table tbody tr:nth-child(even) td { background-color:{{dpEven}}; }
             .dp-propname{ color:{{dpProp}}; }

@@ -106,6 +106,6 @@ public sealed class VbScriptCompiler(CompiledDotnetLanguageHostOptions options, 
             new("_MyType", "Empty"),
         };
         symbols.AddRange(FrameworkSymbols(target.Major, target.Minor).Select(s => new KeyValuePair<string, object>(s, -1)));
-        return new VisualBasicParseOptions(LanguageVersion.Default, preprocessorSymbols: symbols);
+        return new VisualBasicParseOptions(preprocessorSymbols: symbols);
     }
 }

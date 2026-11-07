@@ -39,6 +39,16 @@
         <TextBlock x:Name="CopyrightBlock" FontSize="11"
                    Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
 
+        <DockPanel Margin="0,8,0,0">
+            <Button x:Name="ViewReleaseButton" DockPanel.Dock="Right" IsVisible="False"
+                    Classes="secondary" Content="View release" Click="ViewReleaseButton_Click"
+                    AutomationProperties.Name="View available Invoklet release"/>
+            <TextBlock x:Name="UpdateStatus" VerticalAlignment="Center"
+                       FontSize="{DynamicResource Invoklet.Type.Caption}"
+                       Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"
+                       AutomationProperties.Name="Update status"/>
+        </DockPanel>
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="OK" MinWidth="{DynamicResource Invoklet.Size.DialogButton}" Click="OkButton_Click" IsDefault="True" IsCancel="True"/>
         </StackPanel>
