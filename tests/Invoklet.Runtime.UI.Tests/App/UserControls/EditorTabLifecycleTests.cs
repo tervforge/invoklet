@@ -99,7 +99,7 @@ public class EditorTabLifecycleTests
         try
         {
             var filePath = Path.Combine(tmpDir, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             var (ctrl, vm) = CreateControl(filePath);
 
             ctrl.State.Editor.Text = "Console.WriteLine(2);";
@@ -214,7 +214,7 @@ public class EditorTabLifecycleTests
         try
         {
             var original = Path.Combine(rootFolder, "Query 1.inv");
-            File.WriteAllText(original, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Query 1"));
+            File.WriteAllText(original, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
 
             var (mainVm, _, _) = CreateMainVm(rootFolder);
             mainVm.OpenTab(original);

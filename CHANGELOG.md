@@ -3,6 +3,12 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Changed
+
+- New scripts no longer receive an automatic Markdown title based on the file name.
+
 ## [0.12.0] — 2026-11-07
 
 ### Added

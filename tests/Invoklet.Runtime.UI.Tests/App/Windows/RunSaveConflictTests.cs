@@ -38,7 +38,7 @@ public class RunSaveConflictTests : IDisposable
     public RunSaveConflictTests()
     {
         _script = Path.Combine(_root, "query.inv");
-        File.WriteAllText(_script, MdRunWriter.NewFile("Console.WriteLine(\"original\");\n", "Demo"));
+        File.WriteAllText(_script, MdRunWriter.NewFile("Console.WriteLine(\"original\");\n"));
     }
 
     public void Dispose()
@@ -266,7 +266,7 @@ public class RunSaveConflictTests : IDisposable
         finally { await CleanupAsync(window, ctrl); }
     }
 
-    private void ChangeExternally() => File.WriteAllText(_script, MdRunWriter.NewFile(External + "\n", "Demo"));
+    private void ChangeExternally() => File.WriteAllText(_script, MdRunWriter.NewFile(External + "\n"));
 
     private void Answer(SaveConflictChoice choice) =>
         _windows.Setup(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>())).ReturnsAsync(choice);

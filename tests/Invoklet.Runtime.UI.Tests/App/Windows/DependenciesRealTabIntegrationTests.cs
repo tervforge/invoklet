@@ -36,7 +36,7 @@ public class DependenciesRealTabIntegrationTests
         try
         {
             var filePath = Path.Combine(tmpDir, "demo.inv");
-            var doc = MdRunParser.TryParse(MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"))!;
+            var doc = MdRunParser.TryParse(MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"))!;
             doc.FrontMatter.Packages["Existing.Package"] = new Package("1.2.3");
             File.WriteAllText(filePath, MdRunWriter.Write(doc));
 

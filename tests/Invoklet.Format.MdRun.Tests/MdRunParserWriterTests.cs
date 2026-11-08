@@ -129,7 +129,7 @@ public class MdRunParserWriterTests
     [InlineData(MdRunKind.Expression)]
     public void NewFile_ThenParse_ProducesRequestedKind(MdRunKind kind)
     {
-        var text = MdRunWriter.NewFile("var x = 1;\n", "Untitled", "net10.0", kind);
+        var text = MdRunWriter.NewFile("var x = 1;\n", "net10.0", kind);
 
         var parsed = MdRunParser.TryParse(text);
 
@@ -150,7 +150,7 @@ public class MdRunParserWriterTests
     [InlineData(MdRunKind.Expression)]
     public void NewFile_WithEmptyCodeOverride_ThenParse_RoundTripsCleanlyThroughWrite(MdRunKind kind)
     {
-        var text = MdRunWriter.NewFile("", "Untitled", "net10.0", kind);
+        var text = MdRunWriter.NewFile("", "net10.0", kind);
 
         var parsed = MdRunParser.TryParse(text);
         Assert.NotNull(parsed);
@@ -189,7 +189,7 @@ public class MdRunParserWriterTests
     [InlineData(MdRunKind.Expression)]
     public void NewFile_WithVbLanguage_ThenParse_ProducesVbLanguageAndFence(MdRunKind kind)
     {
-        var text = MdRunWriter.NewFile("Dim x = 1\n", "Untitled", "net10.0", kind, MdRunLanguage.Vb);
+        var text = MdRunWriter.NewFile("Dim x = 1\n", "net10.0", kind, MdRunLanguage.Vb);
 
         Assert.Contains("```vb run", text);
         var parsed = MdRunParser.TryParse(text);
@@ -208,6 +208,14 @@ public class MdRunParserWriterTests
         Assert.Contains("```csharp run", text);
     }
 
+    [Fact]
+    public void NewFile_Should_NotAddAnAutomaticMarkdownTitle()
+    {
+        var text = MdRunWriter.NewFile("var x = 1;\n");
+
+        Assert.DoesNotContain("# ", text);
+    }
+
     // The format writes the caller's code as it is: what a new script starts with is the language's
     // business (ILanguageHostFactory.CodeForKind), not the file format's.
     [Theory]
@@ -216,7 +224,7 @@ public class MdRunParserWriterTests
     [InlineData("no trailing newline")]
     public void NewFile_Should_PutTheGivenCodeInTheRunBlock(string code)
     {
-        var parsed = MdRunParser.TryParse(MdRunWriter.NewFile(code, "Demo", kind: MdRunKind.Program));
+        var parsed = MdRunParser.TryParse(MdRunWriter.NewFile(code, kind: MdRunKind.Program));
 
         Assert.NotNull(parsed);
         Assert.Equal(code.TrimEnd('\n') + "\n", parsed!.RunCode);

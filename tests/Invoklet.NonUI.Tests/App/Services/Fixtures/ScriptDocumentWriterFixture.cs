@@ -14,7 +14,7 @@ internal sealed class ScriptDocumentWriterFixture
 
     public MdRunDocument CreateDocument(Guid? id = null, List<string>? references = null)
     {
-        var document = MdRunParser.TryParse(MdRunWriter.NewFile("Console.WriteLine(1);\n", title: "Test"))
+        var document = MdRunParser.TryParse(MdRunWriter.NewFile("Console.WriteLine(1);\n"))
             ?? throw new InvalidOperationException("A new file must parse.");
         document.FrontMatter.Id = id;
         document.FrontMatter.References = references;

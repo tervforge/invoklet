@@ -101,7 +101,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task NormalExitAndRestart_Should_RestoreOrderActiveTextAndMetadata_WithoutWritingOriginals()
     {
         var path = Path.Combine(_root, "named.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("saved", "Named"));
+        File.WriteAllText(path, MdRunWriter.NewFile("saved"));
         var original = File.ReadAllBytes(path);
         Guid active;
         using (var first = new Session(_root, new DiskRecoveryStore(RecoveryRoot)))
@@ -225,8 +225,8 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     {
         var changed = Path.Combine(_root, "changed.inv");
         var deleted = Path.Combine(_root, "deleted.inv");
-        File.WriteAllText(changed, MdRunWriter.NewFile("old", "Changed"));
-        File.WriteAllText(deleted, MdRunWriter.NewFile("cached", "Deleted"));
+        File.WriteAllText(changed, MdRunWriter.NewFile("old"));
+        File.WriteAllText(deleted, MdRunWriter.NewFile("cached"));
         RecoveryTab Frame(string path)
         {
             var raw = File.ReadAllText(path);
@@ -241,7 +241,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
         }
         using (var seed = new DiskRecoveryStore(RecoveryRoot))
             await seed.CommitAsync(new() { Revision = 1, Tabs = [Frame(changed), Frame(deleted)] });
-        File.WriteAllText(changed, MdRunWriter.NewFile("new on disk", "Changed"));
+        File.WriteAllText(changed, MdRunWriter.NewFile("new on disk"));
         File.Delete(deleted);
         using var next = new Session(_root, new DiskRecoveryStore(RecoveryRoot));
         await next.Ready();
@@ -257,7 +257,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     [AvaloniaFact]
     public async Task Restart_Should_PreserveVisualBasicMarkdownAndInvalidRawText()
     {
-        var doc = MdRunParser.TryParse(MdRunWriter.NewFile("Console.WriteLine(1)", "VB", language: MdRunLanguage.Vb))!;
+        var doc = MdRunParser.TryParse(MdRunWriter.NewFile("Console.WriteLine(1)", language: MdRunLanguage.Vb))!;
         var captured = doc.CaptureSnapshot();
         var before = "# Notes\r\n\r\n```vb run\r\n";
         var after = "\r\n```\r\nAfter **code**\r\n";
@@ -380,7 +380,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task RenameWaitingForConflictChoice_Should_FinishBeforeTheExitSnapshot()
     {
         var original = Path.Combine(_root, "before.inv");
-        File.WriteAllText(original, MdRunWriter.NewFile("old", "Before"));
+        File.WriteAllText(original, MdRunWriter.NewFile("old"));
         using (var session = new Session(_root, new DiskRecoveryStore(RecoveryRoot)))
         {
             await session.Ready();
@@ -388,7 +388,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
             await session.Ready();
             var tab = session.Vm.Tabs.Last();
             session.Control(tab).State.Editor.Text = "current code";
-            File.WriteAllText(original, MdRunWriter.NewFile("external", "Before"));
+            File.WriteAllText(original, MdRunWriter.NewFile("external"));
             var choice = new TaskCompletionSource<SaveConflictChoice>(TaskCreationOptions.RunContinuationsAsynchronously);
             session.Windows.Setup(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>())).Returns(choice.Task);
             var renaming = session.Vm.RenameFile(original, "after");
@@ -469,7 +469,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     private static RecoveryTab DirtyFileDraft(string path, string text, string args)
     {
         var bytes = File.ReadAllBytes(path);
-        var document = MdRunParser.Parse(MdRunWriter.NewFile(text, Path.GetFileNameWithoutExtension(path), kind: MdRunKind.Program)
+        var document = MdRunParser.Parse(MdRunWriter.NewFile(text, kind: MdRunKind.Program)
             .Replace("kind: Program\n", $"kind: Program\narguments:\n  - name: value\n    default: \"{args}\"\n")).Document!;
         return new RecoveryTab
         {
@@ -486,7 +486,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task TwoWindowsDraftsOfTheSameFile_Should_BothBeRestored_WithoutWritingTheFile()
     {
         var path = Path.Combine(_root, "shared.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("on disk", "Shared"));
+        File.WriteAllText(path, MdRunWriter.NewFile("on disk"));
         var disk = File.ReadAllBytes(path);
         var otherFolder = await ClosedSessionAsync(DateTime.UtcNow.AddMinutes(-10), DirtyFileDraft(path, "other window's edit", "other-arg"));
         await ClosedSessionAsync(DateTime.UtcNow, DirtyFileDraft(path, "this window's edit", "own-arg"));
@@ -531,9 +531,9 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task AnImportedDraftOfAFileNotOpenHere_Should_ReopenItWithTheBaselineItWasEditedAgainst()
     {
         var path = Path.Combine(_root, "elsewhere.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("original", "Elsewhere"));
+        File.WriteAllText(path, MdRunWriter.NewFile("original"));
         var draft = DirtyFileDraft(path, "edited in the other window", "x");
-        File.WriteAllText(path, MdRunWriter.NewFile("changed on disk later", "Elsewhere"));
+        File.WriteAllText(path, MdRunWriter.NewFile("changed on disk later"));
         var changed = File.ReadAllBytes(path);
         await ClosedSessionAsync(DateTime.UtcNow.AddMinutes(-10), draft);
         await ClosedSessionAsync(DateTime.UtcNow, new RecoveryTab { EditorText = "own untitled", IsDirty = true });
@@ -590,7 +590,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     private async Task<(Session Session, EditorTabItemViewModel Named, string Path)> DirtyNamedTabAsync(IRecoveryStore? store = null)
     {
         var path = Path.Combine(_root, "named.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("saved text", "Named"));
+        File.WriteAllText(path, MdRunWriter.NewFile("saved text"));
         var session = new Session(_root, store ?? new DiskRecoveryStore(RecoveryRoot));
         await session.Ready();
         session.Vm.OpenTab(path);
@@ -614,7 +614,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
     public async Task ClosingWithNothingUnsaved_Should_NotAsk_AndStillKeepTheSession()
     {
         var path = Path.Combine(_root, "clean.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("clean", "Clean"));
+        File.WriteAllText(path, MdRunWriter.NewFile("clean"));
         using (var session = new Session(_root, new DiskRecoveryStore(RecoveryRoot)))
         {
             await session.Ready();
@@ -731,7 +731,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
         var (session, named, path) = await DirtyNamedTabAsync();
         using (session)
         {
-            File.WriteAllText(path, MdRunWriter.NewFile("changed elsewhere", "Named"));
+            File.WriteAllText(path, MdRunWriter.NewFile("changed elsewhere"));
             var external = File.ReadAllBytes(path);
             session.Windows.Setup(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>())).ReturnsAsync(SaveConflictChoice.Cancel);
             Answer(session, ExitUnsavedChoice.SaveAll);
@@ -797,7 +797,7 @@ public sealed class SessionDraftLifecycleTests : IDisposable
         File.Copy(typeof(Assert).Assembly.Location, library);
         File.Copy(typeof(Assert).Assembly.Location, macro);
         var path = Path.Combine(folder, "shared.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("on disk", "Shared"));
+        File.WriteAllText(path, MdRunWriter.NewFile("on disk"));
         RecoveryTab Draft(string text, string arg)
         {
             var draft = DirtyFileDraft(path, text, arg);

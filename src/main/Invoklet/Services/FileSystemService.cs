@@ -205,7 +205,7 @@ public sealed class FileSystemService : IFileSystemService
         } while (File.Exists(path) || Directory.Exists(path));
 
         File.WriteAllText(path, MdRunWriter.NewFile(
-            code, title: Path.GetFileNameWithoutExtension(path), language: language, kind: kind));
+            code, language: language, kind: kind));
         return path;
     }
 

@@ -66,12 +66,12 @@ public sealed class TabRecoveryTests : IDisposable
     public async Task DirtyNamedSnapshot_Should_KeepOriginalDiskBaseline_AndAskBeforeOverwritingExternalChanges()
     {
         var path = Path.Combine(_root, "dirty.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("old", "test"));
+        File.WriteAllText(path, MdRunWriter.NewFile("old"));
         var (ctrl, vm) = Open(path);
         ctrl.State.Editor.Text = "unsaved";
         var snapshot = ctrl.CaptureRecovery();
         var originalHash = vm.DiskState!.Hash;
-        File.WriteAllText(path, MdRunWriter.NewFile("external", "test"));
+        File.WriteAllText(path, MdRunWriter.NewFile("external"));
         var external = File.ReadAllBytes(path);
         var (restored, restoredVm) = Open(path, snapshot);
         _windows.Setup(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>())).ReturnsAsync(SaveConflictChoice.Cancel);
@@ -86,7 +86,7 @@ public sealed class TabRecoveryTests : IDisposable
     public async Task UnknownRecoveredBaseline_Should_NotSilentlyAcceptTheCurrentFile()
     {
         var path = Path.Combine(_root, "unknown.inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("disk", "test"));
+        File.WriteAllText(path, MdRunWriter.NewFile("disk"));
         var (ctrl, _) = Open();
         var frame = ctrl.CaptureRecovery() with { FilePath = path, BaselineKnown = false, IsDirty = true };
         var (_, vm) = Open(path, frame);

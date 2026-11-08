@@ -46,7 +46,7 @@ public class EditorThemeRefreshTests : IDisposable
     private string Script(string name)
     {
         var path = Path.Combine(_root, name);
-        File.WriteAllText(path, MdRunWriter.NewFile(Code, name));
+        File.WriteAllText(path, MdRunWriter.NewFile(Code));
         return path;
     }
 

@@ -85,7 +85,7 @@ public class EditorTabsControlTabActionsWiringTests
         try
         {
             var original = Path.Combine(rootFolder, "Query 1.inv");
-            File.WriteAllText(original, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Query 1"));
+            File.WriteAllText(original, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             mainVm.OpenTab(original);
             await GetSoleControlAsync(editorTabs);
             var tab = Assert.Single(mainVm.Tabs);
@@ -109,7 +109,7 @@ public class EditorTabsControlTabActionsWiringTests
         try
         {
             var filePath = Path.Combine(rootFolder, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             mainVm.OpenTab(filePath);
             await GetSoleControlAsync(editorTabs);
             var tab = Assert.Single(mainVm.Tabs);

@@ -29,7 +29,7 @@ public class SaveIfNeededFailureTests
         var filePath = Path.Combine(tmpDir, "demo.inv");
         try
         {
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
 
             var prefs = new Mock<IPreferencesService>();
             prefs.Setup(p => p.Editor).Returns(new EditorSettings());
