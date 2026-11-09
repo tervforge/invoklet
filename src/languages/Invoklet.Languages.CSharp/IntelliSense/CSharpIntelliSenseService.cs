@@ -213,6 +213,9 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     public Task<IMaterializedFix?> MaterializeFixAsync(string code, string key, CancellationToken ct = default)
         => _refactorings.MaterializeFixAsync(code, key, ct);
 
+    public Task<IMaterializedFix?> MaterializeFixAllAsync(string code, string key, FixAllScope scope, CancellationToken ct = default)
+        => _refactorings.MaterializeFixAllAsync(code, key, scope, ct);
+
     internal Task<string> ReindentOutsideTheWrapperAsync(string newCode, IReadOnlyList<TextSpan> changedSpans, CancellationToken ct)
         => _refactorings.ReindentOutsideTheWrapperAsync(newCode, changedSpans, ct);
 

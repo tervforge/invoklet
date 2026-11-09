@@ -313,7 +313,7 @@ public class CodeFixMarginTests
     }
 
     [AvaloniaFact]
-    public void BuildMenuItems_Should_NotAddASeparator_WhenAllCandidatesAreTheSameCategory()
+    public void BuildMenuItems_Should_GroupIntoSubmenu_WhenMultipleCandidatesShareACategory()
     {
         var (_, _, margin) = CreateEditor("x\n");
         var candidates = new[]
@@ -324,8 +324,10 @@ public class CodeFixMarginTests
 
         var items = margin.BuildMenuItems(candidates);
 
-        Assert.Equal(2, items.Count);
-        Assert.All(items, i => Assert.IsType<MenuItem>(i));
+        Assert.Single(items);
+        var group = Assert.IsType<MenuItem>(items[0]);
+        Assert.Equal("Add Using Directive", group.Header);
+        Assert.Equal(2, group.Items.Count);
     }
 
     [AvaloniaFact]
@@ -351,7 +353,7 @@ public class CodeFixMarginTests
     }
 
     [AvaloniaFact]
-    public void BuildMenuItems_Should_PreserveOriginalOrder_WithinEachGroup()
+    public void BuildMenuItems_Should_PreserveOriginalOrder_WithinEachSubmenu()
     {
         var (_, _, margin) = CreateEditor("x\n");
         var candidates = new[]
@@ -362,8 +364,9 @@ public class CodeFixMarginTests
 
         var items = margin.BuildMenuItems(candidates);
 
-        Assert.Equal("using System.Linq;", Assert.IsType<MenuItem>(items[0]).Header);
-        Assert.Equal("using System;", Assert.IsType<MenuItem>(items[1]).Header);
+        var group = Assert.IsType<MenuItem>(items[0]);
+        Assert.Equal("using System.Linq;", ((MenuItem)group.Items[0]!).Header);
+        Assert.Equal("using System;", ((MenuItem)group.Items[1]!).Header);
     }
 
     // Apply used to set

@@ -33,7 +33,7 @@ internal sealed class LightbulbEntries
 
     // Line, title, severity and key only: the fix itself is materialized for the one entry that is clicked.
     private static List<CodeFixEntry> ToEntries(IReadOnlyList<ICodeFixInfo> fixes)
-        => fixes.Select(f => new CodeFixEntry(f.Line, f.Title, ToMarginSeverity(f.Severity), f.Key, f.DiagnosticId)).ToList();
+        => fixes.Select(f => new CodeFixEntry(f.Line, f.Title, ToMarginSeverity(f.Severity), f.Key, f.DiagnosticId, f.SupportsFixAll)).ToList();
 
     // The margin's CodeFixSeverity duplicates DiagnosticSeverity because the control does not reference the
     // contracts; this is the one place the two enums are mapped.

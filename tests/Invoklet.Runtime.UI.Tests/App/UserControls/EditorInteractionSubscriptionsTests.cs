@@ -27,6 +27,9 @@ public sealed class EditorInteractionSubscriptionsTests
             _ => { },
             (_, _) => { },
             (_, _) => { },
+            _ => { },
+            (_, _) => { },
+            (_, _) => { },
             (_, _) => { });
 
         owner.Attach();
@@ -57,6 +60,9 @@ public sealed class EditorInteractionSubscriptionsTests
             (_, _) => counts[2]++,
             (_, _) => counts[3]++,
             (_, _) => counts[4]++,
+            _ => { },
+            (_, _) => { },
+            (_, _) => { },
             _ => { },
             (_, _) => counts[5]++,
             (_, _) => counts[6]++,

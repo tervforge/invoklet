@@ -119,6 +119,12 @@ public interface IIntelliSenseService : IDisposable
         string code,
         string key,
         CancellationToken cancellationToken = default);
+    // Applies a fix to all diagnostics with the same ID within the given scope (method, class or script).
+    Task<IMaterializedFix?> MaterializeFixAllAsync(
+        string code,
+        string key,
+        FixAllScope scope,
+        CancellationToken cancellationToken = default);
 
     // ReSharper-style "resolve all missing usings" — resolves every
     // unambiguous unresolved-type diagnostic in the document at once instead of requiring the

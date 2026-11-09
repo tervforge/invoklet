@@ -7,19 +7,12 @@ using AvaloniaEdit.Editing;
 
 namespace Invoklet.Avalonia.CodeTextEditor.CodeFix;
 
-// Live user request: group the lightbulb's dropdown menu by kind (using-directive
-// fixes separately from create/implement variants), and give fixes/refactorings/conversions their
-// own icon instead of one hammer for everything. Neither CodeFixEntry nor the upstream
-// Invoklet.Contracts.IntelliSense.ICodeFixInfo it mirrors carries a "kind" at all — only
-// Title/DiagnosticId — so CodeFixMargin.Categorize below is built from those two signals:
-// DiagnosticId != null is already a real, existing distinction (RoslynCodeFixEngine only ever sets
-// it for ComputeFixesAsync's diagnostic-driven results, never for ComputeRefactoringsAsync's
-// caret-triggered ones — CodeFixEntry's own doc comment), and beyond that a Title keyword heuristic.
-// Roslyn's own built-in fix/refactoring catalog is a couple hundred MEF-discovered providers
-// (RoslynCodeFixEngine's own doc comment) — too broad to map exhaustively by exact title string —
-// so this covers the three groupings the user explicitly asked for (using-directives, create/
-// implement, conversions/minor edits) and falls back to the existing DiagnosticId split (Fix vs
-// Refactoring) for everything else a keyword doesn't recognize.
+// Groups the lightbulb's dropdown menu by kind (using-directive fixes separately from
+// create/implement variants), with per-category icons. Neither CodeFixEntry nor ICodeFixInfo
+// carries a "kind" — only Title/DiagnosticId — so Categorize below uses those two signals:
+// DiagnosticId != null distinguishes diagnostic-driven fixes from caret-triggered refactorings,
+// and a Title keyword heuristic splits the three main groups (using-directives, create/implement,
+// conversions). Everything else falls back to the DiagnosticId split (Fix vs Refactoring).
 internal enum CodeFixCategory
 {
     UsingDirective,
@@ -35,10 +28,8 @@ internal enum CodeFixCategory
 // type) — a single click applies the only fix directly, or opens a small picker menu when there's
 // more than one.
 //
-// User request 2026-07-21: only the caret's own line ever shows the icon, VS/Rider-
-// style, instead of every line in the file that currently has a fix all being lit up simultaneously
-// — the margin used to render one icon per fix-bearing line regardless of where the caret was,
-// which got noisy fast on a script with several unrelated diagnostics open at once.
+// Only the caret's own line shows the icon (VS/Rider-style) instead of every line with a fix —
+// rendering one icon per fix-bearing line got noisy on scripts with several open diagnostics.
 public class CodeFixMargin : AbstractMargin
 {
     static CodeFixMargin()
@@ -65,6 +56,9 @@ public class CodeFixMargin : AbstractMargin
     // it wants to import) is entirely the click-time responsibility of whoever owns that (forwarded
     // up via CodeTextEditor.FixApplyRequested).
     public event Action<CodeFixEntry>? FixApplyRequested;
+    public event Action<CodeFixEntry, CodeFixAllScope>? FixAllRequested;
+    public event Action<string, int>? SuppressInScriptRequested;
+    public event Action<string>? SuppressGloballyRequested;
 
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
 
@@ -284,9 +278,40 @@ public class CodeFixMargin : AbstractMargin
             if (!firstGroup) items.Add(new Separator());
             firstGroup = false;
 
-            foreach (var fix in inGroup)
-                items.Add(BuildMenuItem(fix));
+            if (inGroup.Count >= 2)
+            {
+                var group = new MenuItem { Header = CategoryLabel(category) };
+                foreach (var fix in inGroup)
+                    group.Items.Add(BuildMenuItem(fix));
+                items.Add(group);
+            }
+            else
+            {
+                foreach (var fix in inGroup)
+                    items.Add(BuildMenuItem(fix));
+            }
         }
+
+        var fixAllIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var fix in candidates)
+        {
+            if (fix.SupportsFixAll && fix.DiagnosticId is not null && fixAllIds.Add(fix.DiagnosticId))
+            {
+                if (items.Count > 0 && items[^1] is not Separator) items.Add(new Separator());
+                items.Add(BuildFixAllMenuItem(fix));
+            }
+        }
+
+        var suppressIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var fix in candidates)
+        {
+            if (fix.DiagnosticId is not null && suppressIds.Add(fix.DiagnosticId))
+            {
+                if (items.Count > 0 && items[^1] is not Separator) items.Add(new Separator());
+                items.Add(BuildSuppressMenuItem(fix.DiagnosticId, fix.Line));
+            }
+        }
+
         return items;
     }
 
@@ -310,6 +335,16 @@ public class CodeFixMargin : AbstractMargin
 
     private static readonly string[] CreateOrImplementKeywords = ["Generate", "Create", "Implement"];
     private static readonly string[] ConversionKeywords = ["Convert ", "Simplify ", "Use "];
+
+    internal static string CategoryLabel(CodeFixCategory category) => category switch
+    {
+        CodeFixCategory.UsingDirective => "Add Using Directive",
+        CodeFixCategory.CreateOrImplement => "Generate",
+        CodeFixCategory.Conversion => "Convert",
+        CodeFixCategory.Fix => "Quick Fix",
+        CodeFixCategory.Refactoring => "Refactoring",
+        _ => "Other",
+    };
 
     private static bool ContainsAnyOrdinal(string title, string[] keywords) =>
         keywords.Any(k => title.Contains(k, StringComparison.Ordinal));
@@ -382,6 +417,51 @@ public class CodeFixMargin : AbstractMargin
     }
 
     private void Apply(CodeFixEntry fix) => FixApplyRequested?.Invoke(fix);
+    internal MenuItem BuildFixAllMenuItem(CodeFixEntry fix)
+    {
+        var parent = new MenuItem { Header = $"Fix all '{fix.DiagnosticId}'", FontFamily = MonospaceFont.Default };
+        var geo = LoadFixAllIcon();
+        if (geo is not null)
+            parent.Icon = new PathIcon { Data = geo, Width = 16, Height = 16 };
+
+        var inMethod = new MenuItem { Header = "in this method" };
+        inMethod.Click += (_, _) => ApplyAll(fix, CodeFixAllScope.ContainingMember);
+        var inClass = new MenuItem { Header = "in this class" };
+        inClass.Click += (_, _) => ApplyAll(fix, CodeFixAllScope.ContainingType);
+        var inScript = new MenuItem { Header = "in this script" };
+        inScript.Click += (_, _) => ApplyAll(fix, CodeFixAllScope.Document);
+
+        parent.Items.Add(inMethod);
+        parent.Items.Add(inClass);
+        parent.Items.Add(inScript);
+        return parent;
+    }
+
+    private StreamGeometry? LoadFixAllIcon()
+    {
+        const string key = "Icon.Wrench";
+        if (!_menuIconCache.TryGetValue(key, out var geo))
+        {
+            geo = LoadResource<StreamGeometry>(key);
+            _menuIconCache[key] = geo;
+        }
+        return geo;
+    }
+    private void ApplyAll(CodeFixEntry fix, CodeFixAllScope scope) => FixAllRequested?.Invoke(fix, scope);
+
+    internal MenuItem BuildSuppressMenuItem(string diagnosticId, int line)
+    {
+        var parent = new MenuItem { Header = $"Suppress '{diagnosticId}'", FontFamily = MonospaceFont.Default };
+
+        var inScript = new MenuItem { Header = "in this script" };
+        inScript.Click += (_, _) => SuppressInScriptRequested?.Invoke(diagnosticId, line);
+        var globally = new MenuItem { Header = "in all scripts" };
+        globally.Click += (_, _) => SuppressGloballyRequested?.Invoke(diagnosticId);
+
+        parent.Items.Add(inScript);
+        parent.Items.Add(globally);
+        return parent;
+    }
 
     // The column is exactly as wide as the bulb's square: a compact gutter, with the glyph right
     // next to the line numbers (as in Rider), and one formula for both the width and the click

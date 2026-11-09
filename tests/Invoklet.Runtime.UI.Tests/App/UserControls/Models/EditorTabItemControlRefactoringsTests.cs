@@ -27,7 +27,7 @@ namespace Invoklet.Runtime.UI.Tests.App.UserControls.Models;
 // simulate a real paint pass or menu click to know what UpdateCodeFixes was actually given).
 public class EditorTabItemControlRefactoringsTests
 {
-    private sealed record FakeCodeFixInfo(int Line, string Title, DiagnosticSeverity Severity, string Key, string? DiagnosticId = null) : ICodeFixInfo;
+    private sealed record FakeCodeFixInfo(int Line, string Title, DiagnosticSeverity Severity, string Key, string? DiagnosticId = null, bool SupportsFixAll = false) : ICodeFixInfo;
 
     private static Mock<IPreferencesService> MakePrefs()
     {

@@ -248,7 +248,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _editorInteractionSubscriptions = new EditorInteractionSubscriptions(
             editor, OnEditorTextChanged, OnEditorCaretPositionChanged, OnEditorDocumentChanged,
             OnRenameSymbolRequested, OnFindReferencesRequested, OnGoToDefinitionRequested,
-            OnFixApplyRequested, _breakpoints.OnAdded, _breakpoints.OnRemoved,
+            OnFixApplyRequested, OnFixAllRequested,
+            OnSuppressInScriptRequested, OnSuppressGloballyRequested,
+            _breakpoints.OnAdded, _breakpoints.OnRemoved,
             OnBreakpointRightClicked);
         _editorInteractionSubscriptions.Attach();
 
@@ -1296,6 +1298,41 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         if (_disposed || _intelliSense is null) return;
         _ = ApplyCodeFixAsync(State.Editor, _intelliSense, fix);
+    }
+
+    private void OnFixAllRequested(CodeFixEntry fix, CodeFixAllScope scope)
+    {
+        if (_disposed || _intelliSense is null) return;
+        _ = ApplyFixAllAsync(State.Editor, _intelliSense, fix, scope);
+    }
+
+    private void OnSuppressInScriptRequested(string diagnosticId, int line)
+    {
+        if (_disposed) return;
+        var editor = State.Editor;
+        var doc = editor.Document;
+        var docLine = doc.GetLineByNumber(Math.Min(line, doc.LineCount));
+        var insertOffset = docLine.Offset;
+        var indent = "";
+        var lineText = doc.GetText(docLine);
+        foreach (var ch in lineText)
+        {
+            if (ch is ' ' or '\t') indent += ch;
+            else break;
+        }
+        var pragma = $"{indent}#pragma warning disable {diagnosticId}\n";
+        doc.Insert(insertOffset, pragma);
+    }
+
+    private void OnSuppressGloballyRequested(string diagnosticId)
+    {
+        if (_disposed) return;
+        var ids = _prefs.CSharp.ExcludedDiagnosticIds;
+        if (ids.Contains(diagnosticId, StringComparer.OrdinalIgnoreCase)) return;
+        ids.Add(diagnosticId);
+        _prefs.CSharp.ExcludedDiagnosticIds = ids;
+        _prefs.Save();
+        UpdateLightbulb();
     }
 
     internal void ResumeDebug(DebugAction action)
@@ -2469,6 +2506,36 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             // Usings go to the .inv front matter's `namespaces:` list (a project file, per
             // docs/ImplementationPlanRPad.md), not the visible script — except for a plain script
             // with no front matter to route them to, where they're folded into the text.
+            var hasProjectFile = State.MdRunDocument is not null;
+            var newCode = hasProjectFile
+                ? materialized.NewCode
+                : PrependUsings(materialized.UsingsToAdd, materialized.NewCode);
+
+            if (editor.Document.Text != newCode)
+                editor.Document.Text = newCode;
+            if (hasProjectFile && materialized.UsingsToAdd.Count > 0)
+                AddGlobalUsings(materialized.UsingsToAdd);
+        });
+    }
+
+    private async Task ApplyFixAllAsync(CodeTextEditor editor, IIntelliSenseService intelliSense, CodeFixEntry fix, CodeFixAllScope scope)
+    {
+        var contractScope = scope switch
+        {
+            CodeFixAllScope.ContainingMember => FixAllScope.ContainingMember,
+            CodeFixAllScope.ContainingType => FixAllScope.ContainingType,
+            CodeFixAllScope.Document => FixAllScope.Document,
+            _ => FixAllScope.Document,
+        };
+        var code = editor.Text;
+        var materialized = await intelliSense.MaterializeFixAllAsync(code, fix.Key, contractScope, CancellationToken.None);
+        if (materialized is null) return;
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (_disposed) return;
+            if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
+
             var hasProjectFile = State.MdRunDocument is not null;
             var newCode = hasProjectFile
                 ? materialized.NewCode

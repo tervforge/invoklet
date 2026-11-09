@@ -33,6 +33,10 @@ public interface ICodeFixInfo
     // CodeRefactoringProvider's suggestion (Use Expression Body, Introduce Local, ...) is triggered by
     // caret position, not a diagnostic, so it simply can't be excluded by ID this way.
     string? DiagnosticId { get; }
+
+    // True when the provider that produced this fix supports FixAllProvider, so the menu
+    // can offer scope-based bulk application (fix all in method, class or script).
+    bool SupportsFixAll { get; }
 }
 
 // The expensive half of ICodeFixInfo, computed on demand (IIntelliSenseService.MaterializeFixAsync)
@@ -47,4 +51,11 @@ public interface IMaterializedFix
 {
     string NewCode { get; }
     IReadOnlyList<string> UsingsToAdd { get; }
+}
+
+public enum FixAllScope
+{
+    ContainingMember,
+    ContainingType,
+    Document,
 }

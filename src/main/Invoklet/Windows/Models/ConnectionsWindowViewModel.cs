@@ -182,7 +182,7 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     }
     public bool IsEndpoint => Param.Type is ConnectionParamType.Endpoint;
     public bool CanBrowse => Param.Type is ConnectionParamType.File;
-    public bool CanInsertSecret => Param.Type is ConnectionParamType.Text or ConnectionParamType.ConnectionString && SecretNames.Count > 0;
+    public bool CanInsertSecret => Param.Type is ConnectionParamType.Text or ConnectionParamType.ConnectionString or ConnectionParamType.File && SecretNames.Count > 0;
     public bool IsBoolean => Param.Type is ConnectionParamType.Boolean;
     public bool IsMap => Param.Type is ConnectionParamType.Map;
     public bool IsList => Param.Type is ConnectionParamType.List;
