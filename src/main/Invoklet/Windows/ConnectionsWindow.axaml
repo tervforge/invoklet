@@ -126,7 +126,8 @@
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="PartLabel"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" SharedSizeGroup="PartSide"/></Grid.ColumnDefinitions>
                                                         <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"/>
                                                         <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Value}" PlaceholderText="{Binding Example}"
-                                                                 AutomationProperties.Name="{Binding Label}"/>
+                                                                 AutomationProperties.Name="{Binding Label}"
+                                                                 controls:PlaceholderMenu.SecretNames="{Binding SecretNames}"/>
                                                         <controls:SecretPicker Grid.Column="2"
                                                                   SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding CanInsertSecret}"
                                                                   AutomationProperties.Name="{Binding Label, StringFormat='Insert secret into {0}'}" ToolTip.Tip="Insert secret"/>
@@ -137,14 +138,16 @@
                                         <Grid ColumnSpacing="8">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="PartLabel"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" SharedSizeGroup="PartSide"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"/>
-                                            <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"/>
+                                            <TextBox Grid.Column="1" Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"
+                                            controls:PlaceholderMenu.SecretNames="{Binding SecretNames}"/>
                                             <controls:SecretPicker Grid.Column="2"
                                                       SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding CanInsertSecret}"
                                                       AutomationProperties.Name="{Binding Param.Label, StringFormat='Insert secret into {0}'}" ToolTip.Tip="Insert secret"/>
                                         </Grid>
                                     </StackPanel>
                                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsTextBox}">
-                                        <TextBox Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"/>
+                                        <TextBox Classes="field form-field" Text="{Binding Text}" PlaceholderText="{Binding Example}" AutomationProperties.Name="{Binding Param.Label}"
+                                        controls:PlaceholderMenu.SecretNames="{Binding SecretNames}"/>
                                         <controls:SecretPicker Grid.Column="1"
                                                   SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding CanInsertSecret}"
                                                   AutomationProperties.Name="{Binding Param.Label, StringFormat='Insert secret into {0}'}" ToolTip.Tip="Insert secret"/>
@@ -173,7 +176,8 @@
                                                         </Button>
                                                         <TextBlock Classes="error" Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding NameError}" IsVisible="{Binding HasNameError}"/>
                                                         <TextBox Classes="form-field" Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Value}" PlaceholderText="Value"
-                                                                 AutomationProperties.Name="{Binding ValueFieldLabel}"/>
+                                                                 AutomationProperties.Name="{Binding ValueFieldLabel}"
+                                                                 controls:PlaceholderMenu.SecretNames="{Binding SecretNames}"/>
                                                         <controls:SecretPicker Grid.Row="3" Grid.ColumnSpan="2" HorizontalAlignment="Right"
                                                                   SecretNames="{Binding SecretNames}" SelectedSecret="{Binding SecretToInsert}" IsVisible="{Binding HasSecrets}"
                                                                   AutomationProperties.Name="{Binding InsertSecretLabel}" ToolTip.Tip="Insert secret"/>
