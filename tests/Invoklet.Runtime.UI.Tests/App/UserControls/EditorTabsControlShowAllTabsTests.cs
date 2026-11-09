@@ -77,7 +77,7 @@ public class EditorTabsControlShowAllTabsTests
         try
         {
             var pathA = Path.Combine(rootFolder, "A.inv");
-            File.WriteAllText(pathA, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "A"));
+            File.WriteAllText(pathA, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             mainVm.OpenTab(pathA); // replaces the pristine blank tab, so a second tab is added explicitly
             mainVm.NewMdRunFile();
             Assert.Equal(2, mainVm.Tabs.Count);

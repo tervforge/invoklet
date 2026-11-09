@@ -234,7 +234,7 @@ public class EditorTabsControlCloseConfirmationTests
         try
         {
             var filePath = Path.Combine(rootFolder, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             mainVm.OpenTab(filePath);
             await editorTabs.TabsReadyForTests();
             var tab = mainVm.Tabs.Single(t => t.FilePath == filePath);
@@ -419,7 +419,7 @@ public class EditorTabsControlCloseConfirmationTests
         var filePath = Path.Combine(rootFolder, "demo.inv");
         try
         {
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             var (tab, ctrl) = await OpenNamedTabAsync(editorTabs, mainVm, filePath);
             ctrl.State.Editor.Text = "Console.WriteLine(2);";
             File.SetUnixFileMode(filePath, UnixFileMode.UserRead);
@@ -451,7 +451,7 @@ public class EditorTabsControlCloseConfirmationTests
         try
         {
             var filePath = Path.Combine(rootFolder, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             var (tab, ctrl) = await OpenNamedTabAsync(editorTabs, mainVm, filePath);
             ctrl.State.Editor.Text = "Console.WriteLine(3);";
             mainVm.NewMdRunFile(); // makes the named tab inactive
@@ -478,7 +478,7 @@ public class EditorTabsControlCloseConfirmationTests
         var filePath = Path.Combine(rootFolder, "demo.inv");
         try
         {
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             var (tab, ctrl) = await OpenNamedTabAsync(editorTabs, mainVm, filePath);
             ctrl.State.Editor.Text = "Console.WriteLine(4);";
             mainVm.NewMdRunFile();

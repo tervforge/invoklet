@@ -81,7 +81,7 @@ public class FileTreeViewModelTests
             var sub = Path.Combine(root, "Sub");
             Directory.CreateDirectory(sub);
             var file = Path.Combine(root, "a.inv");
-            File.WriteAllText(file, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(file, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
 
             var vm = CreateViewModel();
             vm.Refresh([
@@ -102,7 +102,7 @@ public class FileTreeViewModelTests
         try
         {
             var csharpFile = Path.Combine(root, "cs.inv");
-            File.WriteAllText(csharpFile, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "CSharp Demo"));
+            File.WriteAllText(csharpFile, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
             var vbFile = Path.Combine(root, "vb.inv");
             File.WriteAllText(vbFile,
                 "---\nversion: \"1.0\"\nlanguage: vb\ntargetSdk: net10.0\nkind: Statements\n---\n\n# VB Demo\n\n```vb run\nConsole.WriteLine(\"hi\")\n```\n");

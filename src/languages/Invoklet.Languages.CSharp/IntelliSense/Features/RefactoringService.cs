@@ -6,6 +6,7 @@ using Invoklet.Languages.CSharp.IntelliSense.Roslyn;
 using Invoklet.Languages.CSharp.IntelliSense.ScriptDocument;
 using Invoklet.Languages.DotnetCommon;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Options;
@@ -59,6 +60,39 @@ internal sealed class RefactoringService(
     internal Task<IMaterializedFix?> MaterializeFixAsync(string code, string key, CancellationToken ct = default)
         => RoslynMessageCulture.RunAsync(async () => (IMaterializedFix?)await TryMaterializeFixAsync(code, key, ct), ct);
 
+
+    internal Task<IMaterializedFix?> MaterializeFixAllAsync(string code, string key, Invoklet.Contracts.IntelliSense.FixAllScope scope, CancellationToken ct = default)
+        => RoslynMessageCulture.RunAsync(async () => (IMaterializedFix?)await TryMaterializeFixAllAsync(code, key, scope, ct), ct);
+
+    private async Task<IMaterializedFix?> TryMaterializeFixAllAsync(string code, string key, Invoklet.Contracts.IntelliSense.FixAllScope scope, CancellationToken ct)
+    {
+        try
+        {
+            var roslynScope = scope switch
+            {
+                Invoklet.Contracts.IntelliSense.FixAllScope.ContainingMember => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.ContainingMember,
+                Invoklet.Contracts.IntelliSense.FixAllScope.ContainingType => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.ContainingType,
+                _ => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.Document,
+            };
+
+            var headerLength = _layout.HeaderLength(code);
+            var materialized = await _codeFixEngine.MaterializeFixAllAsync(key, roslynScope, _layout.Projection(code).Text, headerLength, ct);
+            if (materialized is null) return null;
+            var projection = _layout.Projection(code);
+            if (projection.RestoreEdit(materialized.Value.NewCode, materialized.Value.ChangedSpans,
+                    _layout.Prefix(code), _layout.Suffix(code), _layout.ParseOptions) is not var (restored, changedSpans)) return null;
+            var newCode = restored;
+            if (_layout.Kind == MdRunKind.Program && restored != code)
+            {
+                var moved = projection.HasChanges ? ProgramBodyProjection.Create(restored, _layout.ParseOptions).Moved : [];
+                newCode = await ReindentOutsideTheWrapperAsync(restored,
+                    [.. changedSpans.Where(span => !moved.Any(m => m.Contains(span)))], ct);
+            }
+            return new SimpleMaterializedFix(newCode, materialized.Value.UsingsToAdd);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { _logger.LogWarning(ex, "MaterializeFixAllAsync failed"); return null; }
+    }
     private async Task<IMaterializedFix?> TryMaterializeFixAsync(string code, string key, CancellationToken ct)
     {
         try

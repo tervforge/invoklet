@@ -49,7 +49,7 @@ public class ReferencePathTabTests : IDisposable
         _library = Path.Combine(Directory.CreateDirectory(Path.Combine(_oldDir, "lib")).FullName, "Greeter.dll");
         File.WriteAllText(_library, "");
         _script = Path.Combine(_oldDir, "query.inv");
-        var text = MdRunWriter.NewFile("Console.WriteLine(1);\n", "Demo");
+        var text = MdRunWriter.NewFile("Console.WriteLine(1);\n");
         var document = MdRunParser.TryParse(text)!;
         document.FrontMatter.References = [.. References];
         File.WriteAllText(_script, MdRunWriter.Write(document));

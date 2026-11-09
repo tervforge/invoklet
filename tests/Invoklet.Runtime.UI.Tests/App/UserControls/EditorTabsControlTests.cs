@@ -32,7 +32,7 @@ public class EditorTabsControlTests
         try
         {
             var filePath = Path.Combine(tmpDir, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
 
             var prefs = new Mock<IPreferencesService>();
             prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -97,7 +97,7 @@ public class EditorTabsControlTests
         try
         {
             var filePath = Path.Combine(tmpDir, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo"));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
 
             var prefs = new Mock<IPreferencesService>();
             prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -239,7 +239,7 @@ public class EditorTabsControlTests
         try
         {
             var filePath = Path.Combine(tmpDir, "demo.inv");
-            File.WriteAllText(filePath, MdRunWriter.NewFile("void Main()\n{\n    \n}\n", "Demo", kind: MdRunKind.Program));
+            File.WriteAllText(filePath, MdRunWriter.NewFile("void Main()\n{\n    \n}\n", kind: MdRunKind.Program));
 
             var prefs = new Mock<IPreferencesService>();
             prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -377,7 +377,7 @@ public class EditorTabsControlTests
             for (var i = 0; i < tabCount; i++)
             {
                 var path = Path.Combine(tmpDir, $"Query {i}.inv");
-                File.WriteAllText(path, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", $"Query {i}"));
+                File.WriteAllText(path, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n"));
                 paths.Add(path);
             }
 

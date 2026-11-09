@@ -3,6 +3,32 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.12.2] — 2026-11-10
+
+### Added
+
+- C# settings now control the Roslyn accessibility-modifier style, including whether accessibility
+  modifiers are always required, omitted, or required only for non-interface members.
+
+### Changed
+
+- The Roslyn lightbulb menu now keeps diagnostic actions within two levels and shows clear,
+  icon-supported actions for fixes, refactorings, and suppressions.
+- Refactorings and conversions are grouped together, with separators only inside their related
+  groups.
+
+## [0.12.1] — 2026-11-09
+
+### Added
+
+- Connection fields can insert a value from the local secret store through the context menu.
+
+### Changed
+
+- Updated the Avalonia UI libraries to 12.1.6.
+- The Roslyn lightbulb menu groups fixes by scope and offers Fix All and suppression actions.
+- New scripts no longer receive an automatic Markdown title based on the file name.
+
 ## [0.12.0] — 2026-11-07
 
 ### Added
@@ -108,7 +134,7 @@ Notable changes in each Invoklet release. Downloads are on the
   The **+** button follows the last tab, the list of all tabs stays at the right edge, where tabs no
   longer slide under the buttons, and the strip's scroll bar is a thin line under the tabs.
 - A tab can be moved to a window of its own: drop it well below the strip or outside the window, or
-  use **Move to New Window** in its context menu. The window has its own tabs, editor and results.
+  use **Move to New Window** in its context menu. The window shows one tab without the tab strip; closing it returns the tab to the main window.
 - Typing a value into an argument set no longer takes the focus off the field after each key.
 - The compiler's warnings are no longer added to the Results: the editor already underlines them.
   The `invoklet` command still writes them to standard error, and `--quiet` (`-q`) leaves them out.
@@ -1277,3 +1303,5 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.8]: https://github.com/tervforge/invoklet/releases/tag/v0.11.8
 [0.11.9]: https://github.com/tervforge/invoklet/releases/tag/v0.11.9
 [0.12.0]: https://github.com/tervforge/invoklet/releases/tag/v0.12.0
+[0.12.1]: https://github.com/tervforge/invoklet/releases/tag/v0.12.1
+[0.12.2]: https://github.com/tervforge/invoklet/releases/tag/v0.12.2

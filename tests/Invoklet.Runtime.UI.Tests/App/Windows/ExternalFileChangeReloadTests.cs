@@ -47,7 +47,7 @@ public class ExternalFileChangeReloadTests
         {
             Folder = Directory.CreateTempSubdirectory("Invoklet-external-reload").FullName;
             Path = System.IO.Path.Combine(Folder, "demo.inv");
-            File.WriteAllText(Path, MdRunWriter.NewFile(Original + "\n", "Demo"));
+            File.WriteAllText(Path, MdRunWriter.NewFile(Original + "\n"));
 
             var prefs = new Mock<IPreferencesService>();
             prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
@@ -107,7 +107,7 @@ public class ExternalFileChangeReloadTests
 
     private static void WriteExternally(string path, string code, MdRunKind kind = MdRunKind.Statements,
         MdRunLanguage language = MdRunLanguage.CSharp)
-        => File.WriteAllText(path, MdRunWriter.NewFile(code + "\n", "Demo", kind: kind, language: language));
+        => File.WriteAllText(path, MdRunWriter.NewFile(code + "\n", kind: kind, language: language));
 
     [AvaloniaFact]
     public async Task ACleanTab_Should_ReloadQuietly_AsOneUndoableEdit()
@@ -340,10 +340,10 @@ public class ExternalFileChangeReloadTests
     {
         using var h = new Harness();
         const string code = "Console.WriteLine(\"${0}\");";
-        File.WriteAllText(h.Path, raw ? code : MdRunWriter.NewFile(code + "\n", "Demo"));
+        File.WriteAllText(h.Path, raw ? code : MdRunWriter.NewFile(code + "\n"));
         var (_, ctrl) = await h.OpenAsync();
         Assert.Equal(code, ctrl.State.Editor.Text.Trim());
-        File.WriteAllText(h.Path, raw ? code + " // changed" : MdRunWriter.NewFile(code + " // changed\n", "Demo"));
+        File.WriteAllText(h.Path, raw ? code + " // changed" : MdRunWriter.NewFile(code + " // changed\n"));
         await h.Tabs.CheckFilesChangedOnDiskAsync();
         Assert.Equal(code + " // changed", ctrl.State.Editor.Text.Trim());
     }

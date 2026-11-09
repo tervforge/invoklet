@@ -77,7 +77,7 @@ internal static class ScriptOpening
         {
             // In memory until the first save, but with a document of the chosen language and kind from the start, so the toolbar,
             // the analysis and Run already behave as for a saved file.
-            var document = MdRunParser.TryParse(MdRunWriter.NewFile("", title: "Untitled", language: newLanguage, kind: newKind));
+            var document = MdRunParser.TryParse(MdRunWriter.NewFile("", language: newLanguage, kind: newKind));
             return new OpenedScript(ScriptSource.New, newCode(), document, null, null, false);
         }
 

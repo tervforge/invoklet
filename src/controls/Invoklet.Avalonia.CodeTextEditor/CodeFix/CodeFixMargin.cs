@@ -7,19 +7,12 @@ using AvaloniaEdit.Editing;
 
 namespace Invoklet.Avalonia.CodeTextEditor.CodeFix;
 
-// Live user request: group the lightbulb's dropdown menu by kind (using-directive
-// fixes separately from create/implement variants), and give fixes/refactorings/conversions their
-// own icon instead of one hammer for everything. Neither CodeFixEntry nor the upstream
-// Invoklet.Contracts.IntelliSense.ICodeFixInfo it mirrors carries a "kind" at all — only
-// Title/DiagnosticId — so CodeFixMargin.Categorize below is built from those two signals:
-// DiagnosticId != null is already a real, existing distinction (RoslynCodeFixEngine only ever sets
-// it for ComputeFixesAsync's diagnostic-driven results, never for ComputeRefactoringsAsync's
-// caret-triggered ones — CodeFixEntry's own doc comment), and beyond that a Title keyword heuristic.
-// Roslyn's own built-in fix/refactoring catalog is a couple hundred MEF-discovered providers
-// (RoslynCodeFixEngine's own doc comment) — too broad to map exhaustively by exact title string —
-// so this covers the three groupings the user explicitly asked for (using-directives, create/
-// implement, conversions/minor edits) and falls back to the existing DiagnosticId split (Fix vs
-// Refactoring) for everything else a keyword doesn't recognize.
+// Groups the lightbulb's dropdown menu by kind (using-directive fixes separately from
+// create/implement variants), with per-category icons. Neither CodeFixEntry nor ICodeFixInfo
+// carries a "kind" — only Title/DiagnosticId — so Categorize below uses those two signals:
+// DiagnosticId != null distinguishes diagnostic-driven fixes from caret-triggered refactorings,
+// and a Title keyword heuristic splits the three main groups (using-directives, create/implement,
+// conversions). Everything else falls back to the DiagnosticId split (Fix vs Refactoring).
 internal enum CodeFixCategory
 {
     UsingDirective,
@@ -35,10 +28,8 @@ internal enum CodeFixCategory
 // type) — a single click applies the only fix directly, or opens a small picker menu when there's
 // more than one.
 //
-// User request 2026-07-21: only the caret's own line ever shows the icon, VS/Rider-
-// style, instead of every line in the file that currently has a fix all being lit up simultaneously
-// — the margin used to render one icon per fix-bearing line regardless of where the caret was,
-// which got noisy fast on a script with several unrelated diagnostics open at once.
+// Only the caret's own line shows the icon (VS/Rider-style) instead of every line with a fix —
+// rendering one icon per fix-bearing line got noisy on scripts with several open diagnostics.
 public class CodeFixMargin : AbstractMargin
 {
     static CodeFixMargin()
@@ -65,6 +56,9 @@ public class CodeFixMargin : AbstractMargin
     // it wants to import) is entirely the click-time responsibility of whoever owns that (forwarded
     // up via CodeTextEditor.FixApplyRequested).
     public event Action<CodeFixEntry>? FixApplyRequested;
+    public event Action<CodeFixEntry, CodeFixAllScope>? FixAllRequested;
+    public event Action<string, int>? SuppressInScriptRequested;
+    public event Action<string>? SuppressGloballyRequested;
 
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
 
@@ -262,7 +256,6 @@ public class CodeFixMargin : AbstractMargin
         CodeFixCategory.UsingDirective,
         CodeFixCategory.CreateOrImplement,
         CodeFixCategory.Fix,
-        CodeFixCategory.Conversion,
         CodeFixCategory.Refactoring,
     ];
 
@@ -275,18 +268,86 @@ public class CodeFixMargin : AbstractMargin
     internal IReadOnlyList<Control> BuildMenuItems(IReadOnlyList<CodeFixEntry> candidates)
     {
         var items = new List<Control>();
-        var firstGroup = true;
+        var diagnosticIds = candidates
+            .Where(f => f.DiagnosticId is not null)
+            .Select(f => f.DiagnosticId!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         foreach (var category in MenuGroupOrder)
         {
-            var inGroup = candidates.Where(f => Categorize(f) == category).ToList();
+            var inGroup = candidates
+                .Where(f => f.DiagnosticId is null &&
+                            (category == CodeFixCategory.Refactoring
+                                ? Categorize(f) is CodeFixCategory.Conversion or CodeFixCategory.Refactoring
+                                : Categorize(f) == category))
+                .ToList();
             if (inGroup.Count == 0) continue;
 
-            if (!firstGroup) items.Add(new Separator());
-            firstGroup = false;
-
-            foreach (var fix in inGroup)
-                items.Add(BuildMenuItem(fix));
+            if (inGroup.Count >= 2)
+            {
+                var group = new MenuItem { Header = CategoryLabel(category) };
+                var groupIconKey = category == CodeFixCategory.Refactoring
+                    ? "Icon.Broom"
+                    : IconKeyForCategory(category);
+                var groupGeo = LoadResource<StreamGeometry>(groupIconKey);
+                if (groupGeo is not null)
+                    group.Icon = new PathIcon { Data = groupGeo, Width = 16, Height = 16 };
+                if (category == CodeFixCategory.Refactoring)
+                {
+                    var conversions = inGroup.Where(f => Categorize(f) == CodeFixCategory.Conversion).ToList();
+                    var refactorings = inGroup.Where(f => Categorize(f) == CodeFixCategory.Refactoring).ToList();
+                    foreach (var fix in conversions)
+                        group.Items.Add(BuildMenuItem(fix));
+                    if (conversions.Count > 0 && refactorings.Count > 0)
+                        group.Items.Add(new Separator());
+                    foreach (var fix in refactorings)
+                        group.Items.Add(BuildMenuItem(fix));
+                }
+                else
+                {
+                    foreach (var fix in inGroup)
+                        group.Items.Add(BuildMenuItem(fix));
+                }
+                items.Add(group);
+            }
+            else
+            {
+                foreach (var fix in inGroup)
+                    items.Add(BuildMenuItem(fix));
+            }
         }
+
+        foreach (var diagnosticId in diagnosticIds)
+        {
+            var diagnosticFixes = candidates
+                .Where(f => string.Equals(f.DiagnosticId, diagnosticId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var diagnosticMenu = new MenuItem
+            {
+                Header = $"{diagnosticId}: {diagnosticFixes[0].Title}",
+                FontFamily = MonospaceFont.Default,
+            };
+            var lightbulbGeo = LoadResource<StreamGeometry>("Icon.Lightbulb");
+            if (lightbulbGeo is not null)
+                diagnosticMenu.Icon = new PathIcon { Data = lightbulbGeo, Width = 16, Height = 16 };
+            foreach (var fix in diagnosticFixes)
+                diagnosticMenu.Items.Add(BuildMenuItem(fix));
+
+            var hasAnotherOccurrence = _fixes.Count(f =>
+                string.Equals(f.DiagnosticId, diagnosticId, StringComparison.OrdinalIgnoreCase)) > 1;
+            var representative = diagnosticFixes.FirstOrDefault(f => f.SupportsFixAll);
+            if (representative is not null && hasAnotherOccurrence)
+            {
+                diagnosticMenu.Items.Add(new Separator());
+                foreach (var item in BuildFixAllMenuItems(representative))
+                    diagnosticMenu.Items.Add(item);
+            }
+            diagnosticMenu.Items.Add(new Separator());
+            foreach (var item in BuildSuppressMenuItems(diagnosticId, diagnosticFixes[0].Line))
+                diagnosticMenu.Items.Add(item);
+            items.Add(diagnosticMenu);
+        }
+
         return items;
     }
 
@@ -310,6 +371,16 @@ public class CodeFixMargin : AbstractMargin
 
     private static readonly string[] CreateOrImplementKeywords = ["Generate", "Create", "Implement"];
     private static readonly string[] ConversionKeywords = ["Convert ", "Simplify ", "Use "];
+
+    internal static string CategoryLabel(CodeFixCategory category) => category switch
+    {
+        CodeFixCategory.UsingDirective => "Add Using Directive",
+        CodeFixCategory.CreateOrImplement => "Generate",
+        CodeFixCategory.Conversion => "Convert",
+        CodeFixCategory.Fix => "Quick Fix",
+        CodeFixCategory.Refactoring => "Refactor",
+        _ => "Other",
+    };
 
     private static bool ContainsAnyOrdinal(string title, string[] keywords) =>
         keywords.Any(k => title.Contains(k, StringComparison.Ordinal));
@@ -382,6 +453,55 @@ public class CodeFixMargin : AbstractMargin
     }
 
     private void Apply(CodeFixEntry fix) => FixApplyRequested?.Invoke(fix);
+    internal IReadOnlyList<MenuItem> BuildFixAllMenuItems(CodeFixEntry fix)
+    {
+        var geo = LoadFixAllIcon();
+        MenuItem Create(string scopeText, CodeFixAllScope scope)
+        {
+            var item = new MenuItem { Header = $"Fix all {scopeText}", FontFamily = MonospaceFont.Default };
+            if (geo is not null)
+                item.Icon = new PathIcon { Data = geo, Width = 16, Height = 16 };
+            item.Click += (_, _) => ApplyAll(fix, scope);
+            return item;
+        }
+
+        return
+        [
+            Create("in this method", CodeFixAllScope.ContainingMember),
+            Create("in this class", CodeFixAllScope.ContainingType),
+            Create("in this script", CodeFixAllScope.Document),
+        ];
+    }
+
+    private StreamGeometry? LoadFixAllIcon()
+    {
+        const string key = "Icon.Wrench";
+        if (!_menuIconCache.TryGetValue(key, out var geo))
+        {
+            geo = LoadResource<StreamGeometry>(key);
+            _menuIconCache[key] = geo;
+        }
+        return geo;
+    }
+    private void ApplyAll(CodeFixEntry fix, CodeFixAllScope scope) => FixAllRequested?.Invoke(fix, scope);
+
+    internal IReadOnlyList<MenuItem> BuildSuppressMenuItems(string diagnosticId, int line)
+    {
+        var warningGeo = LoadResource<StreamGeometry>("Icon.Warning");
+        MenuItem Create(string header)
+        {
+            var item = new MenuItem { Header = header, FontFamily = MonospaceFont.Default };
+            if (warningGeo is not null)
+                item.Icon = new PathIcon { Data = warningGeo, Width = 16, Height = 16 };
+            return item;
+        }
+
+        var inScript = Create("Suppress in this script");
+        inScript.Click += (_, _) => SuppressInScriptRequested?.Invoke(diagnosticId, line);
+        var globally = Create("Suppress in all scripts");
+        globally.Click += (_, _) => SuppressGloballyRequested?.Invoke(diagnosticId);
+        return [inScript, globally];
+    }
 
     // The column is exactly as wide as the bulb's square: a compact gutter, with the glyph right
     // next to the line numbers (as in Rider), and one formula for both the width and the click

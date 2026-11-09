@@ -14,7 +14,7 @@ public class MdRunFilePeekTests
         var file = Path.GetTempFileName();
         try
         {
-            File.WriteAllText(file, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", "Demo", kind: MdRunKind.Statements));
+            File.WriteAllText(file, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\");\n", kind: MdRunKind.Statements));
             Assert.Equal(MdRunLanguage.CSharp, MdRunFilePeek.PeekLanguage(file));
         }
         finally { File.Delete(file); }
@@ -61,7 +61,7 @@ public class MdRunFilePeekTests
         var file = Path.GetTempFileName();
         try
         {
-            File.WriteAllText(file, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\")\n", "Demo", language: MdRunLanguage.Vb));
+            File.WriteAllText(file, MdRunWriter.NewFile("Console.WriteLine(\"Hello, RPad!\")\n", language: MdRunLanguage.Vb));
             Assert.Equal(MdRunLanguage.Vb, MdRunFilePeek.PeekDocumentLanguage(file));
         }
         finally { File.Delete(file); }

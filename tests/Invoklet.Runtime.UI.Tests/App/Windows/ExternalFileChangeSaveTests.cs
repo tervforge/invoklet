@@ -81,7 +81,7 @@ public class ExternalFileChangeSaveTests
         try
         {
             var path = Path.Combine(dir, "demo.inv");
-            File.WriteAllText(path, MdRunWriter.NewFile(Original + "\n", "Demo"));
+            File.WriteAllText(path, MdRunWriter.NewFile(Original + "\n"));
             test(dir, path);
         }
         finally
@@ -98,7 +98,7 @@ public class ExternalFileChangeSaveTests
 
     private static void ChangeExternally(string path, Change change, string code = External)
     {
-        var text = MdRunWriter.NewFile(code + "\n", "Demo");
+        var text = MdRunWriter.NewFile(code + "\n");
         switch (change)
         {
             case Change.Write:
@@ -114,7 +114,7 @@ public class ExternalFileChangeSaveTests
                 break;
             case Change.SameLengthKeepingTheTime:
                 var time = File.GetLastWriteTimeUtc(path);
-                File.WriteAllText(path, MdRunWriter.NewFile(Sameness + "\n", "Demo"));
+                File.WriteAllText(path, MdRunWriter.NewFile(Sameness + "\n"));
                 File.SetLastWriteTimeUtc(path, time);
                 break;
         }
@@ -304,7 +304,7 @@ public class ExternalFileChangeSaveTests
         {
             var path = Path.Combine(dir, "later.inv");
             using var tab = Open(path);
-            File.WriteAllText(path, MdRunWriter.NewFile(External + "\n", "Demo"));
+            File.WriteAllText(path, MdRunWriter.NewFile(External + "\n"));
             tab.Answer(SaveConflictChoice.Cancel);
 
             tab.Ctrl.SaveIfNeeded();
@@ -322,7 +322,7 @@ public class ExternalFileChangeSaveTests
         try
         {
             var path = Path.Combine(dir, "demo.inv");
-            File.WriteAllText(path, MdRunWriter.NewFile(Original + "\n", "Demo"));
+            File.WriteAllText(path, MdRunWriter.NewFile(Original + "\n"));
             using var tab = Open(path);
             ChangeExternally(path, Change.Write);
             var answer = new TaskCompletionSource<SaveConflictChoice>();

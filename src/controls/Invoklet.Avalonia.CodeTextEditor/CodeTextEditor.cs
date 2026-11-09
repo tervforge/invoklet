@@ -250,6 +250,9 @@ public class CodeTextEditor : TextEditor, IDisposable
     /// doc comment for why materializing/applying it is left entirely to whoever owns
     /// IIntelliSenseService.</summary>
     public event Action<CodeFixEntry>? FixApplyRequested;
+    public event Action<CodeFixEntry, CodeFixAllScope>? FixAllRequested;
+    public event Action<string, int>? SuppressInScriptRequested;
+    public event Action<string>? SuppressGloballyRequested;
 
     /// <summary>
     /// Whether the merged gutter shows line numbers (not the base <see cref="TextEditor.ShowLineNumbers"/>,
@@ -429,6 +432,9 @@ public class CodeTextEditor : TextEditor, IDisposable
         _breakpointMargin = new BreakPointMargin(this, _breakpointStore);
         _codeFixMargin = new CodeFixMargin(this);
         _codeFixMargin.FixApplyRequested += fix => FixApplyRequested?.Invoke(fix);
+        _codeFixMargin.FixAllRequested += (fix, scope) => FixAllRequested?.Invoke(fix, scope);
+        _codeFixMargin.SuppressInScriptRequested += (id, line) => SuppressInScriptRequested?.Invoke(id, line);
+        _codeFixMargin.SuppressGloballyRequested += id => SuppressGloballyRequested?.Invoke(id);
         TextArea.LeftMargins.Add(_codeFixMargin);
         TextArea.LeftMargins.Add(_gutterSeparator);
         _debugLineHighlighter = new DebugLineHighlighter();

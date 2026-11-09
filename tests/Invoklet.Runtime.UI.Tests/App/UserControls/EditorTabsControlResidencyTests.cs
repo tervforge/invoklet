@@ -114,7 +114,7 @@ public class EditorTabsControlResidencyTests
     private static Task<EditorTabItemViewModel> FirstTabAsync(EditorTabsControl tabs, MainWindowViewModel vm)
         => TestWait.WhileAsync(() => vm.Tabs.Count == 0 || tabs.ControlForTests(vm.Tabs[0]) is null).ContinueWith(_ => vm.Tabs[0]);
 
-    private static string Script(string code) => MdRunWriter.NewFile(code, "A");
+    private static string Script(string code) => MdRunWriter.NewFile(code);
 
     [AvaloniaFact]
     public async Task Tabs_Should_KeepOnlyTheThreeUsedLastLoaded_ButEveryControlStays()

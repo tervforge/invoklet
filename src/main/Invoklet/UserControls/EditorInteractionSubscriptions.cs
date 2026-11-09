@@ -14,6 +14,9 @@ internal sealed class EditorInteractionSubscriptions : IDisposable
     private readonly EventHandler _findReferencesRequested;
     private readonly EventHandler _goToDefinitionRequested;
     private readonly Action<CodeFixEntry> _fixApplyRequested;
+    private readonly Action<CodeFixEntry, CodeFixAllScope> _fixAllRequested;
+    private readonly Action<string, int> _suppressInScriptRequested;
+    private readonly Action<string> _suppressGloballyRequested;
     private readonly EventHandler<BreakpointEventArgs> _breakpointAdded;
     private readonly EventHandler<BreakpointEventArgs> _breakpointRemoved;
     private readonly Action<int, IBreakpoint?> _breakpointRightClicked;
@@ -23,6 +26,9 @@ internal sealed class EditorInteractionSubscriptions : IDisposable
         EventHandler textChanged, EventHandler caretPositionChanged, EventHandler<DocumentChangedEventArgs> documentChanged,
         EventHandler renameRequested, EventHandler findReferencesRequested,
         EventHandler goToDefinitionRequested, Action<CodeFixEntry> fixApplyRequested,
+        Action<CodeFixEntry, CodeFixAllScope> fixAllRequested,
+        Action<string, int> suppressInScriptRequested,
+        Action<string> suppressGloballyRequested,
         EventHandler<BreakpointEventArgs> breakpointAdded, EventHandler<BreakpointEventArgs> breakpointRemoved,
         Action<int, IBreakpoint?> breakpointRightClicked)
     {
@@ -34,6 +40,9 @@ internal sealed class EditorInteractionSubscriptions : IDisposable
         _findReferencesRequested = findReferencesRequested ?? throw new ArgumentNullException(nameof(findReferencesRequested));
         _goToDefinitionRequested = goToDefinitionRequested ?? throw new ArgumentNullException(nameof(goToDefinitionRequested));
         _fixApplyRequested = fixApplyRequested ?? throw new ArgumentNullException(nameof(fixApplyRequested));
+        _fixAllRequested = fixAllRequested ?? throw new ArgumentNullException(nameof(fixAllRequested));
+        _suppressInScriptRequested = suppressInScriptRequested ?? throw new ArgumentNullException(nameof(suppressInScriptRequested));
+        _suppressGloballyRequested = suppressGloballyRequested ?? throw new ArgumentNullException(nameof(suppressGloballyRequested));
         _breakpointAdded = breakpointAdded ?? throw new ArgumentNullException(nameof(breakpointAdded));
         _breakpointRemoved = breakpointRemoved ?? throw new ArgumentNullException(nameof(breakpointRemoved));
         _breakpointRightClicked = breakpointRightClicked ?? throw new ArgumentNullException(nameof(breakpointRightClicked));
@@ -50,6 +59,9 @@ internal sealed class EditorInteractionSubscriptions : IDisposable
         _editor.FindReferencesRequested += _findReferencesRequested;
         _editor.GoToDefinitionRequested += _goToDefinitionRequested;
         _editor.FixApplyRequested += _fixApplyRequested;
+        _editor.FixAllRequested += _fixAllRequested;
+        _editor.SuppressInScriptRequested += _suppressInScriptRequested;
+        _editor.SuppressGloballyRequested += _suppressGloballyRequested;
         _editor.BreakpointAdded += _breakpointAdded;
         _editor.BreakpointRemoved += _breakpointRemoved;
         _editor.BreakpointRightClicked += _breakpointRightClicked;
@@ -66,6 +78,9 @@ internal sealed class EditorInteractionSubscriptions : IDisposable
         _editor.FindReferencesRequested -= _findReferencesRequested;
         _editor.GoToDefinitionRequested -= _goToDefinitionRequested;
         _editor.FixApplyRequested -= _fixApplyRequested;
+        _editor.FixAllRequested -= _fixAllRequested;
+        _editor.SuppressInScriptRequested -= _suppressInScriptRequested;
+        _editor.SuppressGloballyRequested -= _suppressGloballyRequested;
         _editor.BreakpointAdded -= _breakpointAdded;
         _editor.BreakpointRemoved -= _breakpointRemoved;
         _editor.BreakpointRightClicked -= _breakpointRightClicked;

@@ -343,6 +343,8 @@ public partial class FileTreeView : UserControl
         node.EditingName = node.DisplayName;
         node.IsRenaming = true;
 
+        // Background, not Loaded: started from the context menu, the menu's close returns focus to the
+        // tree after a Loaded-priority focus, which is what dropped the rename box's focus.
         Dispatcher.Post(() =>
         {
             if (_fileTree.ContainerFromItem(node) is not TreeViewItem tvi) return;
@@ -350,7 +352,7 @@ public partial class FileTreeView : UserControl
             if (box is null) return;
             box.Focus();
             box.SelectAll();
-        }, DispatcherPriority.Loaded);
+        }, DispatcherPriority.Background);
     }
 
     private void CommitRename(FileTreeViewNode node)

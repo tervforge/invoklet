@@ -29,7 +29,7 @@ public class StartupWorkspaceReadyTests
         var root = Directory.CreateTempSubdirectory("Invoklet-startup-ready-test").FullName;
         var paths = new[] { "a.inv", "b.inv", "c.inv" }.Select(n => Path.Combine(root, n)).ToArray();
         foreach (var path in paths)
-            File.WriteAllText(path, MdRunWriter.NewFile("Console.WriteLine(1);\n", Path.GetFileNameWithoutExtension(path)));
+            File.WriteAllText(path, MdRunWriter.NewFile("Console.WriteLine(1);\n"));
 
         var session = new SessionSettings { OpenTabs = [.. paths], ActiveTabPath = paths[1] };
         var prefs = new Mock<IPreferencesService>();

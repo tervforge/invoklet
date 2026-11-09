@@ -41,8 +41,8 @@ internal sealed record CliArguments
     /// <summary>Why the command line can't be used, or null.</summary>
     public string? Error { get; init; }
 
-    // Accepted for compatibility, with nothing to do: the runner compiles every script afresh in a
-    // temporary folder, so there is no build cache to skip or rebuild.
+    // Accepted for compatibility, with nothing to do: the runner keeps each script's build (cli-builds)
+    // but does not wire these options to it.
     private static readonly HashSet<string> NoEffectOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "nunuget", "no-cache", "rebuild", "b",

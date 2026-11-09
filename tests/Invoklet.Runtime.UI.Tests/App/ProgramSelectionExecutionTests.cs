@@ -123,7 +123,7 @@ public sealed class ProgramSelectionExecutionTests : IDisposable
     {
         if (new DotnetSdkProvider().Get().FirstOrDefault() is null) return null; // no .NET SDK to compile with
         var path = Path.Combine(_root, language == MdRunLanguage.Vb ? "program-vb.inv" : "program.inv");
-        var document = MdRunWriter.NewFile(code, "Demo", kind: MdRunKind.Program, language: language);
+        var document = MdRunWriter.NewFile(code, kind: MdRunKind.Program, language: language);
         if (args is { Count: > 0 })
         {
             var parsed = MdRunParser.Parse(document).Document!;

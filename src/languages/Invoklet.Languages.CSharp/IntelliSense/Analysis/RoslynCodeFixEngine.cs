@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Composition.Hosting;
 using System.Reflection;
 using Invoklet.Contracts.IntelliSense;
@@ -48,6 +49,8 @@ namespace Invoklet.Languages.CSharp.IntelliSense.Analysis;
 // is treated as unsafe to reconstruct and the whole fix is discarded.
 internal sealed class RoslynCodeFixEngine
 {
+    private sealed record CachedFixCandidate(CodeAction Action, CodeFixProvider? Provider);
+
     private readonly IReadOnlyList<CodeFixProvider> _providers;
     private readonly PreambleEdits _preambleEdits;
     private readonly IReadOnlyList<CodeRefactoringProvider> _refactoringProviders;
@@ -62,7 +65,7 @@ internal sealed class RoslynCodeFixEngine
     // (triggered by a UI click, its own async flow) can race.
     private readonly object _cacheLock = new();
     private Microsoft.CodeAnalysis.Document? _fixDocument;
-    private Dictionary<string, CodeAction> _fixActions = new();
+    private Dictionary<string, CachedFixCandidate> _fixActions = new();
     private Microsoft.CodeAnalysis.Document? _refactoringDocument;
     private Dictionary<string, CodeAction> _refactoringActions = new();
 
@@ -113,7 +116,7 @@ internal sealed class RoslynCodeFixEngine
         Microsoft.CodeAnalysis.Document document, IReadOnlyList<Diagnostic> diagnostics, string userCode, int preambleLength, CancellationToken ct)
     {
         var result = new List<ICodeFixInfo>();
-        var cache = new Dictionary<string, CodeAction>();
+        var cache = new Dictionary<string, CachedFixCandidate>();
 
         foreach (var group in diagnostics.Where(d => d.Location.IsInSource).GroupBy(d => d.Id))
         {
@@ -177,7 +180,7 @@ internal sealed class RoslynCodeFixEngine
     // replace the cache the entries on screen point into, or clicking one silently does nothing.
     // Checked under the lock: once the newer pass has cancelled this one, it can only be overwritten by
     // that newer pass.
-    private void PublishFixes(Microsoft.CodeAnalysis.Document document, Dictionary<string, CodeAction> cache, CancellationToken ct)
+    private void PublishFixes(Microsoft.CodeAnalysis.Document document, Dictionary<string, CachedFixCandidate> cache, CancellationToken ct)
     {
         lock (_cacheLock)
         {
@@ -260,10 +263,10 @@ internal sealed class RoslynCodeFixEngine
         Microsoft.CodeAnalysis.Document document, TextSpan span, string userCode, int preambleLength, int userLine, CancellationToken ct)
     {
         var result = new List<ICodeFixInfo>();
-        var cache = new Dictionary<string, CodeAction>();
+        var refactoringCache = new Dictionary<string, CodeAction>();
         if (userLine < 1)
         {
-            PublishRefactorings(document, cache, ct);
+            PublishRefactorings(document, refactoringCache, ct);
             return result;
         }
 
@@ -295,13 +298,13 @@ internal sealed class RoslynCodeFixEngine
                     // neutral/absent values CollectCandidatesAsync's own non-diagnostic-adjacent
                     // candidates get.
                     var key = Guid.NewGuid().ToString("N");
-                    cache[key] = leaf;
+                    refactoringCache[key] = leaf;
                     result.Add(new RoslynCodeFix(userLine, leaf.Title, ContractSeverity.Info, key, DiagnosticId: null));
                 }
             }
         }
 
-        PublishRefactorings(document, cache, ct);
+        PublishRefactorings(document, refactoringCache, ct);
         return result;
     }
 
@@ -319,7 +322,7 @@ internal sealed class RoslynCodeFixEngine
         Microsoft.CodeAnalysis.Document? document;
         lock (_cacheLock)
         {
-            if (_fixActions.TryGetValue(key, out action)) document = _fixDocument;
+            if (_fixActions.TryGetValue(key, out var fixCandidate)) { action = fixCandidate.Action; document = _fixDocument; }
             else if (_refactoringActions.TryGetValue(key, out action)) document = _refactoringDocument;
             else document = null;
         }
@@ -337,9 +340,70 @@ internal sealed class RoslynCodeFixEngine
         return materialized;
     }
 
+    public async Task<(string NewCode, IReadOnlyList<string> UsingsToAdd, IReadOnlyList<TextSpan> ChangedSpans)?> MaterializeFixAllAsync(
+        string key, Microsoft.CodeAnalysis.CodeFixes.FixAllScope scope, string userCode, int preambleLength, CancellationToken ct)
+    {
+        CachedFixCandidate? candidate;
+        Microsoft.CodeAnalysis.Document? document;
+        lock (_cacheLock)
+        {
+            _fixActions.TryGetValue(key, out candidate);
+            document = _fixDocument;
+        }
+        if (candidate?.Provider is not { } provider || document is null) return null;
+
+        var fixAllProvider = provider.GetFixAllProvider();
+        if (fixAllProvider is null) return null;
+
+        try
+        {
+            var model = await document.GetSemanticModelAsync(ct);
+            if (model is null) return null;
+
+            var diagnosticIds = provider.FixableDiagnosticIds.ToImmutableHashSet();
+            var diagnostics = model.GetDiagnostics(cancellationToken: ct)
+                .Where(d => d.Location.IsInSource && diagnosticIds.Contains(d.Id))
+                .ToImmutableArray();
+            if (diagnostics.IsEmpty) return null;
+
+            var diagnosticProvider = new SingleDocumentDiagnosticProvider(diagnostics);
+            var fixAllContext = new FixAllContext(
+                document, provider, scope,
+                candidate.Action.EquivalenceKey!,
+                diagnosticIds,
+                diagnosticProvider, ct);
+
+            var fixAllAction = await fixAllProvider.GetFixAsync(fixAllContext);
+            if (fixAllAction is null) return null;
+
+            return await TryMaterializeAsync(fixAllAction, document, preambleLength, userCode.Length, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "MaterializeFixAllAsync failed for key {Key}, scope {Scope}", key, scope);
+            return null;
+        }
+    }
+
+    private sealed class SingleDocumentDiagnosticProvider(ImmutableArray<Diagnostic> diagnostics) : FixAllContext.DiagnosticProvider
+    {
+        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(
+            Microsoft.CodeAnalysis.Document document, CancellationToken ct)
+            => Task.FromResult<IEnumerable<Diagnostic>>(diagnostics);
+
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(
+            Microsoft.CodeAnalysis.Project project, CancellationToken ct)
+            => Task.FromResult<IEnumerable<Diagnostic>>([]);
+
+        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(
+            Microsoft.CodeAnalysis.Project project, CancellationToken ct)
+            => Task.FromResult<IEnumerable<Diagnostic>>(diagnostics);
+    }
+
     private async Task CollectCandidatesAsync(
         CodeFixProvider provider, Microsoft.CodeAnalysis.Document document, Diagnostic diagnostic, int userLine, ContractSeverity severity,
-        List<ICodeFixInfo> result, Dictionary<string, CodeAction> cache, CancellationToken ct)
+        List<ICodeFixInfo> result, Dictionary<string, CachedFixCandidate> cache, CancellationToken ct)
     {
         var actions = new List<CodeAction>();
         var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), ct);
@@ -360,8 +424,9 @@ internal sealed class RoslynCodeFixEngine
                 if (IsUnsupportedLeaf(leaf)) continue;
 
                 var key = Guid.NewGuid().ToString("N");
-                cache[key] = leaf;
-                result.Add(new RoslynCodeFix(userLine, leaf.Title, severity, key, diagnostic.Id));
+                var supportsFixAll = provider.GetFixAllProvider() is not null;
+                cache[key] = new CachedFixCandidate(leaf, supportsFixAll ? provider : null);
+                result.Add(new RoslynCodeFix(userLine, leaf.Title, severity, key, diagnostic.Id, supportsFixAll));
             }
         }
     }
@@ -503,5 +568,5 @@ internal sealed class RoslynCodeFixEngine
         _ => ContractSeverity.Info,
     };
 
-    private sealed record RoslynCodeFix(int Line, string Title, ContractSeverity Severity, string Key, string? DiagnosticId) : ICodeFixInfo;
+    private sealed record RoslynCodeFix(int Line, string Title, ContractSeverity Severity, string Key, string? DiagnosticId, bool SupportsFixAll = false) : ICodeFixInfo;
 }

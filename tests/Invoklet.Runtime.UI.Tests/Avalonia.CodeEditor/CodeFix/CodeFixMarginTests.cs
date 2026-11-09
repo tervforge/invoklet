@@ -313,7 +313,7 @@ public class CodeFixMarginTests
     }
 
     [AvaloniaFact]
-    public void BuildMenuItems_Should_NotAddASeparator_WhenAllCandidatesAreTheSameCategory()
+    public void BuildMenuItems_Should_GroupIntoSubmenu_WhenMultipleCandidatesShareACategory()
     {
         var (_, _, margin) = CreateEditor("x\n");
         var candidates = new[]
@@ -324,12 +324,14 @@ public class CodeFixMarginTests
 
         var items = margin.BuildMenuItems(candidates);
 
-        Assert.Equal(2, items.Count);
-        Assert.All(items, i => Assert.IsType<MenuItem>(i));
+        Assert.Single(items);
+        var group = Assert.IsType<MenuItem>(items[0]);
+        Assert.Equal("Add Using Directive", group.Header);
+        Assert.Equal(2, group.Items.Count);
     }
 
     [AvaloniaFact]
-    public void BuildMenuItems_Should_GroupByCategory_WithASeparatorBetweenNonEmptyGroups_InMenuGroupOrder()
+    public void BuildMenuItems_Should_GroupByCategory_WithoutSeparatorsInMainMenu()
     {
         var (_, _, margin) = CreateEditor("x\n");
         // Deliberately listed out of the expected menu order (refactoring first, using-directive
@@ -342,16 +344,55 @@ public class CodeFixMarginTests
 
         var items = margin.BuildMenuItems(candidates);
 
-        Assert.Equal(3, items.Count); // using-directive item, separator, refactoring item
+        Assert.Equal(2, items.Count); // using-directive item and refactoring item
         var usingItem = Assert.IsType<MenuItem>(items[0]);
         Assert.Equal("using System;", usingItem.Header);
-        Assert.IsType<Separator>(items[1]);
-        var refactorItem = Assert.IsType<MenuItem>(items[2]);
+        var refactorItem = Assert.IsType<MenuItem>(items[1]);
         Assert.Equal("Extract method", refactorItem.Header);
     }
 
     [AvaloniaFact]
-    public void BuildMenuItems_Should_PreserveOriginalOrder_WithinEachGroup()
+    public void BuildMenuItems_Should_SeparateConversionsInsideRefactorGroup()
+    {
+        var (_, _, margin) = CreateEditor("x\n");
+        var items = margin.BuildMenuItems(
+        [
+            new CodeFixEntry(1, "Convert to binary", CodeFixSeverity.Info, "convert"),
+            new CodeFixEntry(1, "Extract method", CodeFixSeverity.Info, "refactor"),
+        ]);
+
+        var group = Assert.IsType<MenuItem>(Assert.Single(items));
+        Assert.Equal("Refactor", group.Header);
+        Assert.Equal(3, group.Items.Count);
+        Assert.Equal("Convert to binary", ((MenuItem)group.Items[0]!).Header);
+        Assert.IsType<Separator>(group.Items[1]);
+        Assert.Equal("Extract method", ((MenuItem)group.Items[2]!).Header);
+    }
+
+    [AvaloniaFact]
+    public void BuildMenuItems_Should_KeepUtilityActionsInOneCompactSection()
+    {
+        var (_, _, margin) = CreateEditor("x\n");
+        var candidates = new[]
+        {
+            new CodeFixEntry(1, "Fix first", CodeFixSeverity.Warning, "first", "CS0001", SupportsFixAll: true),
+            new CodeFixEntry(1, "Fix second", CodeFixSeverity.Warning, "second", "CS0002", SupportsFixAll: true),
+        };
+        margin.Update([.. candidates, new CodeFixEntry(2, "Fix elsewhere", CodeFixSeverity.Warning, "elsewhere", "CS0001", SupportsFixAll: true)]);
+
+        var items = margin.BuildMenuItems(candidates);
+
+        Assert.Equal(2, items.Count);
+        var first = Assert.IsType<MenuItem>(items[0]);
+        var second = Assert.IsType<MenuItem>(items[1]);
+        Assert.Equal("CS0001: Fix first", first.Header);
+        Assert.Equal("CS0002: Fix second", second.Header);
+        Assert.Equal(8, first.Items.Count); // one fix + three scopes + two suppress actions, separated
+        Assert.Equal(4, second.Items.Count); // one fix + two suppress actions, separated; no fix-all
+    }
+
+    [AvaloniaFact]
+    public void BuildMenuItems_Should_PreserveOriginalOrder_WithinEachSubmenu()
     {
         var (_, _, margin) = CreateEditor("x\n");
         var candidates = new[]
@@ -362,8 +403,9 @@ public class CodeFixMarginTests
 
         var items = margin.BuildMenuItems(candidates);
 
-        Assert.Equal("using System.Linq;", Assert.IsType<MenuItem>(items[0]).Header);
-        Assert.Equal("using System;", Assert.IsType<MenuItem>(items[1]).Header);
+        var group = Assert.IsType<MenuItem>(items[0]);
+        Assert.Equal("using System.Linq;", ((MenuItem)group.Items[0]!).Header);
+        Assert.Equal("using System;", ((MenuItem)group.Items[1]!).Header);
     }
 
     // Apply used to set

@@ -12,7 +12,7 @@ public sealed class SessionSnapshotLoaderTests
         var path = Path.GetTempFileName();
         try
         {
-            File.WriteAllText(path, MdRunWriter.NewFile("1 + 1", "Demo"));
+            File.WriteAllText(path, MdRunWriter.NewFile("1 + 1"));
             var tab = new RecoveryTab { FilePath = path, EditorText = "stale", IsDirty = false };
             var result = (await new DiskSessionSnapshotLoader().LoadAsync([tab]))[0];
             Assert.Equal("1 + 1\n", result.Document!.RunCode);

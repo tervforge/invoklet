@@ -32,7 +32,7 @@ namespace Invoklet.Runtime.UI.Tests.App.UserControls.Models;
 // lines apart, but this needs to: it's asserting on WHICH one got excluded).
 public class EditorTabItemControlCodeFixSettingsTests
 {
-    private sealed record FakeCodeFixInfo(int Line, string Title, DiagnosticSeverity Severity, string Key, string? DiagnosticId = null) : ICodeFixInfo;
+    private sealed record FakeCodeFixInfo(int Line, string Title, DiagnosticSeverity Severity, string Key, string? DiagnosticId = null, bool SupportsFixAll = false) : ICodeFixInfo;
 
     private static Mock<IPreferencesService> MakePrefs(CSharpLanguageSettings? csharp = null)
     {

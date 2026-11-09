@@ -25,12 +25,11 @@ public static partial class MdRunWriter
         return $"---\n{yaml}\n---\n{doc.BodyBeforeCode}{code}{doc.BodyAfterCode}";
     }
 
-    // A new .inv document around <code>: front matter for the language/kind, a title heading and
-    // the run block. The code is whatever the caller wants the script to start with — the language
+    // A new .inv document around <code>: front matter for the language/kind and the run block.
+    // The code is whatever the caller wants the script to start with — the language
     // decides that (ILanguageHostFactory.CodeForKind), not the file format.
     public static string NewFile(
         string code,
-        string title = "Untitled",
         string targetSdk = "latest",
         MdRunKind kind = MdRunKind.Statements,
         MdRunLanguage language = MdRunLanguage.CSharp)
@@ -42,7 +41,7 @@ public static partial class MdRunWriter
         // starts a line. Write() applies the same guard to RunCode.
         if (!code.EndsWith('\n')) code += "\n";
         var id = Guid.NewGuid().ToString("D");
-        return $"---\nversion: \"1.0\"\nid: {id}\nlanguage: {languageId}\ntargetSdk: {targetSdk}\nkind: {kind}\n---\n\n# {title}\n\n```{languageId} run\n{code}```\n";
+        return $"---\nversion: \"1.0\"\nid: {id}\nlanguage: {languageId}\ntargetSdk: {targetSdk}\nkind: {kind}\n---\n\n```{languageId} run\n{code}```\n";
     }
 
     private static string SerializeFm(MdRunFrontMatter fm, bool windowsPaths)

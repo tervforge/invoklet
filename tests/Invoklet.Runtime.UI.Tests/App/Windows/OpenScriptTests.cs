@@ -37,7 +37,7 @@ public sealed class OpenScriptTests : IDisposable
     private string Script(string name)
     {
         var path = Path.Combine(_root, name + ".inv");
-        File.WriteAllText(path, MdRunWriter.NewFile("1.Dump();", name));
+        File.WriteAllText(path, MdRunWriter.NewFile("1.Dump();"));
         return path;
     }
 
@@ -63,7 +63,7 @@ public sealed class OpenScriptTests : IDisposable
     {
         var vm = Create();
         var oldPath = Path.Combine(_root, "script.rpad");
-        File.WriteAllText(oldPath, MdRunWriter.NewFile("1.Dump();", "script"));
+        File.WriteAllText(oldPath, MdRunWriter.NewFile("1.Dump();"));
 
         await vm.OpenScriptAsync(oldPath);
         Assert.Empty(vm.Tabs);
