@@ -5,8 +5,16 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-11-09
+
+### Added
+
+- Connection fields can insert a value from the local secret store through the context menu.
+
 ### Changed
 
+- Updated the Avalonia UI libraries to 12.1.6.
+- The Roslyn lightbulb menu groups fixes by scope and offers Fix All and suppression actions.
 - New scripts no longer receive an automatic Markdown title based on the file name.
 
 ## [0.12.0] — 2026-11-07
@@ -1283,3 +1291,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.8]: https://github.com/tervforge/invoklet/releases/tag/v0.11.8
 [0.11.9]: https://github.com/tervforge/invoklet/releases/tag/v0.11.9
 [0.12.0]: https://github.com/tervforge/invoklet/releases/tag/v0.12.0
+[0.12.1]: https://github.com/tervforge/invoklet/releases/tag/v0.12.1
