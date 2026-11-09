@@ -114,7 +114,7 @@ Notable changes in each Invoklet release. Downloads are on the
   The **+** button follows the last tab, the list of all tabs stays at the right edge, where tabs no
   longer slide under the buttons, and the strip's scroll bar is a thin line under the tabs.
 - A tab can be moved to a window of its own: drop it well below the strip or outside the window, or
-  use **Move to New Window** in its context menu. The window has its own tabs, editor and results.
+  use **Move to New Window** in its context menu. The window shows one tab without the tab strip; closing it returns the tab to the main window.
 - Typing a value into an argument set no longer takes the focus off the field after each key.
 - The compiler's warnings are no longer added to the Results: the editor already underlines them.
   The `invoklet` command still writes them to standard error, and `--quiet` (`-q`) leaves them out.
