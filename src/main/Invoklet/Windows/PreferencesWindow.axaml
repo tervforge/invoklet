@@ -330,6 +330,13 @@
                               Content="Code fixes and refactorings (lightbulb)"
                               Margin="0,8,0,0"/>
 
+                    <TextBlock Text="Accessibility modifiers:"
+                               Margin="0,8,0,4"
+                               IsEnabled="{Binding CodeFixesEnabled}"/>
+                    <ComboBox ItemsSource="{Binding AccessibilityModifiersStyles}"
+                              SelectedItem="{Binding AccessibilityModifiersStyle}"
+                              IsEnabled="{Binding CodeFixesEnabled}"/>
+
                     <TextBlock Text="Excluded diagnostic IDs:"
                                Margin="0,8,0,4"
                                IsEnabled="{Binding CodeFixesEnabled}"

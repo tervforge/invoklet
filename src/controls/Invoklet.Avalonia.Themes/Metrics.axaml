@@ -28,7 +28,7 @@
     <StaticResource x:Key="ControlCornerRadius" ResourceKey="Invoklet.Radius.Control"/>
     <!-- Fluent's padding inside menus, context menus and submenus: keeps the rounded item highlights
          off the menu's rounded border. -->
-    <Thickness x:Key="MenuFlyoutPresenterThemePadding">4</Thickness>
+    <Thickness x:Key="MenuFlyoutPresenterThemePadding">2</Thickness>
     <!-- The same inside a ComboBox's dropdown. -->
     <Thickness x:Key="ComboBoxDropdownBorderPadding">4</Thickness>
     <x:Double x:Key="Invoklet.Type.DialogTitle">15</x:Double>

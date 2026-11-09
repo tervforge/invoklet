@@ -207,6 +207,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         _intelliSense = intelliSense;
         _intelliSense?.UpdateIndentation(prefs.Editor.UseTabs, prefs.Editor.IndentationSize);
+        _intelliSense?.UpdateAccessibilityModifiersStyle(prefs.CSharp.AccessibilityModifiersStyle);
         _InvokletAnalyzers = prefs.Experimental?.InvokletAnalyzers == true;
         intelliSense?.UpdateInvokletAnalyzers(_InvokletAnalyzers);
         SetupEditor(editor, intelliSense);
@@ -1725,6 +1726,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             ResultsOutput.ShowGeneratedLabels = _prefs.Editor.ResultsShowGeneratedLabels;
 
             _intelliSense?.UpdateIndentation(_prefs.Editor.UseTabs, _prefs.Editor.IndentationSize);
+            _intelliSense?.UpdateAccessibilityModifiersStyle(_prefs.CSharp.AccessibilityModifiersStyle);
             _prefs.Keyboard.ApplyTo(State.Editor);
             ApplyPreviewCodeFont();
             if ((_prefs.Experimental?.InvokletAnalyzers == true) != _InvokletAnalyzers)

@@ -508,6 +508,15 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         set => SetPref(_prefs.CSharp.CodeFixesEnabled, value, v => _prefs.CSharp.CodeFixesEnabled = v);
     }
 
+    public static IReadOnlyList<string> AccessibilityModifiersStyles { get; } =
+        ["omit_if_default", "always", "never", "for_non_interface_members"];
+
+    public string AccessibilityModifiersStyle
+    {
+        get => _prefs.CSharp.AccessibilityModifiersStyle;
+        set => SetPref(_prefs.CSharp.AccessibilityModifiersStyle, value, v => _prefs.CSharp.AccessibilityModifiersStyle = v);
+    }
+
     // One diagnostic ID per line in the UI ("CS0184", "IDE0007", ...), List<string> underneath
     // (CSharpLanguageSettings.ExcludedDiagnosticIds' own doc comment covers the matching semantics).
     // Blank lines are dropped on the way into the list rather than stored as empty exclusion

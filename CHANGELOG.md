@@ -3,7 +3,19 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
-## [Unreleased]
+## [0.12.2] — 2026-11-10
+
+### Added
+
+- C# settings now control the Roslyn accessibility-modifier style, including whether accessibility
+  modifiers are always required, omitted, or required only for non-interface members.
+
+### Changed
+
+- The Roslyn lightbulb menu now keeps diagnostic actions within two levels and shows clear,
+  icon-supported actions for fixes, refactorings, and suppressions.
+- Refactorings and conversions are grouped together, with separators only inside their related
+  groups.
 
 ## [0.12.1] — 2026-11-09
 
@@ -1292,3 +1304,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.11.9]: https://github.com/tervforge/invoklet/releases/tag/v0.11.9
 [0.12.0]: https://github.com/tervforge/invoklet/releases/tag/v0.12.0
 [0.12.1]: https://github.com/tervforge/invoklet/releases/tag/v0.12.1
+[0.12.2]: https://github.com/tervforge/invoklet/releases/tag/v0.12.2

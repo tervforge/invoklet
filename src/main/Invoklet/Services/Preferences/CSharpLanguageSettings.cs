@@ -16,6 +16,9 @@ public sealed class CSharpLanguageSettings
     // — this only gates the FIX suggestions layered on top, for users who find the lightbulb noisy.
     public bool CodeFixesEnabled { get; set; } = true;
 
+    // Roslyn code-style value for dotnet_style_require_accessibility_modifiers.
+    public string AccessibilityModifiersStyle { get; set; } = "omit_if_default";
+
     // Exact, case-insensitive Roslyn
     // diagnostic ID exclusion list ("CS0184", "IDE0007", "IDE0055", ...) — lets a user silence
     // specific opinionated suggestions without turning code fixes off entirely. A diagnostic ID

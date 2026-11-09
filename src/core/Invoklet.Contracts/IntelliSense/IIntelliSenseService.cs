@@ -77,6 +77,9 @@ public interface IIntelliSenseService : IDisposable
     // Shared indentation policy for formatting and generated edits; unsupported languages may ignore it.
     void UpdateIndentation(bool useTabs, int indentationSize) { }
 
+    // C# code-style setting; other languages may ignore it.
+    void UpdateAccessibilityModifiersStyle(string style) { }
+
     // Reformats whitespace/indentation using the language's default formatting rules (Roslyn's
     // Formatter for C#). Returns null on failure or if code is already formatted; the caller keeps
     // the original text in that case.

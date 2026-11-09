@@ -34,6 +34,7 @@ internal sealed class ScriptDocumentSession : IDisposable
     private int _contextVersion;
     private bool _useTabs;
     private int _indentationSize = 4;
+    private string _accessibilityModifiersStyle = "omit_if_default";
 
     public ScriptDocumentSession(ScriptDocumentLayout layout, IReadOnlyList<MetadataReference> references)
     {
@@ -179,8 +180,20 @@ internal sealed class ScriptDocumentSession : IDisposable
         }
     }
 
+    public void UpdateAccessibilityModifiersStyle(string style)
+    {
+        lock (SyncLock)
+        {
+            _accessibilityModifiersStyle = style is "always" or "never" or "for_non_interface_members" or "omit_if_default"
+                ? style
+                : "omit_if_default";
+            Workspace.TryApplyChanges(Workspace.CurrentSolution.WithAnalyzerConfigDocumentText(
+                _editorConfigId, SourceText.From(EditorConfig(_useTabs, _indentationSize))));
+        }
+    }
+
     public void Dispose() => Workspace.Dispose();
 
-    private static string EditorConfig(bool useTabs, int indentationSize) =>
-        $"root = true\n[*.cs]\nindent_style = {(useTabs ? "tab" : "space")}\nindent_size = {indentationSize}\ntab_width = {indentationSize}\n";
+    private string EditorConfig(bool useTabs, int indentationSize) =>
+        $"root = true\n[*.cs]\nindent_style = {(useTabs ? "tab" : "space")}\nindent_size = {indentationSize}\ntab_width = {indentationSize}\ndotnet_style_require_accessibility_modifiers = {_accessibilityModifiersStyle}\n";
 }
