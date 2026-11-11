@@ -10,7 +10,12 @@ Notable changes in each Invoklet release. Downloads are on the
 - Counted distinct diagnostics when deciding whether to show Fix All in the lightbulb menu.
 - Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
 - Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.
+- Rejected stale code actions after a context change and showed when a script change cancelled Fix All.
 - Applied script warning suppression from the start of the script and hid suppression for compiler errors.
+
+### Changed
+
+- C# accessibility diagnostics now honor the configured style. With the default `omit_if_default`, IDE0040 suggests removing redundant access modifiers.
 
 ## [0.12.2] — 2026-11-10
 

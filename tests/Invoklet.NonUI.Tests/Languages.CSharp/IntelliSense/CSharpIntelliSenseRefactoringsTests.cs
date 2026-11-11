@@ -146,6 +146,22 @@ public class CSharpIntelliSenseRefactoringsTests
         Assert.Null(materialized);
     }
 
+    [Fact]
+    public async Task MaterializeFixAsync_Should_RejectARefactoringAfterNamespacesChange()
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        const string code = "class C\n{\n    int M()\n    {\n        return 5;\n    }\n}\n";
+        var ct = TestContext.Current.CancellationToken;
+        var position = code.IndexOf("return 5;", StringComparison.Ordinal);
+        var fixes = await service.GetRefactoringsAsync(code, position, ct);
+        var key = Assert.Single(fixes!, f => f.Title.Contains("expression body", StringComparison.OrdinalIgnoreCase)).Key;
+        Assert.NotNull(await service.MaterializeFixAsync(code, key, ct));
+
+        service.UpdateGlobalUsings(["System.Text"]);
+
+        Assert.Null(await service.MaterializeFixAsync(code, key, ct));
+    }
+
     // Roslyn's MoveTypeCodeRefactoringProvider offered "Move type to C.cs",
     // "Rename file to C.cs" and — keyed to the synthetic document's name — "Rename type to Script" on
     // every type declaration. A .inv script is one file the user never sees as Script.cs.

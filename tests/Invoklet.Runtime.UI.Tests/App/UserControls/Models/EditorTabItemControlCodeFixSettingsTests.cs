@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Invoklet.Avalonia.CodeTextEditor;
@@ -81,6 +82,58 @@ public class EditorTabItemControlCodeFixSettingsTests
         var referenceService = new CSharpReferenceService();
         var refs = referenceService.GetDefault().Append(referenceService.GetExtensionReference());
         return new CSharpIntelliSenseService(refs, NullLogger<CSharpIntelliSenseService>.Instance);
+    }
+
+    [AvaloniaFact]
+    public async Task FixAll_Should_ReportCancellation_WhenTheScriptChangesDuringMaterialization()
+    {
+        var intelliSense = new Mock<IIntelliSenseService>();
+        var pending = new TaskCompletionSource<IMaterializedFix?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        const string code = "class First { }\nclass Second { }";
+        intelliSense.Setup(s => s.MaterializeFixAllAsync(code, "key", FixAllScope.Document, It.IsAny<CancellationToken>()))
+            .Returns(pending.Task);
+        var (ctrl, editor, margin) = CreateControl(MakePrefs(), intelliSense);
+        using var tab = ctrl;
+        editor.Text = code;
+        var fix = new CodeFixEntry(1, "Add accessibility modifiers", CodeFixSeverity.Info, "key", "IDE0040", SupportsFixAll: true);
+        var item = Assert.Single(margin.BuildFixAllMenuItems(fix), item => Equals(item.Header, "Fix all in this script"));
+        var result = new Mock<IMaterializedFix>();
+        result.SetupGet(f => f.NewCode).Returns("internal class First { }\ninternal class Second { }");
+        result.SetupGet(f => f.UsingsToAdd).Returns([]);
+
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        editor.Text = "class Changed { }";
+        pending.SetResult(result.Object);
+
+        var status = ctrl.FindControl<TextBlock>("ExecStatusBlock")!;
+        await TestWait.EventuallyAsync(() => Assert.Equal("Fix All cancelled because the script changed. Try again.", status.Text));
+        Assert.Equal("class Changed { }", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void HideFixesInAllScripts_Should_RefreshTheLightbulbInBothTabs()
+    {
+        var prefs = MakePrefs();
+        prefs.Setup(p => p.Save()).Callback(() => prefs.Raise(p => p.Changed += null));
+        var firstSense = new Mock<IIntelliSenseService>();
+        var secondSense = new Mock<IIntelliSenseService>();
+        var (first, firstEditor, firstMargin) = CreateControl(prefs, firstSense);
+        var (second, secondEditor, secondMargin) = CreateControl(prefs, secondSense);
+        using var firstTab = first;
+        using var secondTab = second;
+        ICodeFixInfo[] fixes = [new FakeCodeFixInfo(1, "Add accessibility modifiers", DiagnosticSeverity.Info, "key", "IDE0040")];
+        firstSense.Raise(s => s.CodeFixesChanged += null, firstEditor.Text, (IReadOnlyList<ICodeFixInfo>)fixes);
+        secondSense.Raise(s => s.CodeFixesChanged += null, secondEditor.Text, (IReadOnlyList<ICodeFixInfo>)fixes);
+        Dispatcher.UIThread.RunJobs();
+        var fix = Assert.Single(firstMargin.Fixes);
+        Assert.Single(secondMargin.Fixes);
+        var hide = Assert.Single(firstMargin.BuildSuppressMenuItems("IDE0040", fix.Line), item => Equals(item.Header, "Hide fixes in all scripts"));
+
+        hide.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(firstMargin.Fixes);
+        Assert.Empty(secondMargin.Fixes);
     }
 
     [AvaloniaFact]

@@ -265,7 +265,7 @@ internal sealed class BackgroundAnalysis(
         if (!CanPublish(version, ct)) return;
         DiagnosticsChanged?.Invoke(code, visible);
 
-        var fixes = await _codeFixEngine.ComputeFixesAsync(document, forCodeFixes, _layout.Projection(code).Text, headerLength, ct);
+        var fixes = await _codeFixEngine.ComputeFixesAsync(document, forCodeFixes, _layout.Projection(code).Text, headerLength, version, ct);
         if (CanPublish(version, ct)) CodeFixesChanged?.Invoke(code, fixes);
     }
 

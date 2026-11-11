@@ -2481,6 +2481,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private async Task ApplyCodeFixAsync(CodeTextEditor editor, IIntelliSenseService intelliSense, CodeFixEntry fix)
     {
         var code = editor.Text;
+        var contextVersion = intelliSense.ContextVersion;
         var materialized = await intelliSense.MaterializeFixAsync(code, fix.Key, CancellationToken.None);
         if (materialized is null) return;
 
@@ -2491,6 +2492,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         await Dispatcher.InvokeAsync(() =>
         {
             if (_disposed) return;
+            if (intelliSense.ContextVersion != contextVersion) return;
             if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
 
             // Usings go to the .inv front matter's `namespaces:` list (a project file, per
@@ -2520,13 +2522,19 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var document = editor.Document;
         var version = document.Version;
         var script = State.MdRunDocument;
+        var contextVersion = intelliSense.ContextVersion;
         var materialized = await intelliSense.MaterializeFixAllAsync(document.Text, fix.Key, contractScope, CancellationToken.None);
 
         await Dispatcher.InvokeAsync(() =>
         {
             if (_disposed) return;
             if (!ReferenceEquals(editor.Document, document) || !ReferenceEquals(document.Version, version)
-                || !ReferenceEquals(State.MdRunDocument, script)) return;
+                || !ReferenceEquals(State.MdRunDocument, script) || intelliSense.ContextVersion != contextVersion)
+            {
+                SetStatus("Fix All cancelled because the script changed. Try again.", "Invoklet.Status.CancelledBrush");
+                UpdateOutputUi();
+                return;
+            }
             if (materialized is null)
             {
                 SetStatus("Fix All could not be applied. Reopen the lightbulb menu to try again.", "Invoklet.Status.ErrorBrush");

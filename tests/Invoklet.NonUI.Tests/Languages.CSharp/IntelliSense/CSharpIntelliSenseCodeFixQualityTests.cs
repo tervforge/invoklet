@@ -164,6 +164,42 @@ public class CSharpIntelliSenseCodeFixQualityTests
         Assert.Equal(2, Assert.Single(omit, fix => fix.DiagnosticId == "IDE0040").Line);
     }
 
+    [Fact]
+    public async Task MaterializeFixAsync_AndFixAll_Should_RejectOldKeysBeforeTheStyleRefreshPublishes()
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        service.UpdateAccessibilityModifiersStyle("always");
+        const string code = "class First { }\nclass Second { }";
+        var completion = new TaskCompletionSource<IReadOnlyList<ICodeFixInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.CodeFixesChanged += (_, fixes) => completion.TrySetResult(fixes);
+        var ct = TestContext.Current.CancellationToken;
+        service.NotifyTextChanged(code);
+        var fixes = await completion.Task.WaitAsync(BackgroundAnalysisTimeout, ct);
+        var key = Assert.Single(fixes, f => f.Line == 1 && f.DiagnosticId == "IDE0040").Key;
+        Assert.NotNull(await service.MaterializeFixAsync(code, key, ct));
+        Assert.NotNull(await service.MaterializeFixAllAsync(code, key, FixAllScope.Document, ct));
+
+        var refreshStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRefresh = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.AnalysisSnapshotTakenForTests = () =>
+        {
+            refreshStarted.TrySetResult();
+            return releaseRefresh.Task;
+        };
+        try
+        {
+            service.UpdateAccessibilityModifiersStyle("never");
+            await refreshStarted.Task.WaitAsync(BackgroundAnalysisTimeout, ct);
+
+            Assert.Null(await service.MaterializeFixAsync(code, key, ct));
+            Assert.Null(await service.MaterializeFixAllAsync(code, key, FixAllScope.Document, ct));
+        }
+        finally
+        {
+            releaseRefresh.TrySetResult();
+        }
+    }
+
     // "like in ReSharper ... a 'using all' that automatically resolves all imports" — ResolveAllMissingUsingsAsync
     // resolves every unambiguous unresolved-type diagnostic in one pass instead of the lightbulb's fix
     // one at a time. Three undefined types, two different (but each individually unambiguous)

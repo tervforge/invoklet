@@ -37,15 +37,26 @@ internal sealed class RefactoringService(
         {
             if (position < 0 || position > code.Length) return null;
 
-            var document = _syncDocument(code);
-            var headerLength = _layout.HeaderLength(code);
-            var span = new TextSpan(_layout.ToDocumentOffset(code, position), 0);
+            Document document;
+            int version;
+            int headerLength;
+            string projectedCode;
+            TextSpan span;
+            lock (_session.SyncLock)
+            {
+                document = _syncDocument(code);
+                version = _session.ContextVersion;
+                headerLength = _layout.HeaderLength(code);
+                projectedCode = _layout.Projection(code).Text;
+                span = new TextSpan(_layout.ToDocumentOffset(code, position), 0);
+            }
 
             // 1-based, same convention as CodeFixEntry.Line/RoslynCodeFixEngine's own diagnostic-fix
             // line lookup — LinePosition.Line itself is 0-based.
             var userLine = SourceText.From(code).Lines.GetLinePosition(position).Line + 1;
 
-            return await _codeFixEngine.ComputeRefactoringsAsync(document, span, _layout.Projection(code).Text, headerLength, userLine, ct);
+            var refactorings = await _codeFixEngine.ComputeRefactoringsAsync(document, span, projectedCode, headerLength, userLine, version, ct);
+            return _session.IsCurrent(version) ? refactorings : null;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { _logger.LogWarning(ex, "GetRefactoringsAsync failed"); return null; }
@@ -55,63 +66,59 @@ internal sealed class RefactoringService(
     // both CodeFixesChanged's fixes and GetRefactoringsAsync's refactorings, see IIntelliSenseService.
     // MaterializeFixAsync's own doc comment. No SyncDocument call here — the cached CodeAction
     // RoslynCodeFixEngine looks key up already carries its own document snapshot internally (captured
-    // when it was registered), so materializing it needs nothing from the live workspace at all, only
-    // the code/preamble metrics needed for the relocating-preamble math.
+    // when it was registered). Only use that snapshot while its context still describes the script.
     internal Task<IMaterializedFix?> MaterializeFixAsync(string code, string key, CancellationToken ct = default)
-        => RoslynMessageCulture.RunAsync(async () => (IMaterializedFix?)await TryMaterializeFixAsync(code, key, ct), ct);
-
+        => RoslynMessageCulture.RunAsync(() => TryMaterializeFixAsync(code, key, null, ct), ct);
 
     internal Task<IMaterializedFix?> MaterializeFixAllAsync(string code, string key, Invoklet.Contracts.IntelliSense.FixAllScope scope, CancellationToken ct = default)
-        => RoslynMessageCulture.RunAsync(async () => (IMaterializedFix?)await TryMaterializeFixAllAsync(code, key, scope, ct), ct);
-
-    private async Task<IMaterializedFix?> TryMaterializeFixAllAsync(string code, string key, Invoklet.Contracts.IntelliSense.FixAllScope scope, CancellationToken ct)
     {
-        try
+        var roslynScope = scope switch
         {
-            var roslynScope = scope switch
-            {
-                Invoklet.Contracts.IntelliSense.FixAllScope.ContainingMember => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.ContainingMember,
-                Invoklet.Contracts.IntelliSense.FixAllScope.ContainingType => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.ContainingType,
-                _ => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.Document,
-            };
-
-            var headerLength = _layout.HeaderLength(code);
-            var materialized = await _codeFixEngine.MaterializeFixAllAsync(key, roslynScope, _layout.Projection(code).Text, headerLength, ct);
-            if (materialized is null) return null;
-            var projection = _layout.Projection(code);
-            if (projection.RestoreEdit(materialized.Value.NewCode, materialized.Value.ChangedSpans,
-                    _layout.Prefix(code), _layout.Suffix(code), _layout.ParseOptions) is not var (restored, changedSpans)) return null;
-            var newCode = restored;
-            if (_layout.Kind == MdRunKind.Program && restored != code)
-            {
-                var moved = projection.HasChanges ? ProgramBodyProjection.Create(restored, _layout.ParseOptions).Moved : [];
-                newCode = await ReindentOutsideTheWrapperAsync(restored,
-                    [.. changedSpans.Where(span => !moved.Any(m => m.Contains(span)))], ct);
-            }
-            return new SimpleMaterializedFix(newCode, materialized.Value.UsingsToAdd);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { _logger.LogWarning(ex, "MaterializeFixAllAsync failed"); return null; }
+            Invoklet.Contracts.IntelliSense.FixAllScope.ContainingMember => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.ContainingMember,
+            Invoklet.Contracts.IntelliSense.FixAllScope.ContainingType => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.ContainingType,
+            _ => Microsoft.CodeAnalysis.CodeFixes.FixAllScope.Document,
+        };
+        return RoslynMessageCulture.RunAsync(() => TryMaterializeFixAsync(code, key, roslynScope, ct), ct);
     }
-    private async Task<IMaterializedFix?> TryMaterializeFixAsync(string code, string key, CancellationToken ct)
+
+    private async Task<IMaterializedFix?> TryMaterializeFixAsync(string code, string key,
+        Microsoft.CodeAnalysis.CodeFixes.FixAllScope? scope, CancellationToken ct)
     {
         try
         {
-            var headerLength = _layout.HeaderLength(code);
-            var materialized = await _codeFixEngine.MaterializeAsync(key, _layout.Projection(code).Text, headerLength, ct);
-            if (materialized is null) return null;
-            var projection = _layout.Projection(code);
+            int version;
+            int headerLength;
+            ProgramBodyProjection projection;
+            string prefix;
+            string suffix;
+            CSharpParseOptions parseOptions;
+            MdRunKind kind;
+            lock (_session.SyncLock)
+            {
+                version = _session.ContextVersion;
+                headerLength = _layout.HeaderLength(code);
+                projection = _layout.Projection(code);
+                prefix = _layout.Prefix(code);
+                suffix = _layout.Suffix(code);
+                parseOptions = _layout.ParseOptions;
+                kind = _layout.Kind;
+            }
+            var materialized = scope is { } bulkScope
+                ? await _codeFixEngine.MaterializeFixAllAsync(key, bulkScope, projection.Text, headerLength, version, ct)
+                : await _codeFixEngine.MaterializeAsync(key, projection.Text, headerLength, version, ct);
+            if (materialized is null || !_session.IsCurrent(version)) return null;
             if (projection.RestoreEdit(materialized.Value.NewCode, materialized.Value.ChangedSpans,
-                    _layout.Prefix(code), _layout.Suffix(code), _layout.ParseOptions) is not var (restored, changedSpans)) return null;
+                    prefix, suffix, parseOptions) is not { } restoredEdit) return null;
+            var (restored, changedSpans) = restoredEdit;
             var newCode = restored;
-            if (_layout.Kind == MdRunKind.Program && restored != code)
+            if (kind == MdRunKind.Program && restored != code)
             {
                 // A class compiled outside the hidden one was formatted at its own columns already.
-                var moved = projection.HasChanges ? ProgramBodyProjection.Create(restored, _layout.ParseOptions).Moved : [];
+                var moved = projection.HasChanges ? ProgramBodyProjection.Create(restored, parseOptions).Moved : [];
                 newCode = await ReindentOutsideTheWrapperAsync(restored,
                     [.. changedSpans.Where(span => !moved.Any(m => m.Contains(span)))], ct);
             }
-            return new SimpleMaterializedFix(newCode, materialized.Value.UsingsToAdd);
+            return _session.IsCurrent(version) ? new SimpleMaterializedFix(newCode, materialized.Value.UsingsToAdd) : null;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { _logger.LogWarning(ex, "MaterializeFixAsync failed"); return null; }

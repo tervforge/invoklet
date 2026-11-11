@@ -210,6 +210,8 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
         if (_session.UpdateAccessibilityModifiersStyle(style)) _scheduler.Refresh(_analysis.AnalyzeAsync);
     }
 
+    public int ContextVersion => _session.ContextVersion;
+
     // ── Refactorings, fixes and missing usings ─────────────
 
     public Task<IReadOnlyList<ICodeFixInfo>?> GetRefactoringsAsync(string code, int position, CancellationToken ct = default)

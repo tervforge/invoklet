@@ -66,9 +66,13 @@ internal sealed class RoslynCodeFixEngine
     // (triggered by a UI click, its own async flow) can race.
     private readonly object _cacheLock = new();
     private Microsoft.CodeAnalysis.Document? _fixDocument;
+    private int _fixContextVersion;
+    private string? _fixUserCode;
     private Dictionary<string, CachedFixCandidate> _fixActions = new();
     private Dictionary<FixAllAction, Dictionary<TextSpan, Diagnostic>> _fixAllDiagnostics = new();
     private Microsoft.CodeAnalysis.Document? _refactoringDocument;
+    private int _refactoringContextVersion;
+    private string? _refactoringUserCode;
     private Dictionary<string, CodeAction> _refactoringActions = new();
 
     // Refactoring providers that only make sense for a multi-file project on disk. MoveType offers
@@ -115,7 +119,8 @@ internal sealed class RoslynCodeFixEngine
     }
 
     public async Task<IReadOnlyList<ICodeFixInfo>> ComputeFixesAsync(
-        Microsoft.CodeAnalysis.Document document, IReadOnlyList<Diagnostic> diagnostics, string userCode, int preambleLength, CancellationToken ct)
+        Microsoft.CodeAnalysis.Document document, IReadOnlyList<Diagnostic> diagnostics, string userCode, int preambleLength,
+        int contextVersion, CancellationToken ct)
     {
         var result = new List<ICodeFixInfo>();
         var cache = new Dictionary<string, CachedFixCandidate>();
@@ -193,7 +198,7 @@ internal sealed class RoslynCodeFixEngine
         var seen = new HashSet<(int Line, string Title)>();
         result = result.Where(fix => seen.Add((fix.Line, fix.Title))).ToList();
 
-        PublishFixes(document, cache, fixAllDiagnostics, ct);
+        PublishFixes(document, cache, fixAllDiagnostics, userCode, contextVersion, ct);
         return result;
     }
 
@@ -202,12 +207,15 @@ internal sealed class RoslynCodeFixEngine
     // Checked under the lock: once the newer pass has cancelled this one, it can only be overwritten by
     // that newer pass.
     private void PublishFixes(Microsoft.CodeAnalysis.Document document, Dictionary<string, CachedFixCandidate> cache,
-        Dictionary<FixAllAction, Dictionary<TextSpan, Diagnostic>> fixAllDiagnostics, CancellationToken ct)
+        Dictionary<FixAllAction, Dictionary<TextSpan, Diagnostic>> fixAllDiagnostics, string userCode, int contextVersion, CancellationToken ct)
     {
         lock (_cacheLock)
         {
             ct.ThrowIfCancellationRequested();
+            if (contextVersion < _fixContextVersion) return;
             _fixDocument = document;
+            _fixContextVersion = contextVersion;
+            _fixUserCode = userCode;
             _fixActions = cache;
             _fixAllDiagnostics = fixAllDiagnostics;
         }
@@ -216,12 +224,16 @@ internal sealed class RoslynCodeFixEngine
     private static FixAllAction GetFixAllAction(CachedFixCandidate candidate) =>
         new(candidate.Provider!, candidate.Action.EquivalenceKey!, candidate.Diagnostic.Id);
 
-    private void PublishRefactorings(Microsoft.CodeAnalysis.Document document, Dictionary<string, CodeAction> cache, CancellationToken ct)
+    private void PublishRefactorings(Microsoft.CodeAnalysis.Document document, Dictionary<string, CodeAction> cache,
+        string userCode, int contextVersion, CancellationToken ct)
     {
         lock (_cacheLock)
         {
             ct.ThrowIfCancellationRequested();
+            if (contextVersion < _refactoringContextVersion) return;
             _refactoringDocument = document;
+            _refactoringContextVersion = contextVersion;
+            _refactoringUserCode = userCode;
             _refactoringActions = cache;
         }
     }
@@ -286,13 +298,14 @@ internal sealed class RoslynCodeFixEngine
     // RegisterRefactoring vs RegisterCodeFix is just a different registration callback name for the
     // same underlying CodeAction type.
     public async Task<IReadOnlyList<ICodeFixInfo>> ComputeRefactoringsAsync(
-        Microsoft.CodeAnalysis.Document document, TextSpan span, string userCode, int preambleLength, int userLine, CancellationToken ct)
+        Microsoft.CodeAnalysis.Document document, TextSpan span, string userCode, int preambleLength, int userLine,
+        int contextVersion, CancellationToken ct)
     {
         var result = new List<ICodeFixInfo>();
         var refactoringCache = new Dictionary<string, CodeAction>();
         if (userLine < 1)
         {
-            PublishRefactorings(document, refactoringCache, ct);
+            PublishRefactorings(document, refactoringCache, userCode, contextVersion, ct);
             return result;
         }
 
@@ -330,7 +343,7 @@ internal sealed class RoslynCodeFixEngine
             }
         }
 
-        PublishRefactorings(document, refactoringCache, ct);
+        PublishRefactorings(document, refactoringCache, userCode, contextVersion, ct);
         return result;
     }
 
@@ -342,15 +355,20 @@ internal sealed class RoslynCodeFixEngine
     // listed that re-materializing against stale state wouldn't be meaningful) — same "gracefully do
     // nothing" contract as every other IntelliSense failure path in this codebase.
     public async Task<(string NewCode, IReadOnlyList<string> UsingsToAdd, IReadOnlyList<TextSpan> ChangedSpans)?> MaterializeAsync(
-        string key, string userCode, int preambleLength, CancellationToken ct)
+        string key, string userCode, int preambleLength, int contextVersion, CancellationToken ct)
     {
         CodeAction? action;
         Microsoft.CodeAnalysis.Document? document;
         lock (_cacheLock)
         {
-            if (_fixActions.TryGetValue(key, out var fixCandidate)) { action = fixCandidate.Action; document = _fixDocument; }
-            else if (_refactoringActions.TryGetValue(key, out action)) document = _refactoringDocument;
-            else document = null;
+            if (_fixContextVersion == contextVersion && _fixUserCode == userCode && _fixActions.TryGetValue(key, out var fixCandidate))
+            {
+                action = fixCandidate.Action;
+                document = _fixDocument;
+            }
+            else if (_refactoringContextVersion == contextVersion && _refactoringUserCode == userCode && _refactoringActions.TryGetValue(key, out action))
+                document = _refactoringDocument;
+            else return null;
         }
         if (action is null || document is null) return null;
 
@@ -367,14 +385,16 @@ internal sealed class RoslynCodeFixEngine
     }
 
     public async Task<(string NewCode, IReadOnlyList<string> UsingsToAdd, IReadOnlyList<TextSpan> ChangedSpans)?> MaterializeFixAllAsync(
-        string key, Microsoft.CodeAnalysis.CodeFixes.FixAllScope scope, string userCode, int preambleLength, CancellationToken ct)
+        string key, Microsoft.CodeAnalysis.CodeFixes.FixAllScope scope, string userCode, int preambleLength,
+        int contextVersion, CancellationToken ct)
     {
         CachedFixCandidate? candidate;
         Microsoft.CodeAnalysis.Document? document;
         Dictionary<TextSpan, Diagnostic>? diagnostics;
         lock (_cacheLock)
         {
-            if (!_fixActions.TryGetValue(key, out candidate) || candidate.Provider is null) return null;
+            if (_fixContextVersion != contextVersion || _fixUserCode != userCode
+                || !_fixActions.TryGetValue(key, out candidate) || candidate.Provider is null) return null;
             document = _fixDocument;
             _fixAllDiagnostics.TryGetValue(GetFixAllAction(candidate), out diagnostics);
         }
@@ -385,10 +405,6 @@ internal sealed class RoslynCodeFixEngine
 
         try
         {
-            var text = await document.GetTextAsync(ct);
-            var userSpan = new TextSpan(preambleLength, userCode.Length);
-            if (userSpan.End > text.Length || text.ToString(userSpan) != userCode) return null;
-
             var diagnosticProvider = new SingleDocumentDiagnosticProvider(diagnostics.Values);
             var fixAllContext = new FixAllContext(
                 document, candidate.Diagnostic.Location.SourceSpan, provider, scope,
