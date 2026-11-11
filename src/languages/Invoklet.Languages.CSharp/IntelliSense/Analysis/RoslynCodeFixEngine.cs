@@ -1,7 +1,7 @@
-using System.Collections.Immutable;
 using System.Composition.Hosting;
 using System.Reflection;
 using Invoklet.Contracts.IntelliSense;
+using Invoklet.Languages.DotnetCommon;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
@@ -49,7 +49,8 @@ namespace Invoklet.Languages.CSharp.IntelliSense.Analysis;
 // is treated as unsafe to reconstruct and the whole fix is discarded.
 internal sealed class RoslynCodeFixEngine
 {
-    private sealed record CachedFixCandidate(CodeAction Action, CodeFixProvider? Provider);
+    private sealed record CachedFixCandidate(CodeAction Action, CodeFixProvider? Provider, Diagnostic Diagnostic);
+    private readonly record struct FixAllAction(CodeFixProvider Provider, string EquivalenceKey, string DiagnosticId);
 
     private readonly IReadOnlyList<CodeFixProvider> _providers;
     private readonly PreambleEdits _preambleEdits;
@@ -66,6 +67,7 @@ internal sealed class RoslynCodeFixEngine
     private readonly object _cacheLock = new();
     private Microsoft.CodeAnalysis.Document? _fixDocument;
     private Dictionary<string, CachedFixCandidate> _fixActions = new();
+    private Dictionary<FixAllAction, Dictionary<TextSpan, Diagnostic>> _fixAllDiagnostics = new();
     private Microsoft.CodeAnalysis.Document? _refactoringDocument;
     private Dictionary<string, CodeAction> _refactoringActions = new();
 
@@ -117,6 +119,7 @@ internal sealed class RoslynCodeFixEngine
     {
         var result = new List<ICodeFixInfo>();
         var cache = new Dictionary<string, CachedFixCandidate>();
+        var fixAllDiagnostics = new Dictionary<FixAllAction, Dictionary<TextSpan, Diagnostic>>();
 
         foreach (var group in diagnostics.Where(d => d.Location.IsInSource).GroupBy(d => d.Id))
         {
@@ -143,6 +146,7 @@ internal sealed class RoslynCodeFixEngine
                 ? groupList.Where(d => !d.Descriptor.CustomTags.Contains(WellKnownDiagnosticTags.Unnecessary))
                 : groupList;
 
+            var groupFixes = new List<RoslynCodeFix>();
             foreach (var diagnostic in diagnosticsToProcess)
             {
                 ct.ThrowIfCancellationRequested();
@@ -155,8 +159,25 @@ internal sealed class RoslynCodeFixEngine
                 foreach (var provider in providers)
                 {
                     await CollectCandidatesAsync(provider, document, diagnostic, userLine,
-                        ToContractSeverity(diagnostic.Severity), result, cache, ct);
+                        ToContractSeverity(diagnostic.Severity), groupFixes, cache, ct);
                 }
+            }
+
+            // Count before deduplicating menu titles: two diagnostics on the same line may offer
+            // the same action, and one diagnostic may offer several different actions.
+            foreach (var fix in groupFixes.Where(fix => fix.SupportsFixAll))
+            {
+                var candidate = cache[fix.Key];
+                var action = GetFixAllAction(candidate);
+                if (!fixAllDiagnostics.TryGetValue(action, out var occurrences))
+                    fixAllDiagnostics.Add(action, occurrences = new());
+                occurrences.TryAdd(candidate.Diagnostic.Location.SourceSpan, candidate.Diagnostic);
+            }
+
+            foreach (var fix in groupFixes)
+            {
+                var multiple = fix.SupportsFixAll && fixAllDiagnostics[GetFixAllAction(cache[fix.Key])].Count > 1;
+                result.Add(multiple ? fix with { HasMultipleDiagnosticOccurrences = true } : fix);
             }
         }
 
@@ -172,7 +193,7 @@ internal sealed class RoslynCodeFixEngine
         var seen = new HashSet<(int Line, string Title)>();
         result = result.Where(fix => seen.Add((fix.Line, fix.Title))).ToList();
 
-        PublishFixes(document, cache, ct);
+        PublishFixes(document, cache, fixAllDiagnostics, ct);
         return result;
     }
 
@@ -180,15 +201,20 @@ internal sealed class RoslynCodeFixEngine
     // replace the cache the entries on screen point into, or clicking one silently does nothing.
     // Checked under the lock: once the newer pass has cancelled this one, it can only be overwritten by
     // that newer pass.
-    private void PublishFixes(Microsoft.CodeAnalysis.Document document, Dictionary<string, CachedFixCandidate> cache, CancellationToken ct)
+    private void PublishFixes(Microsoft.CodeAnalysis.Document document, Dictionary<string, CachedFixCandidate> cache,
+        Dictionary<FixAllAction, Dictionary<TextSpan, Diagnostic>> fixAllDiagnostics, CancellationToken ct)
     {
         lock (_cacheLock)
         {
             ct.ThrowIfCancellationRequested();
             _fixDocument = document;
             _fixActions = cache;
+            _fixAllDiagnostics = fixAllDiagnostics;
         }
     }
+
+    private static FixAllAction GetFixAllAction(CachedFixCandidate candidate) =>
+        new(candidate.Provider!, candidate.Action.EquivalenceKey!, candidate.Diagnostic.Id);
 
     private void PublishRefactorings(Microsoft.CodeAnalysis.Document document, Dictionary<string, CodeAction> cache, CancellationToken ct)
     {
@@ -345,32 +371,29 @@ internal sealed class RoslynCodeFixEngine
     {
         CachedFixCandidate? candidate;
         Microsoft.CodeAnalysis.Document? document;
+        Dictionary<TextSpan, Diagnostic>? diagnostics;
         lock (_cacheLock)
         {
-            _fixActions.TryGetValue(key, out candidate);
+            if (!_fixActions.TryGetValue(key, out candidate) || candidate.Provider is null) return null;
             document = _fixDocument;
+            _fixAllDiagnostics.TryGetValue(GetFixAllAction(candidate), out diagnostics);
         }
-        if (candidate?.Provider is not { } provider || document is null) return null;
+        if (candidate.Provider is not { } provider || document is null || diagnostics is not { Count: > 0 }) return null;
 
         var fixAllProvider = provider.GetFixAllProvider();
         if (fixAllProvider is null) return null;
 
         try
         {
-            var model = await document.GetSemanticModelAsync(ct);
-            if (model is null) return null;
+            var text = await document.GetTextAsync(ct);
+            var userSpan = new TextSpan(preambleLength, userCode.Length);
+            if (userSpan.End > text.Length || text.ToString(userSpan) != userCode) return null;
 
-            var diagnosticIds = provider.FixableDiagnosticIds.ToImmutableHashSet();
-            var diagnostics = model.GetDiagnostics(cancellationToken: ct)
-                .Where(d => d.Location.IsInSource && diagnosticIds.Contains(d.Id))
-                .ToImmutableArray();
-            if (diagnostics.IsEmpty) return null;
-
-            var diagnosticProvider = new SingleDocumentDiagnosticProvider(diagnostics);
+            var diagnosticProvider = new SingleDocumentDiagnosticProvider(diagnostics.Values);
             var fixAllContext = new FixAllContext(
-                document, provider, scope,
+                document, candidate.Diagnostic.Location.SourceSpan, provider, scope,
                 candidate.Action.EquivalenceKey!,
-                diagnosticIds,
+                [candidate.Diagnostic.Id],
                 diagnosticProvider, ct);
 
             var fixAllAction = await fixAllProvider.GetFixAsync(fixAllContext);
@@ -386,7 +409,7 @@ internal sealed class RoslynCodeFixEngine
         }
     }
 
-    private sealed class SingleDocumentDiagnosticProvider(ImmutableArray<Diagnostic> diagnostics) : FixAllContext.DiagnosticProvider
+    private sealed class SingleDocumentDiagnosticProvider(IEnumerable<Diagnostic> diagnostics) : FixAllContext.DiagnosticProvider
     {
         public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(
             Microsoft.CodeAnalysis.Document document, CancellationToken ct)
@@ -403,7 +426,7 @@ internal sealed class RoslynCodeFixEngine
 
     private async Task CollectCandidatesAsync(
         CodeFixProvider provider, Microsoft.CodeAnalysis.Document document, Diagnostic diagnostic, int userLine, ContractSeverity severity,
-        List<ICodeFixInfo> result, Dictionary<string, CachedFixCandidate> cache, CancellationToken ct)
+        List<RoslynCodeFix> result, Dictionary<string, CachedFixCandidate> cache, CancellationToken ct)
     {
         var actions = new List<CodeAction>();
         var context = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), ct);
@@ -416,6 +439,8 @@ internal sealed class RoslynCodeFixEngine
             return;
         }
 
+        if (actions.Count == 0) return;
+        var diagnosticMessage = diagnostic.GetMessage(RoslynMessageCulture.Culture);
         foreach (var action in actions)
         {
             ct.ThrowIfCancellationRequested();
@@ -424,9 +449,12 @@ internal sealed class RoslynCodeFixEngine
                 if (IsUnsupportedLeaf(leaf)) continue;
 
                 var key = Guid.NewGuid().ToString("N");
-                var supportsFixAll = provider.GetFixAllProvider() is not null;
-                cache[key] = new CachedFixCandidate(leaf, supportsFixAll ? provider : null);
-                result.Add(new RoslynCodeFix(userLine, leaf.Title, severity, key, diagnostic.Id, supportsFixAll));
+                var supportsFixAll = leaf.EquivalenceKey is not null && provider.GetFixAllProvider() is not null;
+                cache[key] = new CachedFixCandidate(leaf, supportsFixAll ? provider : null, diagnostic);
+                result.Add(new RoslynCodeFix(userLine, leaf.Title, severity, key, diagnostic.Id, supportsFixAll)
+                {
+                    DiagnosticMessage = diagnosticMessage,
+                });
             }
         }
     }
@@ -568,5 +596,9 @@ internal sealed class RoslynCodeFixEngine
         _ => ContractSeverity.Info,
     };
 
-    private sealed record RoslynCodeFix(int Line, string Title, ContractSeverity Severity, string Key, string? DiagnosticId, bool SupportsFixAll = false) : ICodeFixInfo;
+    private sealed record RoslynCodeFix(int Line, string Title, ContractSeverity Severity, string Key, string? DiagnosticId, bool SupportsFixAll = false) : ICodeFixInfo
+    {
+        public bool HasMultipleDiagnosticOccurrences { get; init; }
+        public string? DiagnosticMessage { get; init; }
+    }
 }

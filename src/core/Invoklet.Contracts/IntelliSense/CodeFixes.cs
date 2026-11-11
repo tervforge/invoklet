@@ -33,10 +33,14 @@ public interface ICodeFixInfo
     // CodeRefactoringProvider's suggestion (Use Expression Body, Introduce Local, ...) is triggered by
     // caret position, not a diagnostic, so it simply can't be excluded by ID this way.
     string? DiagnosticId { get; }
+    string? DiagnosticMessage => null;
 
     // True when the provider that produced this fix supports FixAllProvider, so the menu
     // can offer scope-based bulk application (fix all in method, class or script).
     bool SupportsFixAll { get; }
+
+    // True when this action can fix the diagnostic at more than one source span in the script.
+    bool HasMultipleDiagnosticOccurrences => false;
 }
 
 // The expensive half of ICodeFixInfo, computed on demand (IIntelliSenseService.MaterializeFixAsync)

@@ -3,6 +3,15 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- Counted distinct diagnostics when deciding whether to show Fix All in the lightbulb menu.
+- Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
+- Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.
+- Applied script warning suppression from the start of the script and hid suppression for compiler errors.
+
 ## [0.12.2] — 2026-11-10
 
 ### Added

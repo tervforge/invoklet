@@ -198,7 +198,7 @@ internal sealed class BackgroundAnalysis(
         var compilation = await document.Project.GetCompilationAsync(ct);
         var analyzerDiagnostics = compilation is null
             ? []
-            : await _analyzerEngine.ComputeAsync(compilation, _analyzersEnabled(), ct);
+            : await _analyzerEngine.ComputeAsync(compilation, document.Project.AnalyzerOptions, _analyzersEnabled(), ct);
 
         var headerLength = _layout.HeaderLength(code);
         var visible = new List<IDiagnosticInfo>();

@@ -1,6 +1,8 @@
 using Invoklet.Contracts.IntelliSense;
 using Invoklet.Format.MdRun;
 using Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense.Fixtures;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Xunit;
 
 namespace Invoklet.NonUI.Tests.Languages.CSharp.IntelliSense;
@@ -61,6 +63,105 @@ public class CSharpIntelliSenseCodeFixQualityTests
 
         var onlyLine = Assert.Single(usingFixes);
         Assert.Equal(1, onlyLine.Line);
+    }
+
+    [Theory]
+    [InlineData("void Main() {}", false)]
+    [InlineData("void Main() {} void Other() {}", true)]
+    public async Task NotifyTextChanged_Should_CountDistinctDiagnosticSpans_BeforeDeduplicatingActions(string code, bool multiple)
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        service.UpdateAccessibilityModifiersStyle("always");
+        service.UpdateKind(MdRunKind.Program);
+        var completion = new TaskCompletionSource<IReadOnlyList<ICodeFixInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.CodeFixesChanged += (_, fixes) => completion.TrySetResult(fixes);
+
+        service.NotifyTextChanged(code);
+
+        var fixes = await completion.Task.WaitAsync(BackgroundAnalysisTimeout, TestContext.Current.CancellationToken);
+        var fix = Assert.Single(fixes, f => f.DiagnosticId == "IDE0040" && f.Title == "Add accessibility modifiers");
+        Assert.True(fix.SupportsFixAll);
+        Assert.Equal(multiple, fix.HasMultipleDiagnosticOccurrences);
+    }
+
+    [Theory]
+    [InlineData(FixAllScope.ContainingMember, 2)]
+    [InlineData(FixAllScope.ContainingType, 3)]
+    [InlineData(FixAllScope.Document, 4)]
+    public async Task MaterializeFixAllAsync_Should_AddBraces_OnlyInsideTheSelectedScope(FixAllScope scope, int expectedBlocks)
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        const string code = """
+            class A
+            {
+                void First(bool flag)
+                {
+                    if (flag) Console.WriteLine(1);
+                    if (flag) Console.WriteLine(2);
+                }
+                void Second(bool flag) { if (flag) Console.WriteLine(3); }
+            }
+            class B { void Third(bool flag) { if (flag) Console.WriteLine(4); } }
+            """;
+        var completion = new TaskCompletionSource<IReadOnlyList<ICodeFixInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.CodeFixesChanged += (_, fixes) => completion.TrySetResult(fixes);
+        var ct = TestContext.Current.CancellationToken;
+        service.NotifyTextChanged(code);
+        var fixes = await completion.Task.WaitAsync(BackgroundAnalysisTimeout, ct);
+        var selected = Assert.Single(fixes, f => f.Line == 5 && f.DiagnosticId == "IDE0011" && f.Title == "Add braces");
+
+        var applied = await service.MaterializeFixAllAsync(code, selected.Key, scope, ct);
+
+        Assert.NotNull(applied);
+        var root = CSharpSyntaxTree.ParseText(applied.NewCode, cancellationToken: ct).GetRoot(ct);
+        Assert.False(root.ContainsDiagnostics);
+        var statements = root.DescendantNodes().OfType<IfStatementSyntax>().ToList();
+        Assert.Equal(4, statements.Count);
+        Assert.Equal(Enumerable.Range(0, 4).Select(i => i < expectedBlocks), statements.Select(s => s.Statement is BlockSyntax));
+    }
+
+    [Fact]
+    public async Task MaterializeFixAllAsync_Should_AddAccessibilityModifiers_InProgramMode()
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        service.UpdateAccessibilityModifiersStyle("always");
+        service.UpdateKind(MdRunKind.Program);
+        const string code = "void Main() {}\nvoid Other() {}";
+        var completion = new TaskCompletionSource<IReadOnlyList<ICodeFixInfo>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.CodeFixesChanged += (_, fixes) => completion.TrySetResult(fixes);
+        var ct = TestContext.Current.CancellationToken;
+        service.NotifyTextChanged(code);
+        var fixes = await completion.Task.WaitAsync(BackgroundAnalysisTimeout, ct);
+        var selected = fixes.First(f => f.DiagnosticId == "IDE0040" && f.Title == "Add accessibility modifiers");
+
+        var applied = await service.MaterializeFixAllAsync(code, selected.Key, FixAllScope.Document, ct);
+
+        Assert.NotNull(applied);
+        Assert.Contains("private void Main()", applied.NewCode);
+        Assert.Contains("private void Other()", applied.NewCode);
+        Assert.DoesNotContain("__InvokletProgram", applied.NewCode);
+    }
+
+    [Fact]
+    public async Task UpdateAccessibilityModifiersStyle_Should_ReanalyzeTheOpenScript()
+    {
+        using var service = new CSharpIntelliSenseFixture().CreateSut();
+        var passes = System.Threading.Channels.Channel.CreateUnbounded<IReadOnlyList<ICodeFixInfo>>();
+        service.CodeFixesChanged += (_, fixes) => passes.Writer.TryWrite(fixes);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(BackgroundAnalysisTimeout);
+        service.UpdateAccessibilityModifiersStyle("always");
+        service.NotifyTextChanged("class First { }\ninternal class Second { }");
+
+        var always = await passes.Reader.ReadAsync(timeout.Token);
+        service.UpdateAccessibilityModifiersStyle("never");
+        var never = await passes.Reader.ReadAsync(timeout.Token);
+        service.UpdateAccessibilityModifiersStyle("omit_if_default");
+        var omit = await passes.Reader.ReadAsync(timeout.Token);
+
+        Assert.Equal(1, Assert.Single(always, fix => fix.DiagnosticId == "IDE0040").Line);
+        Assert.DoesNotContain(never, fix => fix.DiagnosticId == "IDE0040");
+        Assert.Equal(2, Assert.Single(omit, fix => fix.DiagnosticId == "IDE0040").Line);
     }
 
     // "like in ReSharper ... a 'using all' that automatically resolves all imports" — ResolveAllMissingUsingsAsync

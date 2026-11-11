@@ -35,6 +35,66 @@ namespace Invoklet.Runtime.UI.Tests.App.UserControls.Models;
 [Trait("Category", "Roslyn")]
 public class EditorTabItemControlCodeFixApplyTests
 {
+    [AvaloniaFact]
+    public async Task ClickingFixAllInScript_Should_ApplyBothAccessibilityFixes()
+    {
+        var prefs = MakePrefs();
+        prefs.Object.CSharp.AccessibilityModifiersStyle = "always";
+        var vm = new EditorTabItemViewModel(null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
+        using var intelliSense = CreateRealIntelliSense();
+        using var ctrl = new EditorsTabItemControl(vm, MakeTheme().Object, new Mock<IWindowService>().Object,
+            new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense,
+            new Mock<IBuildCacheService>().Object, timings: NoPauses.Timings);
+        var host = new Window { Content = ctrl };
+        host.Show();
+        var editor = ctrl.State.Editor;
+        var margin = editor.TextArea.LeftMargins.OfType<CodeFixMargin>().Single();
+        editor.Text = "class First { }\nclass Second { }";
+        CodeFixEntry? FirstFix() => margin.Fixes.FirstOrDefault(f => f.Line == 1 && f.DiagnosticId == "IDE0040");
+        await TestWait.WhileAsync(() => FirstFix() is null);
+        var fix = FirstFix();
+        Assert.NotNull(fix);
+        var group = Assert.IsType<MenuItem>(Assert.Single(margin.BuildMenuItems([fix])));
+        var apply = Assert.Single(group.Items.OfType<MenuItem>(), item => Equals(item.Header, "Fix all in this script"));
+
+        apply.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+        await TestWait.EventuallyAsync(() =>
+        {
+            Assert.Contains("internal class First", editor.Text);
+            Assert.Contains("internal class Second", editor.Text);
+        });
+    }
+
+    [AvaloniaFact]
+    public async Task SuppressInThisScript_Should_AlsoSuppressWarningsAboveTheSelectedLine()
+    {
+        var prefs = MakePrefs();
+        var vm = new EditorTabItemViewModel(null, [], prefs.Object, new Mock<IEditorTabActions>().Object);
+        using var intelliSense = CreateRealIntelliSense();
+        using var ctrl = new EditorsTabItemControl(vm, MakeTheme().Object, new Mock<IWindowService>().Object,
+            new Mock<ILanguageHostRegistry>().Object, prefs.Object, intelliSense,
+            new Mock<IBuildCacheService>().Object, timings: NoPauses.Timings);
+        var host = new Window { Content = ctrl };
+        host.Show();
+        var editor = ctrl.State.Editor;
+        var margin = editor.TextArea.LeftMargins.OfType<CodeFixMargin>().Single();
+        const string code = "int first = 1;\nint second = 2;";
+        editor.Text = code;
+        CodeFixEntry? SecondWarning() => margin.Fixes.FirstOrDefault(f => f.Line == 2 && f.DiagnosticId == "CS0219");
+        await TestWait.WhileAsync(() => SecondWarning() is null);
+        var fix = SecondWarning();
+        Assert.NotNull(fix);
+        Assert.Contains(margin.Fixes, f => f.Line == 1 && f.DiagnosticId == "CS0219");
+        var group = Assert.IsType<MenuItem>(Assert.Single(margin.BuildMenuItems([fix])));
+        var suppress = Assert.Single(group.Items.OfType<MenuItem>(), item => Equals(item.Header, "Suppress in this script"));
+
+        suppress.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+        Assert.Equal("#pragma warning disable CS0219\n" + code, editor.Text);
+        await TestWait.EventuallyAsync(() => Assert.DoesNotContain(margin.Fixes, f => f.DiagnosticId == "CS0219"));
+    }
+
     private static Mock<IPreferencesService> MakePrefs()
     {
         var prefs = new Mock<IPreferencesService>();

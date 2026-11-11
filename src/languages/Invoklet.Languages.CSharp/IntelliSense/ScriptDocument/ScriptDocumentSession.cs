@@ -180,20 +180,24 @@ internal sealed class ScriptDocumentSession : IDisposable
         }
     }
 
-    public void UpdateAccessibilityModifiersStyle(string style)
+    public bool UpdateAccessibilityModifiersStyle(string style)
     {
         lock (SyncLock)
         {
-            _accessibilityModifiersStyle = style is "always" or "never" or "for_non_interface_members" or "omit_if_default"
+            style = style is "always" or "never" or "for_non_interface_members" or "omit_if_default"
                 ? style
                 : "omit_if_default";
-            Workspace.TryApplyChanges(Workspace.CurrentSolution.WithAnalyzerConfigDocumentText(
-                _editorConfigId, SourceText.From(EditorConfig(_useTabs, _indentationSize))));
+            if (_accessibilityModifiersStyle == style) return false;
+            if (!Workspace.TryApplyChanges(Workspace.CurrentSolution.WithAnalyzerConfigDocumentText(
+                    _editorConfigId, SourceText.From(EditorConfig(_useTabs, _indentationSize, style))))) return false;
+            _accessibilityModifiersStyle = style;
+            ContextChanged();
+            return true;
         }
     }
 
     public void Dispose() => Workspace.Dispose();
 
-    private string EditorConfig(bool useTabs, int indentationSize) =>
-        $"root = true\n[*.cs]\nindent_style = {(useTabs ? "tab" : "space")}\nindent_size = {indentationSize}\ntab_width = {indentationSize}\ndotnet_style_require_accessibility_modifiers = {_accessibilityModifiersStyle}\n";
+    private string EditorConfig(bool useTabs, int indentationSize, string? accessibilityStyle = null) =>
+        $"root = true\n[*.cs]\nindent_style = {(useTabs ? "tab" : "space")}\nindent_size = {indentationSize}\ntab_width = {indentationSize}\ndotnet_style_require_accessibility_modifiers = {accessibilityStyle ?? _accessibilityModifiersStyle}\n";
 }

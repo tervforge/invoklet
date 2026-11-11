@@ -375,10 +375,13 @@ public class CodeFixMarginTests
         var (_, _, margin) = CreateEditor("x\n");
         var candidates = new[]
         {
-            new CodeFixEntry(1, "Fix first", CodeFixSeverity.Warning, "first", "CS0001", SupportsFixAll: true),
+            new CodeFixEntry(1, "Fix first", CodeFixSeverity.Warning, "first", "CS0001", SupportsFixAll: true)
+            {
+                HasMultipleDiagnosticOccurrences = true,
+            },
             new CodeFixEntry(1, "Fix second", CodeFixSeverity.Warning, "second", "CS0002", SupportsFixAll: true),
         };
-        margin.Update([.. candidates, new CodeFixEntry(2, "Fix elsewhere", CodeFixSeverity.Warning, "elsewhere", "CS0001", SupportsFixAll: true)]);
+        margin.Update(candidates);
 
         var items = margin.BuildMenuItems(candidates);
 
@@ -389,6 +392,73 @@ public class CodeFixMarginTests
         Assert.Equal("CS0002: Fix second", second.Header);
         Assert.Equal(8, first.Items.Count); // one fix + three scopes + two suppress actions, separated
         Assert.Equal(4, second.Items.Count); // one fix + two suppress actions, separated; no fix-all
+    }
+
+    [AvaloniaFact]
+    public void BuildMenuItems_Should_HideFixAll_ForAlternativeActionsOnOneDiagnostic()
+    {
+        var (_, _, margin) = CreateEditor("x\n");
+        CodeFixEntry[] candidates =
+        [
+            new(1, "First alternative", CodeFixSeverity.Warning, "first", "IDE0001", SupportsFixAll: true),
+            new(1, "Second alternative", CodeFixSeverity.Warning, "second", "IDE0001", SupportsFixAll: true),
+        ];
+        margin.Update(candidates);
+
+        var items = margin.BuildMenuItems(candidates);
+
+        var diagnostic = Assert.IsType<MenuItem>(Assert.Single(items));
+        var actions = diagnostic.Items.OfType<MenuItem>().Select(item => item.Header).ToList();
+        Assert.Contains("First alternative", actions);
+        Assert.Contains("Second alternative", actions);
+        Assert.DoesNotContain(actions, header => header is string text && text.StartsWith("Fix all", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public void BuildMenuItems_Should_ShowTheCompilerMessage_WithoutSuppressionForAnError()
+    {
+        var (_, _, margin) = CreateEditor("Missing value;\n");
+        var fix = new CodeFixEntry(1, "Generate class 'Missing'", CodeFixSeverity.Error, "generate", "CS0246")
+        {
+            DiagnosticMessage = "The type or namespace name 'Missing' could not be found",
+        };
+
+        var diagnostic = Assert.IsType<MenuItem>(Assert.Single(margin.BuildMenuItems([fix])));
+
+        Assert.Equal($"CS0246: {fix.DiagnosticMessage}", diagnostic.Header);
+        Assert.Equal(fix.Title, Assert.IsType<MenuItem>(Assert.Single(diagnostic.Items)).Header);
+    }
+
+    [AvaloniaFact]
+    public void BuildMenuItems_Should_NameEveryAvailableBulkAction_WhenThereAreAlternatives()
+    {
+        var (_, _, margin) = CreateEditor("x\n");
+        var first = new CodeFixEntry(1, "First alternative", CodeFixSeverity.Warning, "first", "IDE0001", SupportsFixAll: true)
+        {
+            HasMultipleDiagnosticOccurrences = true,
+        };
+        var second = first with { Title = "Second alternative", Key = "second" };
+
+        var diagnostic = Assert.IsType<MenuItem>(Assert.Single(margin.BuildMenuItems([first, second])));
+
+        var headers = diagnostic.Items.OfType<MenuItem>().Select(item => item.Header).ToList();
+        Assert.Contains("First alternative (in this script)", headers);
+        Assert.Contains("Second alternative (in this script)", headers);
+    }
+
+    [AvaloniaFact]
+    public void BuildMenuItems_Should_PrioritizeImportsOverTypeGenerationForTheSameDiagnostic()
+    {
+        var (_, _, margin) = CreateEditor("Regex regex;\n");
+        var items = margin.BuildMenuItems(
+        [
+            new CodeFixEntry(1, "Generate class 'Regex'", CodeFixSeverity.Error, "generate", "CS0246"),
+            new CodeFixEntry(1, "using System.Text.RegularExpressions;", CodeFixSeverity.Error, "import", "CS0246"),
+        ]);
+
+        var diagnostic = Assert.IsType<MenuItem>(Assert.Single(items));
+        Assert.Equal("using System.Text.RegularExpressions;", Assert.IsType<MenuItem>(diagnostic.Items[0]).Header);
+        Assert.Equal("Generate class 'Regex'", Assert.IsType<MenuItem>(diagnostic.Items[1]).Header);
     }
 
     [AvaloniaFact]

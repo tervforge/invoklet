@@ -1307,22 +1307,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _ = ApplyFixAllAsync(State.Editor, _intelliSense, fix, scope);
     }
 
-    private void OnSuppressInScriptRequested(string diagnosticId, int line)
+    private void OnSuppressInScriptRequested(string diagnosticId, int _)
     {
         if (_disposed) return;
-        var editor = State.Editor;
-        var doc = editor.Document;
-        var docLine = doc.GetLineByNumber(Math.Min(line, doc.LineCount));
-        var insertOffset = docLine.Offset;
-        var indent = "";
-        var lineText = doc.GetText(docLine);
-        foreach (var ch in lineText)
-        {
-            if (ch is ' ' or '\t') indent += ch;
-            else break;
-        }
-        var pragma = $"{indent}#pragma warning disable {diagnosticId}\n";
-        doc.Insert(insertOffset, pragma);
+        State.Editor.Document.Insert(0, $"#pragma warning disable {diagnosticId}\n");
     }
 
     private void OnSuppressGloballyRequested(string diagnosticId)
@@ -2529,23 +2517,30 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             CodeFixAllScope.Document => FixAllScope.Document,
             _ => FixAllScope.Document,
         };
-        var code = editor.Text;
-        var materialized = await intelliSense.MaterializeFixAllAsync(code, fix.Key, contractScope, CancellationToken.None);
-        if (materialized is null) return;
+        var document = editor.Document;
+        var version = document.Version;
+        var script = State.MdRunDocument;
+        var materialized = await intelliSense.MaterializeFixAllAsync(document.Text, fix.Key, contractScope, CancellationToken.None);
 
         await Dispatcher.InvokeAsync(() =>
         {
             if (_disposed) return;
-            if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
+            if (!ReferenceEquals(editor.Document, document) || !ReferenceEquals(document.Version, version)
+                || !ReferenceEquals(State.MdRunDocument, script)) return;
+            if (materialized is null)
+            {
+                SetStatus("Fix All could not be applied. Reopen the lightbulb menu to try again.", "Invoklet.Status.ErrorBrush");
+                UpdateOutputUi();
+                return;
+            }
 
-            var hasProjectFile = State.MdRunDocument is not null;
-            var newCode = hasProjectFile
+            var newCode = script is not null
                 ? materialized.NewCode
                 : PrependUsings(materialized.UsingsToAdd, materialized.NewCode);
 
-            if (editor.Document.Text != newCode)
-                editor.Document.Text = newCode;
-            if (hasProjectFile && materialized.UsingsToAdd.Count > 0)
+            if (document.Text != newCode)
+                document.Text = newCode;
+            if (script is not null && materialized.UsingsToAdd.Count > 0)
                 AddGlobalUsings(materialized.UsingsToAdd);
         });
     }

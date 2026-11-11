@@ -83,7 +83,7 @@ internal sealed class RoslynAnalyzerEngine
     // Empty (not null) on failure — same "degrade gracefully, never take down the rest of the
     // background analysis pass" contract as RoslynCodeFixEngine's own materialization failures.
     public async Task<ImmutableArray<Diagnostic>> ComputeAsync(
-        Compilation compilation, bool includeInvokletAnalyzers, CancellationToken ct)
+        Compilation compilation, AnalyzerOptions options, bool includeInvokletAnalyzers, CancellationToken ct)
     {
         var analyzers = includeInvokletAnalyzers ? _ideAnalyzers.AddRange(_InvokletAnalyzers) : _ideAnalyzers;
         if (analyzers.IsEmpty) return [];
@@ -91,7 +91,7 @@ internal sealed class RoslynAnalyzerEngine
         try
         {
             var withAnalyzers = compilation.WithAnalyzers(analyzers, new CompilationWithAnalyzersOptions(
-                new AnalyzerOptions([]),
+                options,
                 onAnalyzerException: (ex, analyzer, _) =>
                     _logger.LogDebug(ex, "Analyzer {Analyzer} threw", analyzer.GetType().Name),
                 concurrentAnalysis: true,

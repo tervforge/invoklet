@@ -26,7 +26,11 @@ public enum CodeFixSeverity
 // off. Defaults to null rather than being required —
 // most call sites (every test that isn't specifically about ID-based exclusion filtering) don't care
 // about it, same rationale as ICodeFixInfo's real implementation defaulting it for refactorings.
-public sealed record CodeFixEntry(int Line, string Title, CodeFixSeverity Severity, string Key, string? DiagnosticId = null, bool SupportsFixAll = false);
+public sealed record CodeFixEntry(int Line, string Title, CodeFixSeverity Severity, string Key, string? DiagnosticId = null, bool SupportsFixAll = false)
+{
+    public bool HasMultipleDiagnosticOccurrences { get; init; }
+    public string? DiagnosticMessage { get; init; }
+}
 
 // The scope for a "Fix all" operation, mirroring Roslyn's FixAllScope values relevant to a script.
 public enum CodeFixAllScope

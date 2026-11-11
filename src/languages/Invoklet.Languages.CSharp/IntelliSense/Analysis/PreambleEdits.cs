@@ -52,9 +52,16 @@ internal sealed class PreambleEdits(ILogger logger)
         {
             if (change.Span.Start >= preambleLength)
             {
-                var clampedLength = Math.Max(0, Math.Min(change.Span.End, userCodeEnd) - change.Span.Start);
+                // The diff can match an existing closing brace to a new inner block and place its
+                // replacement after the trailing pad. Keep the insertion at the end of user code.
+                var start = Math.Min(change.Span.Start, userCodeEnd);
+                if (start < change.Span.Start &&
+                    !string.IsNullOrWhiteSpace(originalFullText.ToString(TextSpan.FromBounds(start, change.Span.Start))))
+                    return null;
+
+                var clampedLength = Math.Min(change.Span.End, userCodeEnd) - start;
                 userCodeChanges.Add(new TextChange(
-                    new TextSpan(change.Span.Start - preambleLength, clampedLength), change.NewText ?? ""));
+                    new TextSpan(start - preambleLength, clampedLength), change.NewText ?? ""));
                 continue;
             }
 

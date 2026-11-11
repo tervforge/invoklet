@@ -116,6 +116,7 @@ public sealed class CodeActionWrapperIndentationTests
     {
         const string code = "void Main()\n{\n    Console.WriteLine(1);\n}\n";
         using var service = CreateService(MdRunKind.Program);
+        service.UpdateAccessibilityModifiersStyle("always");
 
         var result = await ApplyAsync(service, code, "Add accessibility modifiers");
 

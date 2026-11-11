@@ -205,7 +205,10 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
 
     public void UpdateIndentation(bool useTabs, int indentationSize) => _session.UpdateIndentation(useTabs, indentationSize);
 
-    public void UpdateAccessibilityModifiersStyle(string style) => _session.UpdateAccessibilityModifiersStyle(style);
+    public void UpdateAccessibilityModifiersStyle(string style)
+    {
+        if (_session.UpdateAccessibilityModifiersStyle(style)) _scheduler.Refresh(_analysis.AnalyzeAsync);
+    }
 
     // ── Refactorings, fixes and missing usings ─────────────
 
