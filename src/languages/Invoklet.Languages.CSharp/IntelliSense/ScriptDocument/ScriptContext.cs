@@ -148,7 +148,7 @@ internal sealed class ScriptContext
         lock (_session.SyncLock)
         {
             var source = contract is { Members.Count: > 0 } ? contract.GenerateCSharpFacade() : "";
-            if (_argumentContract.SequenceEqual(members) && _argumentSource?.Text == source) return;
+            if (_argumentContract.SequenceEqual(members) && (_argumentSource?.Text ?? "") == source) return;
 
             var project = _session.Workspace.CurrentSolution.GetProject(_session.DocumentId.ProjectId);
             if (project is null) return;
@@ -187,8 +187,6 @@ internal sealed class ScriptContext
             : [], contract);
     }
 
-    internal Task UpdateExecutionContextAsync(ExecutionRequest request) => ApplyExecutionContextAsync(request, CancellationToken.None);
-
     // A request cancelled before it is applied changes nothing: the slow parts (reading the NuGet
     // assets, the targeting pack, the contract assembly lookup) run without the workspace lock, and
     // a caller that has since asked again must not have its newer context overwritten when this one
@@ -197,7 +195,7 @@ internal sealed class ScriptContext
     //
     // Requests also supersede each other by the order they were made in: one that finishes after a
     // later request has been applied is dropped, whether or not its caller cancelled it.
-    internal async Task ApplyExecutionContextAsync(ExecutionRequest request, CancellationToken cancellationToken)
+    internal async Task<bool> ApplyExecutionContextAsync(ExecutionRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var sequence = Interlocked.Increment(ref _contextRequests);
@@ -225,14 +223,16 @@ internal sealed class ScriptContext
         lock (_session.SyncLock)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (sequence < _appliedContextRequest) return;
+            if (sequence < _appliedContextRequest) return false;
             _appliedContextRequest = sequence;
+            var previousVersion = _session.ContextVersion;
             // One request is applied whole or not at all: the references, the setting and the connections are of the same request.
             CommitPackageReferences(resolution);
             UpdateAllowUnsafe(request.AllowUnsafe);
             _requestedConnections = request.Connections;
             _requestedContractAssembly = contract;
             ApplyConnectionRepresentation();
+            return !_session.IsCurrent(previousVersion);
         }
     }
 

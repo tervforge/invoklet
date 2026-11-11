@@ -1835,11 +1835,17 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // Two sources feed the lightbulb: these diagnostic-driven fixes, pushed by every analysis of the text, and the
         // refactorings at the caret below, pulled on caret moves. Each keeps its last list in _lightbulb, so a change of
         // the code-fix preferences re-filters both at once (OnPreferencesChanged).
+        var refactoringsContextVersion = intelliSense.ContextVersion;
         var analysis = _analysis = new EditorAnalysisView(editor, intelliSense, _themeService.CurrentTheme.Editor.IsDark,
             _prefs.CSharp.InlayHintsEnabled, fixes =>
             {
                 if (_disposed) return;
                 _lightbulb.SetDiagnosticFixes(fixes);
+                if (refactoringsContextVersion != intelliSense.ContextVersion)
+                {
+                    _lightbulb.SetRefactorings(null);
+                    _refactoringCaretHandler?.Invoke(editor.TextArea.Caret, EventArgs.Empty);
+                }
                 UpdateLightbulb();
             });
 
@@ -1848,6 +1854,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         _refactoringCaretHandler = (_, _) =>
         {
+            var contextVersion = refactoringsContextVersion = intelliSense.ContextVersion;
             // The master "show code fixes" switch skips even asking for refactorings, not just hiding them
             // once listed: a caret move fires on every arrow key and click, and Roslyn's own providers do real
             // syntax and semantic work just to decide whether they apply, whether or not the result is shown.
@@ -1873,7 +1880,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
                     await Dispatcher.InvokeAsync(() =>
                     {
-                        if (_disposed || !refactoringRequests.IsCurrent(result)) return;
+                        if (_disposed || !refactoringRequests.IsCurrent(result) || intelliSense.ContextVersion != contextVersion) return;
                         if (!ReferenceEquals(editor.Text, text) && editor.Text != text) return;
                         _lightbulb.SetRefactorings(result.Refactorings);
                         UpdateLightbulb();
@@ -2474,16 +2481,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // FixApplyRequested path — see EditorsTabItemControl's own SetupEditor comment on the merged
     // list). MaterializeFixAsync only now does the expensive work (GetOperationsAsync + diffing) that
     // used to run eagerly for every candidate on every keystroke/caret-move; null means the key no
-    // longer resolves (the code changed enough since this entry was listed that the underlying
-    // RoslynCodeFixEngine cache moved on) — silently do nothing, same "gracefully degrade" contract
-    // as every other IntelliSense failure path in this codebase, not worth surfacing as an error for
-    // what's really just "you clicked something that's since gone stale".
+    // longer resolves (the code or its context changed, or a newer analysis replaced its key).
     private async Task ApplyCodeFixAsync(CodeTextEditor editor, IIntelliSenseService intelliSense, CodeFixEntry fix)
     {
         var code = editor.Text;
         var contextVersion = intelliSense.ContextVersion;
         var materialized = await intelliSense.MaterializeFixAsync(code, fix.Key, CancellationToken.None);
-        if (materialized is null) return;
 
         // MaterializeFixAsync's own Task.Run (CSharpIntelliSenseService) means this continuation
         // isn't guaranteed to resume on the UI thread — same not-implicit-by-default rationale as
@@ -2492,8 +2495,18 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         await Dispatcher.InvokeAsync(() =>
         {
             if (_disposed) return;
-            if (intelliSense.ContextVersion != contextVersion) return;
-            if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
+            if (intelliSense.ContextVersion != contextVersion || editor.Text != code)
+            {
+                SetStatus("Code fix cancelled because the script or its context changed. Try again.", "Invoklet.Status.CancelledBrush");
+                UpdateOutputUi();
+                return;
+            }
+            if (materialized is null)
+            {
+                SetStatus("Code fix could not be applied. Reopen the lightbulb menu to try again.", "Invoklet.Status.ErrorBrush");
+                UpdateOutputUi();
+                return;
+            }
 
             // Usings go to the .inv front matter's `namespaces:` list (a project file, per
             // docs/ImplementationPlanRPad.md), not the visible script — except for a plain script
@@ -2531,7 +2544,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             if (!ReferenceEquals(editor.Document, document) || !ReferenceEquals(document.Version, version)
                 || !ReferenceEquals(State.MdRunDocument, script) || intelliSense.ContextVersion != contextVersion)
             {
-                SetStatus("Fix All cancelled because the script changed. Try again.", "Invoklet.Status.CancelledBrush");
+                SetStatus("Fix All cancelled because the script or its context changed. Try again.", "Invoklet.Status.CancelledBrush");
                 UpdateOutputUi();
                 return;
             }

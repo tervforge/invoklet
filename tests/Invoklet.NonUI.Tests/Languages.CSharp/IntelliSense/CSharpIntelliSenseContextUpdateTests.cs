@@ -95,6 +95,28 @@ public sealed class CSharpIntelliSenseContextUpdateTests
 
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
+    [Fact]
+    public async Task ApplyExecutionContextAsync_Should_ReplaceLightbulbKeys_WithoutATextEdit()
+    {
+        using var service = Create();
+        const string code = "var match = Regex.Match(\"a\", \"a\");";
+        var passes = System.Threading.Channels.Channel.CreateUnbounded<IReadOnlyList<ICodeFixInfo>>();
+        service.CodeFixesChanged += (_, fixes) => passes.Writer.TryWrite(fixes);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(Patience);
+        service.NotifyTextChanged(code);
+        var oldFix = Assert.Single(await passes.Reader.ReadAsync(timeout.Token), f => f.Title == "using System.Text.RegularExpressions;");
+
+        await service.ApplyExecutionContextAsync(Connection("Stock"), timeout.Token);
+
+        var newFix = Assert.Single(await passes.Reader.ReadAsync(timeout.Token), f => f.Title == oldFix.Title);
+        Assert.NotEqual(oldFix.Key, newFix.Key);
+        Assert.Null(await service.MaterializeFixAsync(code, oldFix.Key, timeout.Token));
+        var applied = await service.MaterializeFixAsync(code, newFix.Key, timeout.Token);
+        Assert.NotNull(applied);
+        Assert.Contains("System.Text.RegularExpressions", applied.UsingsToAdd);
+    }
+
     // The older request is the slow one (its lookups were still running): it finishes after the
     // newer has been applied, and, not cancelled by anyone, must still not replace it.
     [Fact]

@@ -113,20 +113,26 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
 
     public void UpdateGlobalUsings(IReadOnlyList<string> usings)
     {
-        if (!_layout.SetExtraUsings(usings)) return;
-        // force re-sync with the new preamble on the next analysis pass — also drop the cached
-        // _lastSourceText/_lastFullText baseline (see their own doc comment): the preamble just
-        // changed underneath it, so diffing against it would compute a TextChange against text the
-        // workspace no longer holds.
-        _session.InvalidateBaseline();
+        lock (_session.SyncLock)
+        {
+            if (!_layout.SetExtraUsings(usings)) return;
+            // Invalidate the text and any analysis of the previous preamble together.
+            _session.InvalidateBaseline();
+            _session.ContextChanged();
+        }
+        _scheduler.Refresh(_analysis.AnalyzeAsync);
     }
 
     public void UpdateKind(MdRunKind kind)
     {
-        if (!_layout.SetKind(kind)) return;
-        // force re-sync with the new kind-transform prefix on the next analysis pass — same
-        // baseline-invalidation reasoning as UpdateGlobalUsings above.
-        _session.InvalidateBaseline();
+        lock (_session.SyncLock)
+        {
+            if (!_layout.SetKind(kind)) return;
+            // The new script kind changes both the wrapper and the source offsets.
+            _session.InvalidateBaseline();
+            _session.ContextChanged();
+        }
+        _scheduler.Refresh(_analysis.AnalyzeAsync);
     }
 
     // ── Document sync ──────────────────────────────────────────────────────────
@@ -263,18 +269,30 @@ public sealed class CSharpIntelliSenseService : IIntelliSenseService
     public void NotifyTextChanged(Func<string> getCode) => _scheduler.Notify(getCode, _analysis.AnalyzeAsync);
 
     /// <summary>Updates the typed <c>Arguments</c> members offered by completion.</summary>
-    public void UpdateArgumentContract(MdRunArgumentContract? contract) => _context.UpdateArgumentContract(contract);
+    public void UpdateArgumentContract(MdRunArgumentContract? contract)
+        => RefreshAnalysisAfterContextUpdate(() => _context.UpdateArgumentContract(contract));
 
-    public Task UpdateExecutionContextAsync(ExecutionRequest request) => _context.UpdateExecutionContextAsync(request);
+    public Task UpdateExecutionContextAsync(ExecutionRequest request) => ApplyExecutionContextAsync(request, CancellationToken.None);
 
-    public Task ApplyExecutionContextAsync(ExecutionRequest request, CancellationToken cancellationToken)
-        => _context.ApplyExecutionContextAsync(request, cancellationToken);
+    public async Task ApplyExecutionContextAsync(ExecutionRequest request, CancellationToken cancellationToken)
+    {
+        if (await _context.ApplyExecutionContextAsync(request, cancellationToken).ConfigureAwait(false))
+            _scheduler.Refresh(_analysis.AnalyzeAsync);
+    }
 
     // Without a build context: the runtime IntelliSense itself runs on, the user's NuGet settings.
-    public void UpdatePackageReferences(IReadOnlyDictionary<string, Package> packages) => _context.UpdatePackageReferences(packages);
+    public void UpdatePackageReferences(IReadOnlyDictionary<string, Package> packages)
+        => RefreshAnalysisAfterContextUpdate(() => _context.UpdatePackageReferences(packages));
 
     public void UpdatePackageReferences(IReadOnlyDictionary<string, Package> packages, PackageReferenceContext context)
-        => _context.UpdatePackageReferences(packages, context);
+        => RefreshAnalysisAfterContextUpdate(() => _context.UpdatePackageReferences(packages, context));
+
+    private void RefreshAnalysisAfterContextUpdate(Action update)
+    {
+        var previousVersion = _session.ContextVersion;
+        update();
+        if (!_session.IsCurrent(previousVersion)) _scheduler.Refresh(_analysis.AnalyzeAsync);
+    }
 
     internal Func<ExecutionRequest, Task>? ExecutionContextResolvedForTests
     {

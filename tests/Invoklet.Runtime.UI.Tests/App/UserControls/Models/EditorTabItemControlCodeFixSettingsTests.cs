@@ -106,8 +106,49 @@ public class EditorTabItemControlCodeFixSettingsTests
         pending.SetResult(result.Object);
 
         var status = ctrl.FindControl<TextBlock>("ExecStatusBlock")!;
-        await TestWait.EventuallyAsync(() => Assert.Equal("Fix All cancelled because the script changed. Try again.", status.Text));
+        await TestWait.EventuallyAsync(() => Assert.Equal("Fix All cancelled because the script or its context changed. Try again.", status.Text));
         Assert.Equal("class Changed { }", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task CodeFix_Should_ReportAnUnavailableAction()
+    {
+        var intelliSense = new Mock<IIntelliSenseService>();
+        const string code = "class First { }";
+        intelliSense.Setup(s => s.MaterializeFixAsync(code, "key", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IMaterializedFix?)null);
+        var (ctrl, editor, margin) = CreateControl(MakePrefs(), intelliSense);
+        using var tab = ctrl;
+        editor.Text = code;
+        var item = margin.BuildMenuItem(new CodeFixEntry(1, "Add accessibility modifiers", CodeFixSeverity.Info, "key", "IDE0040"));
+
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+        var status = ctrl.FindControl<TextBlock>("ExecStatusBlock")!;
+        await TestWait.EventuallyAsync(() => Assert.Equal("Code fix could not be applied. Reopen the lightbulb menu to try again.", status.Text));
+        Assert.Equal(code, editor.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task Lightbulb_Should_RefreshRefactoringsAtTheSameCaret_WhenTheContextChanges()
+    {
+        var context = 0;
+        var intelliSense = new Mock<IIntelliSenseService>();
+        intelliSense.SetupGet(s => s.ContextVersion).Returns(() => Volatile.Read(ref context));
+        intelliSense.Setup(s => s.GetRefactoringsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => (IReadOnlyList<ICodeFixInfo>)[new FakeCodeFixInfo(1, "Refactor", DiagnosticSeverity.Info, $"refactor-{Volatile.Read(ref context)}")]);
+        var (ctrl, editor, margin) = CreateControl(MakePrefs(), intelliSense);
+        using var tab = ctrl;
+        editor.Text = "class First { }";
+        editor.TextArea.Caret.Offset = 6;
+        await TestWait.EventuallyAsync(() => Assert.Contains(margin.Fixes, f => f.Key == "refactor-0"));
+
+        Interlocked.Increment(ref context);
+        intelliSense.Raise(s => s.CodeFixesChanged += null, editor.Text, (IReadOnlyList<ICodeFixInfo>)[]);
+
+        await TestWait.EventuallyAsync(() => Assert.Contains(margin.Fixes, f => f.Key == "refactor-1"));
+        Assert.DoesNotContain(margin.Fixes, f => f.Key == "refactor-0");
+        Assert.Equal(6, editor.TextArea.Caret.Offset);
     }
 
     [AvaloniaFact]

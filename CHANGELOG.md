@@ -11,6 +11,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
 - Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.
 - Rejected stale code actions after a context change and showed when a script change cancelled Fix All.
+- Refreshed lightbulb actions when references or other analysis context changed without an edit.
 - Applied script warning suppression from the start of the script and hid suppression for compiler errors.
 
 ### Changed
