@@ -39,16 +39,15 @@ public class ConnectionPlaceholderResolverTests
     }
 
     [Fact]
-    public void TheRegistry_Should_FindDriversLetterCaseAside_AndReplaceInPlace()
+    public void TheRegistry_Should_FindDriversLetterCaseAside_AndRefuseASecondOfAnId()
     {
         var registry = new ConnectionDriverRegistry();
         var first = new HttpConnectionDriver();
-        var second = new HttpConnectionDriver();
         registry.Register(first);
         Assert.Same(first, registry.Find("HTTP"));
         Assert.Null(registry.Find("postgres"));
-        registry.Register(second);
-        Assert.Same(second, Assert.Single(registry.Drivers));
+        Assert.Throws<InvalidOperationException>(() => registry.Register(new HttpConnectionDriver()));
+        Assert.Same(first, Assert.Single(registry.Drivers));
     }
 }
 

@@ -20,6 +20,7 @@ internal sealed class CompiledDotnetLanguageHostDebugAttachFixture : IDisposable
     public FakeDebugger Debugger { get; } = new();
     public FakeScript Script { get; } = new();
     public ExecutionOptions? ScriptOptions { get; private set; }
+    public IReadOnlyList<string> ConnectionStartupValues { get; set; } = [];
 
     public string StartupHook => Path.Combine(_folder, "Invoklet.Runtime.dll");
 
@@ -38,6 +39,7 @@ internal sealed class CompiledDotnetLanguageHostDebugAttachFixture : IDisposable
             },
             OutputDirectory = _folder,
             RuntimeLibPath = "Invoklet.Runtime.dll",
+            ConnectionStartupValues = ConnectionStartupValues,
             Kind = MdRunKind.Statements,
         };
         var compiler = new FakeCompiler(new ProcessCompilerResult(Path.Combine(_folder, "out.dll"), true, [], []));

@@ -35,6 +35,7 @@ public sealed class OpenApiScriptTests : IDisposable
     private readonly string _folder = Directory.CreateTempSubdirectory("Invoklet-openapi-script").FullName;
     private readonly HttpListener _listener = new();
     private readonly ConcurrentQueue<string> _seen = [];
+    private readonly ConcurrentQueue<string?> _authorization = [];
     private readonly string _address;
 
     public OpenApiScriptTests()
@@ -72,6 +73,8 @@ public sealed class OpenApiScriptTests : IDisposable
             var request = context.Request;
             var body = request.HasEntityBody ? await new StreamReader(request.InputStream).ReadToEndAsync() : "";
             _seen.Enqueue($"{request.HttpMethod} {request.Url!.PathAndQuery} {body}".TrimEnd());
+            if (request.Url.AbsolutePath != "/api/openapi.json")
+                _authorization.Enqueue(request.Headers["Authorization"]);
             var (status, text) = (request.HttpMethod, request.Url.AbsolutePath) switch
             {
                 ("GET", "/api/openapi.json") => (200, Spec),
@@ -97,7 +100,11 @@ public sealed class OpenApiScriptTests : IDisposable
         {
             Name = "pets",
             Driver = "openapi",
-            Params = new(StringComparer.Ordinal) { ["baseAddress"] = MdRunValue.Of(_address) },
+            Params = new(StringComparer.Ordinal)
+            {
+                ["baseAddress"] = MdRunValue.Of(_address),
+                ["headers"] = MdRunValue.Map([new("Authorization", MdRunValue.Of("Bearer openapi-startup-test"))]),
+            },
         };
         var drivers = new ConnectionDriverRegistry();
         drivers.Register(new OpenApiConnectionDriver());
@@ -138,5 +145,6 @@ public sealed class OpenApiScriptTests : IDisposable
         Assert.Contains("GET /api/pets?kind=dog", _seen);
         Assert.Contains(_seen, s => s.StartsWith("POST /api/pets {", StringComparison.Ordinal) && s.Contains("\"name\":\"New\"") && !s.Contains("\"id\""));
         Assert.Contains("DELETE /api/pets/7", _seen);
+        Assert.Equal(Enumerable.Repeat("Bearer openapi-startup-test", 4), _authorization);
     }
 }

@@ -163,7 +163,7 @@ public sealed class GrpcConnectionDriver : IConnectionSchemaDriver
         {
             sb.Append("        var metadata = new global::Grpc.Core.Metadata();\n");
             foreach (var (name, value) in metadata)
-                sb.Append("        metadata.Add(").Append(ConnectionCodeContext.Literal(name)).Append(", ").Append(context.Text(value.Text ?? "")).Append(");\n");
+                sb.Append("        metadata.Add(").Append(ConnectionCodeContext.Literal(name)).Append(", ").Append(context.RuntimeText(value.Text ?? "")).Append(");\n");
             // A new Metadata per call: adding to the caller's own would grow it on every call it is reused for.
             sb.Append("        CallInvoker = global::Grpc.Core.Interceptors.ChannelExtensions.Intercept(Channel, headers =>\n")
                 .Append("        {\n")

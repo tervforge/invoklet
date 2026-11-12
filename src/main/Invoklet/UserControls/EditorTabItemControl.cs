@@ -85,8 +85,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private readonly WatchEvaluator _watchEvaluator;
     // Schema warm-up is owned by this tab; closing or superseding it must stop the read.
     private CancellationTokenSource? _connectionSchemaWarmupCts;
-    private int _connectionSchemaRefreshPosted;
-    private string? _connectionSchemaRefreshKey;
+    private readonly object _connectionSchemaRefreshLock = new();
+    private HashSet<string>? _pendingConnectionSchemaKeys;
     private readonly IBuildCacheService _buildCache;
     private IDisposable? _selectedKindSub;
     private IDisposable? _filePathSub;
@@ -2205,16 +2205,18 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 // Roslyn context update. Cancellation remains owned by this captured refresh.
                 await Task.Delay(_timings.ContextRefreshCoalesce, token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
-                var shouldReanalyze = Interlocked.Exchange(ref _contextRefreshReanalyzePending, 0) == 1;
                 var generated = frontMatter is null ? null
-                    : GeneratedConnections.For(connections, language, packageIds, _connectionDrivers, _connectionSchemas?.Cache, scriptDirectory);
+                    : GeneratedConnections.For(connections, language, packageIds, _connectionDrivers, _connectionSchemas?.Cache, scriptDirectory,
+                        includeStartupValues: false);
                 token.ThrowIfCancellationRequested();
                 await intelliSense.ApplyExecutionContextAsync(baseRequest with { Connections = generated }, token);
-                if (shouldReanalyze)
+                if (Volatile.Read(ref _contextRefreshReanalyzePending) == 1)
                     await Dispatcher.InvokeAsync(() =>
                     {
                         // The classes the script's code refers to are new: analyse it again now rather than at the next keystroke.
-                        if (!_disposed && !token.IsCancellationRequested) _intelliSense?.NotifyTextChanged(State.Editor.Text);
+                        if (!_disposed && !token.IsCancellationRequested
+                            && Interlocked.Exchange(ref _contextRefreshReanalyzePending, 0) == 1)
+                            _intelliSense?.NotifyTextChanged(State.Editor.Text);
                     });
             }
             catch (OperationCanceledException) { }
@@ -2237,23 +2239,28 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         // Cache updates can arrive in a burst (one event per generated source). One queued UI
         // callback is enough: it reads the cache after the burst and refreshes the newest context.
-        Volatile.Write(ref _connectionSchemaRefreshKey, key);
-        if (Interlocked.Exchange(ref _connectionSchemaRefreshPosted, 1) != 0) return;
+        lock (_connectionSchemaRefreshLock)
+        {
+            if (_pendingConnectionSchemaKeys is { } pending)
+            {
+                pending.Add(key);
+                return;
+            }
+            _pendingConnectionSchemaKeys = new HashSet<string>(StringComparer.Ordinal) { key };
+        }
         _ui.Post(() =>
         {
-            try
+            HashSet<string> changedKeys;
+            lock (_connectionSchemaRefreshLock)
             {
-                if (_disposed || _connectionSchemas is not { } schemas
-                    || State.MdRunDocument?.FrontMatter.Connections is not { Count: > 0 } connections) return;
-                var scriptDirectory = ScriptDirectory;
-                var pendingKey = Volatile.Read(ref _connectionSchemaRefreshKey);
-                if (pendingKey is null || !connections.Any(c => schemas.Cache.KeyOf(c, scriptDirectory) == pendingKey)) return;
+                changedKeys = _pendingConnectionSchemaKeys!;
+                _pendingConnectionSchemaKeys = null;
+            }
+            if (_disposed || _connectionSchemas is not { } schemas
+                || State.MdRunDocument?.FrontMatter.Connections is not { Count: > 0 } connections) return;
+            var scriptDirectory = ScriptDirectory;
+            if (connections.Any(c => changedKeys.Contains(schemas.Cache.KeyOf(c, scriptDirectory))))
                 RefreshIntelliSenseContext(reanalyze: true);
-            }
-            finally
-            {
-                Volatile.Write(ref _connectionSchemaRefreshPosted, 0);
-            }
         });
     }
 

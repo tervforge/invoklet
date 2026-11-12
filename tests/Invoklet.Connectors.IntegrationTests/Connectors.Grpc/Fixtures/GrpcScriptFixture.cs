@@ -28,6 +28,7 @@ public sealed class GrpcScriptFixture : IAsyncLifetime
 
     private readonly GrpcServersFixture _servers = new();
     private readonly string _folder = Directory.CreateTempSubdirectory("Invoklet-grpc-script").FullName;
+    private ConnectionSchemas _schemas = null!;
 
     public IReadOnlyDictionary<string, string> Packages { get; } = new GrpcConnectionDriver().Packages;
     public GeneratedConnections Generated { get; private set; } = null!;
@@ -42,11 +43,11 @@ public sealed class GrpcScriptFixture : IAsyncLifetime
         await _servers.InitializeAsync();
         var drivers = new ConnectionDriverRegistry();
         drivers.Register(new GrpcConnectionDriver());
-        var schemas = new ConnectionSchemas(drivers, Path.Combine(_folder, "schemas"), DotnetConnectionTools.Default,
+        _schemas = new ConnectionSchemas(drivers, Path.Combine(_folder, "schemas"), DotnetConnectionTools.Default,
             name => name == "inventory-token" ? "t0k" : null);
         var connection = _servers.Inventory();
-        await schemas.EnsureAsync([connection], null, ConnectionSchemaRefresh.Failed, CancellationToken.None);
-        Generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, Packages.Keys, drivers, schemas.Cache)!;
+        await _schemas.EnsureAsync([connection], null, ConnectionSchemaRefresh.Failed, CancellationToken.None);
+        Generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, Packages.Keys, drivers, _schemas.Cache)!;
         if (Sdk is null) return;
 
         BuiltDirectory = NewOutputDirectory();
@@ -64,14 +65,22 @@ public sealed class GrpcScriptFixture : IAsyncLifetime
     public string NewOutputDirectory() => Directory.CreateDirectory(Path.Combine(_folder, "build-" + Guid.NewGuid().ToString("N"))).FullName;
 
     /// <summary>A host as the Invoklet window gives it: the script asks for the connection's secret, and gets it from here.</summary>
-    public CSharpLanguageHost CreateHost(string outputDirectory)
+    public CSharpLanguageHost CreateHost(string outputDirectory, string? authorization = null)
     {
+        var generated = Generated;
+        if (authorization is not null)
+        {
+            var connection = _servers.Inventory(metadata: authorization);
+            // The server contract is the same for both sets of metadata.
+            _schemas.Cache.Put(connection, _schemas.Cache.Get(_servers.Inventory())!);
+            generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, Packages.Keys, _schemas.Drivers, _schemas.Cache)!;
+        }
         var options = CompiledDotnetLanguageHostOptions.From(new ExecutionRequest
         {
             Platform = Sdk!,
             OutputDirectory = outputDirectory,
             Packages = Packages,
-            Connections = Generated,
+            Connections = generated,
         }, new CSharpReferenceService().GetExtensionReference());
         return new CSharpLanguageHost(options, NullLoggerFactory.Instance) { SecretReader = name => name == "inventory-token" ? "t0k" : null };
     }

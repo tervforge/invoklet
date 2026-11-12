@@ -137,7 +137,7 @@ public sealed class HttpConnectionDriver : IConnectionDriver
                 .Append(", global::System.Globalization.CultureInfo.InvariantCulture));\n");
         foreach (var (name, value) in parameters.TryGetValue(Headers, out var headers) ? headers.Fields ?? [] : [])
             sb.Append("        DefaultRequestHeaders.TryAddWithoutValidation(").Append(ConnectionCodeContext.Literal(name)).Append(", ")
-                .Append(context.Text(value.Text ?? "")).Append(");\n");
+                .Append(context.RuntimeText(value.Text ?? "")).Append(");\n");
         sb.Append("    }\n}");
         return new ConnectionClientCode(sb.ToString());
     }

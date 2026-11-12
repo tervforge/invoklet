@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using Invoklet.Connectors.Http;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.IntelliSense;
@@ -55,9 +56,10 @@ public sealed class ConnectionClientTests : IDisposable
         Assert.Empty(generated.Errors);
         Assert.Contains("public static BillingApiClient BillingApi => __billingApi ??= new BillingApiClient();", generated.Source);
         Assert.Contains("public sealed class BillingApiClient : global::System.Net.Http.HttpClient", generated.Source);
-        Assert.Contains("\"Bearer \" + global::Util.GetSecret(\"billing-token\")", generated.Source);
+        Assert.Contains("global::Util.GetConnectionStartupValue(0) + global::Util.GetSecret(\"billing-token\")", generated.Source);
         Assert.Contains("global::System.Environment.GetEnvironmentVariable(\"INVOKLET_TEST_TENANT\")", generated.Source);
-        Assert.Contains("\"-\\\"q\\\"\"", generated.Source);
+        Assert.Contains("global::Util.GetConnectionStartupValue(1)", generated.Source);
+        Assert.Equal(["Bearer ", "-\"q\""], generated.StartupValues);
         Assert.DoesNotContain("${", generated.Source);
     }
 
@@ -210,6 +212,47 @@ public sealed class ConnectionClientTests : IDisposable
         {
             Environment.SetEnvironmentVariable(FileSecretStore.FileEnvVar, previousSecrets);
             Environment.SetEnvironmentVariable("INVOKLET_TEST_TENANT", null);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "RealBuild")]
+    public async Task AScript_Should_ReceiveAnUpdatedHttpHeaderWithoutRecompiling()
+    {
+        var sdk = new DotnetSdkProvider().Get().FirstOrDefault();
+        Assert.SkipWhen(sdk is null, "No .NET SDK is installed.");
+        const string first = "Bearer http-startup-first";
+        const string second = "Bearer http-startup-second";
+        const string script = "Console.WriteLine(Connections.BillingApi.DefaultRequestHeaders.Authorization);";
+        var ct = TestContext.Current.CancellationToken;
+
+        var initial = await RunAsync(first);
+        var updated = await RunAsync(second);
+
+        Assert.Equal(first, initial.Output);
+        Assert.Equal(second, updated.Output);
+        Assert.True(initial.Compiled);
+        Assert.False(updated.Compiled);
+        var dll = Directory.EnumerateFiles(_folder, "InvokletQuery.dll", SearchOption.AllDirectories).Single();
+        Assert.Equal(-1, File.ReadAllBytes(dll).AsSpan().IndexOf(Encoding.Unicode.GetBytes("http-startup-")));
+
+        async Task<(string Output, bool Compiled)> RunAsync(string authorization)
+        {
+            var connection = Billing();
+            connection.Params["headers"] = MdRunValue.Map([new("Authorization", MdRunValue.Of(authorization))]);
+            var options = CompiledDotnetLanguageHostOptions.From(new ExecutionRequest
+            {
+                Platform = sdk!,
+                OutputDirectory = _folder,
+                Connections = GeneratedConnections.For([connection], MdRunLanguage.CSharp, [], Drivers()),
+            }, new CSharpReferenceService().GetExtensionReference());
+            await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance);
+            var output = new ConcurrentQueue<string>();
+            var compiled = false;
+            host.StageChanged += (stage, _) => { if (stage == RunStage.Compiling) compiled = true; };
+            var result = await host.RunAsync(script, (data, _) => output.Enqueue(data), ct).WaitAsync(TimeSpan.FromMinutes(2), ct);
+            Assert.True(result.Succeeded, string.Join('\n', output));
+            return (Assert.Single(output), compiled);
         }
     }
 

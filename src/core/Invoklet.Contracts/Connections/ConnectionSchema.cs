@@ -89,7 +89,9 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
     private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
     // The reads under way, by key: the editor, a run and the Connections window often ask for the
     // same schema at once, and each read may be a server round trip plus a code generator.
-    private readonly Dictionary<string, Task<bool>> _fetches = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActiveFetch> _fetches = new(StringComparer.Ordinal);
+    private static readonly byte[] FingerprintKey = RandomNumberGenerator.GetBytes(32);
+    private sealed record ActiveFetch(string Fingerprint, object Generation, Task<bool> Task);
     // Generated contracts can be large. Keep a bounded hot set, invalidated by file metadata,
     // instead of reparsing the same JSON during every editor/context refresh.
     private readonly Dictionary<string, CachedDescription> _descriptions = new(StringComparer.Ordinal);
@@ -156,8 +158,10 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
                 if (_descriptions.TryGetValue(key, out var cached)
                     && cached.Written == written && cached.Created == created && cached.Length == length)
                     return cached.Schema;
-                if (_descriptions.Count >= 16) _descriptions.Remove(_descriptions.Keys.First());
-                _descriptions[key] = new CachedDescription(written, created, length, schema);
+                // A refresh may have replaced this file while it was being read.
+                info.Refresh();
+                if (info.Exists && info.LastWriteTimeUtc.Ticks == written && info.CreationTimeUtc.Ticks == created && info.Length == length)
+                    Remember(key, new CachedDescription(written, created, length, schema));
             }
             return schema;
         }
@@ -221,24 +225,27 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
 
     public void Put(MdRunConnection connection, ConnectionSchema schema, string? scriptDirectory = null)
     {
-        Directory.CreateDirectory(Folder);
         var key = KeyOf(connection, scriptDirectory);
+        if (TryStore(key, schema, generation: null))
+            Changed?.Invoke(key);
+    }
+
+    private bool TryStore(string key, ConnectionSchema schema, object? generation)
+    {
+        Directory.CreateDirectory(Folder);
         var target = Path.Combine(Folder, key + ".json");
         // Named after the key, so one left over (the process killed mid-write) tells whose it was.
         var temp = Path.Combine(Folder, key + "." + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             File.WriteAllText(temp, JsonSerializer.Serialize(schema));
-            try
-            {
-                File.Move(temp, target, overwrite: true);
-            }
+            try { return Commit(); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // On Windows another Invoklet (the window and the CLI share the folder) may be reading
                 // the file for a moment.
                 Thread.Sleep(100);
-                File.Move(temp, target, overwrite: true);
+                return Commit();
             }
         }
         finally
@@ -246,14 +253,32 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
             try { File.Delete(temp); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
-        lock (_lock)
+        bool Commit()
         {
-            _errors.Remove(key);
-            _descriptions.Remove(key);
+            lock (_lock)
+            {
+                if (generation is not null && !IsCurrentFetch(key, generation)) return false;
+                File.Move(temp, target, overwrite: true);
+                _errors.Remove(key);
+                var info = new FileInfo(target);
+                if (info.Exists)
+                    Remember(key, new CachedDescription(info.LastWriteTimeUtc.Ticks, info.CreationTimeUtc.Ticks, info.Length, schema));
+                else
+                    _descriptions.Remove(key);
+                return true;
+            }
         }
-        // Fetches publish on a worker thread: warm the description there before the UI is notified.
-        _ = Get(connection, scriptDirectory);
-        Changed?.Invoke(key);
+    }
+
+    // Called with the cache lock held.
+    private bool IsCurrentFetch(string key, object generation) =>
+        _fetches.TryGetValue(key, out var fetch) && ReferenceEquals(fetch.Generation, generation);
+
+    private void Remember(string key, CachedDescription description)
+    {
+        if (!_descriptions.ContainsKey(key) && _descriptions.Count >= 16)
+            _descriptions.Remove(_descriptions.Keys.First());
+        _descriptions[key] = description;
     }
 
     /// <summary>
@@ -281,7 +306,13 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
             var resolved = ConnectionPlaceholderResolver.Resolve(connection.Params, secret, Environment.GetEnvironmentVariable);
             if (resolved.Errors.Count > 0)
             {
-                lock (_lock) _errors[key] = string.Join(" ", resolved.Errors);
+                bool superseded;
+                lock (_lock)
+                {
+                    superseded = _fetches.Remove(key);
+                    _errors[key] = string.Join(" ", resolved.Errors);
+                }
+                if (superseded) FetchingChanged?.Invoke(key);
                 Changed?.Invoke(key);
                 changed = true;
                 continue;
@@ -309,40 +340,58 @@ public sealed class ConnectionSchemaCache(string folder, ConnectionDriverRegistr
         ConnectionSchemaRefresh refresh)
     {
         var cached = refresh != ConnectionSchemaRefresh.All ? Get(connection, scriptDirectory) : null;
+        // A changed secret or variable needs a fresh read. Keep only a process-keyed fingerprint
+        // of the resolved parameters in the request registry.
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(resolvedParams);
+        string fingerprint;
+        try { fingerprint = Convert.ToHexString(HMACSHA256.HashData(FingerprintKey, bytes)); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+        var generation = new object();
         Task<bool> fetch;
         lock (_lock)
         {
-            if (_fetches.TryGetValue(key, out var running)) return running;
+            if (_fetches.TryGetValue(key, out var running) && running.Fingerprint == fingerprint)
+                return running.Task;
             if (refresh != ConnectionSchemaRefresh.All && (cached is not null || _descriptions.ContainsKey(key)))
                 return Task.FromResult(false);
             if (refresh == ConnectionSchemaRefresh.Missing && _errors.ContainsKey(key)) return Task.FromResult(false);
-            fetch = Task.Run(async () =>
-            {
-                try
-                {
-                    Put(connection, await driver.FetchSchemaAsync(resolvedParams, tools, CancellationToken.None).ConfigureAwait(false),
-                        scriptDirectory);
-                }
-                catch (Exception ex)
-                {
-                    lock (_lock) _errors[key] = ex.Message;
-                    Changed?.Invoke(key);
-                }
-                return true;
-            });
-            _fetches[key] = fetch;
+            fetch = Task.Run(() => ReadAndPublishAsync(key, generation, driver, resolvedParams, tools));
+            _fetches[key] = new ActiveFetch(fingerprint, generation, fetch);
         }
         FetchingChanged?.Invoke(key);
-        // Registered after the task is listed, so a read that is already over still leaves the list.
-        _ = fetch.ContinueWith(_ =>
+        return fetch;
+    }
+
+    private async Task<bool> ReadAndPublishAsync(string key, object generation, IConnectionSchemaDriver driver,
+        IReadOnlyDictionary<string, MdRunValue> resolvedParams, ConnectionTools tools)
+    {
+        try
         {
+            try
+            {
+                var schema = await driver.FetchSchemaAsync(resolvedParams, tools, CancellationToken.None).ConfigureAwait(false);
+                if (!TryStore(key, schema, generation)) return false;
+            }
+            catch (Exception ex)
+            {
+                lock (_lock)
+                {
+                    if (!IsCurrentFetch(key, generation)) return false;
+                    _errors[key] = ex.Message;
+                }
+            }
+            Changed?.Invoke(key);
+            return true;
+        }
+        finally
+        {
+            bool ended;
             lock (_lock)
             {
-                if (_fetches.TryGetValue(key, out var listed) && listed == fetch) _fetches.Remove(key);
+                ended = IsCurrentFetch(key, generation) && _fetches.Remove(key);
             }
-            FetchingChanged?.Invoke(key);
-        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        return fetch;
+            if (ended) FetchingChanged?.Invoke(key);
+        }
     }
 }
 

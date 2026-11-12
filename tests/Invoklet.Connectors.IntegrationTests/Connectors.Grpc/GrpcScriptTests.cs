@@ -1,4 +1,6 @@
+using System.Text;
 using Invoklet.Connectors.IntegrationTests.Connectors.Grpc.Fixtures;
+using Invoklet.Contracts.Models;
 using Invoklet.Languages.DotnetCommon;
 using Xunit;
 
@@ -33,6 +35,33 @@ public sealed class GrpcScriptTests(GrpcScriptFixture grpc) : IClassFixture<Grpc
         // Assert
         Assert.True(result.Succeeded, string.Join('\n', errors));
         Assert.Equal("A1 42 Bearer t0k 1", output[^1]);
+    }
+
+    [Fact]
+    public async Task RunAsync_UpdatedMetadata_IsSentToTheServerWithoutRecompiling()
+    {
+        Assert.SkipWhen(grpc.Sdk is null, "No .NET SDK is installed.");
+        var directory = grpc.NewOutputDirectory();
+        const string first = "Bearer grpc-startup-first";
+        const string second = "Bearer grpc-startup-second";
+
+        await using var initial = grpc.CreateHost(directory, first);
+        var initialCompiled = false;
+        initial.StageChanged += (stage, _) => { if (stage == RunStage.Compiling) initialCompiled = true; };
+        var (firstResult, firstOutput, firstErrors) = await GrpcScriptFixture.RunAsync(initial, GrpcScriptFixture.CallingScript);
+        await using var updated = grpc.CreateHost(directory, second);
+        var updatedCompiled = false;
+        updated.StageChanged += (stage, _) => { if (stage == RunStage.Compiling) updatedCompiled = true; };
+        var (secondResult, secondOutput, secondErrors) = await GrpcScriptFixture.RunAsync(updated, GrpcScriptFixture.CallingScript);
+
+        Assert.True(firstResult.Succeeded, string.Join('\n', firstErrors));
+        Assert.True(secondResult.Succeeded, string.Join('\n', secondErrors));
+        Assert.Equal($"A1 42 {first} 1", firstOutput[^1]);
+        Assert.Equal($"A1 42 {second} 1", secondOutput[^1]);
+        Assert.True(initialCompiled);
+        Assert.False(updatedCompiled);
+        var dll = Directory.EnumerateFiles(directory, "InvokletQuery.dll", SearchOption.AllDirectories).Single();
+        Assert.Equal(-1, File.ReadAllBytes(dll).AsSpan().IndexOf(Encoding.Unicode.GetBytes("grpc-startup-")));
     }
 
     // Neither CS8669 nor any other nullable warning from the generated classes or the wrapper.

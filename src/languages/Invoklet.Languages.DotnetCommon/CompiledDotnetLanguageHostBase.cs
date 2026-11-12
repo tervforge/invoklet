@@ -244,8 +244,11 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
 
         try
         {
+            var executionOptions = _options.ConnectionStartupValues.Count == 0
+                ? _options.ExecutionOptions
+                : _options.ExecutionOptions.WithStartupHook(FindStartupHook(binaryPath));
             await using var process = _executionProcessFactory(
-                _options.ExecutionOptions,
+                executionOptions,
                 binaryPath,
                 Environment.ProcessId.ToString(),
                 _options.CurrentQueryPath,
@@ -260,6 +263,8 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             var drained = Task.WhenAll(
                 output.DrainAsync(process.StandardOutput, OutputKind.StandardOutput, cts.Token),
                 output.DrainAsync(process.StandardError, OutputKind.StandardError, cts.Token));
+            if (_options.ConnectionStartupValues.Count > 0)
+                await SendStartupLineAsync(process.InputStream, cts.Token);
 
             // The run ends when the process exits, not when its output closes — a script
             // that closes stdout/stderr itself is still running, and disposing the process here
@@ -332,8 +337,7 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
         {
             // The script is started here as for a run, with its own stdin and stdout, so it can ask for input and its output reaches the
             // same handler; the debugger attaches to it. Invoklet.Runtime's startup hook holds it until the breakpoints are set.
-            var hook = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(binaryPath)!, "Invoklet.Runtime.dll"));
-            var scriptOptions = _options.ExecutionOptions.WithStartupHook(File.Exists(hook) ? hook : null);
+            var scriptOptions = _options.ExecutionOptions.WithStartupHook(FindStartupHook(binaryPath));
             await using var script = _executionProcessFactory(
                 scriptOptions, binaryPath, Environment.ProcessId.ToString(), _options.CurrentQueryPath, _options.Arguments);
             if (!script.Start()) throw new InvalidOperationException("Failed to start the script.");
@@ -395,14 +399,40 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
             async Task ReleaseScriptAsync(CancellationToken ct)
             {
                 if (scriptOptions.StartupHook is null) return;
-                await script.InputStream.WriteAsync("\n"u8.ToArray(), ct);
-                await script.InputStream.FlushAsync(ct);
+                await SendStartupLineAsync(script.InputStream, ct);
             }
         }
         finally
         {
             _runCts = null;
             _currentInputStream = null;
+        }
+    }
+
+    private string? FindStartupHook(string binaryPath)
+    {
+        var hook = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(binaryPath)!, "Invoklet.Runtime.dll"));
+        if (File.Exists(hook)) return hook;
+        if (_options.ConnectionStartupValues.Count > 0)
+            throw new InvalidOperationException("Invoklet.Runtime.dll is missing. The script's connection settings could not be sent.");
+        return null;
+    }
+
+    private async Task SendStartupLineAsync(Stream input, CancellationToken cancellationToken)
+    {
+        // The startup hook reads exactly one line before user code runs. The value slots
+        // are not passed as process arguments, environment variables, or compiler input.
+        var values = _options.ConnectionStartupValues;
+        var line = values.Count == 0 ? "\n" : "invoklet-connections:" + string.Join(".", values.Select(Base64)) + "\n";
+        var bytes = Encoding.UTF8.GetBytes(line);
+        try
+        {
+            await input.WriteAsync(bytes, cancellationToken);
+            await input.FlushAsync(cancellationToken);
+        }
+        finally
+        {
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes);
         }
     }
 

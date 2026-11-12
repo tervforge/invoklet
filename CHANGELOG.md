@@ -7,6 +7,9 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- Passed PostgreSQL and SQL Server connection strings to the script at startup without embedding their values in the generated assembly.
+- Passed HTTP and OpenAPI header values and gRPC metadata values through the same startup channel.
+- Kept connection schema refreshes visible and prevented an older read from replacing a newer result after a credential change.
 - Counted distinct diagnostics when deciding whether to show Fix All in the lightbulb menu.
 - Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
 - Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.

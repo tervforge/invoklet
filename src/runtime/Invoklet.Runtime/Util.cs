@@ -20,6 +20,25 @@ public static partial class Util
 {
     internal const char InputRequestPrefixChar = '\x1f'; // ASCII Unit Separator — distinct from ObjectExtensions.DumpLinePrefixChar
 
+    private const string ConnectionStartupPrefix = "invoklet-connections:";
+    private static string[] _connectionStartupValues = Array.Empty<string>();
+
+    internal static void InitializeConnectionStartupValues(string? line)
+    {
+        if (line is null || !line.StartsWith(ConnectionStartupPrefix, StringComparison.Ordinal)) return;
+        var fields = line.Substring(ConnectionStartupPrefix.Length).Split('.');
+        _connectionStartupValues = Array.ConvertAll(fields, field => Encoding.UTF8.GetString(Convert.FromBase64String(field)));
+    }
+
+    /// <summary>Reads a connection setting supplied by Invoklet before script execution. Used by generated connection clients.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public static string GetConnectionStartupValue(int index)
+    {
+        if ((uint)index >= (uint)_connectionStartupValues.Length)
+            throw new InvalidOperationException("Connection settings are unavailable. Start the script from Invoklet or the invoklet command line.");
+        return _connectionStartupValues[index];
+    }
+
     // Mirrors ChildProcess.CurrentQueryPathEnvVar (Invoklet.Build.Core), a
     // separate assembly this one (netstandard2.0, referenced by the compiled SCRIPT's own project,
     // not by Invoklet itself) has no reference to — duplicated literal, not shared, same precedent as

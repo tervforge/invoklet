@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
@@ -89,7 +91,7 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
 
     /// <summary>The statements of the generated context's constructor that assign <c>ConnectionString</c>.</summary>
     protected virtual string ConstructorStatements(MdRunConnection connection, ConnectionCodeContext context) =>
-        "        ConnectionString = " + context.Text(connection.Params[ConnectionStringKey].Text!.Trim()) + ";\n";
+        "        ConnectionString = " + context.RuntimeText(connection.Params[ConnectionStringKey].Text!.Trim()) + ";\n";
 
     public virtual IReadOnlyList<string> Validate(MdRunConnection connection)
     {
@@ -144,7 +146,7 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
         {
             // The reverse engineering is synchronous and can't be stopped: a caller that gives up stops waiting, and the next one joins the read
             // that is still going instead of starting another on the same database.
-            return await JoinRead(Id + "\n" + connectionString + "\n" + schema, async () =>
+            return await JoinRead((Id, Fingerprint(connectionString), schema), async () =>
                 {
                     if (ReadStartingForTests is { } starting) await starting().ConfigureAwait(false);
                     return EfModelReader.Read(connectionString, schema, UseProvider, AddDesignTimeServices, AdjustDatabaseModel);
@@ -163,12 +165,20 @@ public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
 
     // Shared by every instance, so two instances of a driver (a registry may make them) still read one database once at a time.
     private static readonly object ReadsLock = new();
-    private static readonly Dictionary<string, Task<List<EfEntity>>> Reads = [];
+    private static readonly byte[] FingerprintKey = RandomNumberGenerator.GetBytes(32);
+    private static readonly Dictionary<(string Driver, string Fingerprint, string? Schema), Task<List<EfEntity>>> Reads = [];
+
+    private static string Fingerprint(string connectionString)
+    {
+        var bytes = Encoding.UTF8.GetBytes(connectionString);
+        try { return Convert.ToHexString(HMACSHA256.HashData(FingerprintKey, bytes)); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
 
     // Test-only: awaited when a read of a database starts, before it reads anything, so a test can hold a read that is going.
     internal Func<Task>? ReadStartingForTests { get; set; }
 
-    private Task<List<EfEntity>> JoinRead(string key, Func<Task<List<EfEntity>>> read)
+    private Task<List<EfEntity>> JoinRead((string Driver, string Fingerprint, string? Schema) key, Func<Task<List<EfEntity>>> read)
     {
         lock (ReadsLock)
         {

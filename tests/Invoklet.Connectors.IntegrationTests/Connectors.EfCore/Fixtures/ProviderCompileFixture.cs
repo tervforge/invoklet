@@ -18,6 +18,11 @@ internal sealed class ProviderCompileFixture : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, true);
 
+    public bool LastRunCompiled { get; private set; }
+
+    public byte[] ReadCompiledScript() =>
+        File.ReadAllBytes(Directory.EnumerateFiles(Path.Combine(_folder, "build"), "InvokletQuery.dll", SearchOption.AllDirectories).Single());
+
     // What a server would have given: a table with an identity key, a json column and a version column, a table that points to it, and a view.
     public static List<EfEntity> Shop() =>
     [
@@ -65,6 +70,11 @@ internal sealed class ProviderCompileFixture : IDisposable
             Connections = generated,
         }, new CSharpReferenceService().GetExtensionReference());
         await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance);
+        LastRunCompiled = false;
+        host.StageChanged += (stage, _) =>
+        {
+            if (stage == RunStage.Compiling) LastRunCompiled = true;
+        };
         var output = new ConcurrentQueue<string>();
         var errors = new ConcurrentQueue<string>();
         var result = await host.RunAsync(script, (data, kind) => (kind == OutputKind.StandardError ? errors : output).Enqueue(data), CancellationToken.None)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Serialization;
 using Invoklet.Format.MdRun;
 
 namespace Invoklet.Contracts.Connections;
@@ -7,11 +8,14 @@ namespace Invoklet.Contracts.Connections;
 /// <summary>What a driver's <see cref="IConnectionDriver.CreateClient"/> writes code with.</summary>
 public sealed class ConnectionCodeContext
 {
-    internal ConnectionCodeContext(MdRunConnection connection, string className, ConnectionSchema? schema)
+    private readonly List<string> _startupValues;
+
+    internal ConnectionCodeContext(MdRunConnection connection, string className, ConnectionSchema? schema, List<string> startupValues)
     {
         Connection = connection;
         ClassName = className;
         Schema = schema;
+        _startupValues = startupValues;
     }
 
     public MdRunConnection Connection { get; }
@@ -27,7 +31,17 @@ public sealed class ConnectionCodeContext
     /// as <c>Util.GetSecret("name")</c> and <c>${env:NAME}</c> as the variable, failing with a clear
     /// message when it isn't set. The text must have no placeholder errors (the generator checks).
     /// </summary>
-    public string Text(string text)
+    public string Text(string text) => TextExpression(text, Literal);
+
+    /// <summary>A connection value expression whose literal parts come from the script host at startup.</summary>
+    public string RuntimeText(string text) => TextExpression(text, value =>
+    {
+        var index = _startupValues.Count;
+        _startupValues.Add(value);
+        return $"global::Util.GetConnectionStartupValue({index.ToString(CultureInfo.InvariantCulture)})";
+    });
+
+    private string TextExpression(string text, Func<string, string> literal)
     {
         var parts = MdRunPlaceholders.Parse(text).Parts;
         if (parts.Count == 0) return "\"\"";
@@ -35,7 +49,7 @@ public sealed class ConnectionCodeContext
         {
             MdRunPlaceholders.Kind.Secret => $"global::Util.GetSecret({Literal(part.Value)})",
             MdRunPlaceholders.Kind.Environment => $"(global::System.Environment.GetEnvironmentVariable({Literal(part.Value)}) ?? throw new global::System.InvalidOperationException({Literal($"Connection '{Connection.Name}': the environment variable '{part.Value}' is not set.")}))",
-            _ => Literal(part.Value),
+            _ => literal(part.Value),
         }));
     }
 
@@ -92,6 +106,10 @@ public sealed class ConnectionCodeContext
 /// <param name="Files">C# files a connection's schema adds, such as a gRPC server's messages and clients.</param>
 public sealed record GeneratedConnections(string Source, IReadOnlyList<string> Errors, IReadOnlyList<GeneratedSourceFile> Files)
 {
+    /// <summary>Literal values sent to the running script separately from its compiled source.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> StartupValues { get; init; } = [];
+
     /// <summary>
     /// Null for a script without connections. Problems (an invalid list, a driver this Invoklet lacks,
     /// invalid parameters, a package the driver needs missing from <paramref name="scriptPackages"/>,
@@ -105,12 +123,13 @@ public sealed record GeneratedConnections(string Source, IReadOnlyList<string> E
     /// <param name="readSchemaFromDisk">Whether a missing in-memory schema may be loaded from disk.</param>
     public static GeneratedConnections? For(IReadOnlyList<MdRunConnection> connections, MdRunLanguage language,
         IEnumerable<string> scriptPackages, ConnectionDriverRegistry drivers, IConnectionSchemaSource? schemas = null,
-        string? scriptDirectory = null, bool readSchemaFromDisk = true)
+        string? scriptDirectory = null, bool readSchemaFromDisk = true, bool includeStartupValues = true)
     {
         if (connections.Count == 0) return null;
         if (language != MdRunLanguage.CSharp)
             return new GeneratedConnections("", ["Connections can be used in C# scripts only, for now."], []);
         var files = new List<GeneratedSourceFile>();
+        var startupValues = new List<string>();
         var schemaFiles = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var errors = MdRunConnection.Validate(connections).ToList();
@@ -174,7 +193,7 @@ public sealed record GeneratedConnections(string Source, IReadOnlyList<string> E
 
             var className = codeName + "Client";
             for (var suffix = 2; !symbols.Add(className); suffix++) className = codeName + "Client" + suffix;
-            var context = new ConnectionCodeContext(connection, className, schema);
+            var context = new ConnectionCodeContext(connection, className, schema, startupValues);
             var client = driver.CreateClient(connection, context);
             namespaces.UnionWith(client.Namespaces ?? []);
             classes.Append(Indent(client.ClassSource.Replace("\r\n", "\n").TrimEnd(), "    ")).Append("\n\n");
@@ -198,7 +217,10 @@ public sealed record GeneratedConnections(string Source, IReadOnlyList<string> E
             .Append(classes)
             .Append("}\n")
             .Append("#nullable restore\n");
-        return new GeneratedConnections(source.ToString(), errors, files);
+        return new GeneratedConnections(source.ToString(), errors, files)
+        {
+            StartupValues = includeStartupValues ? startupValues.ToArray() : [],
+        };
     }
 
     /// <summary>The driver's packages that aren't among the script's.</summary>
