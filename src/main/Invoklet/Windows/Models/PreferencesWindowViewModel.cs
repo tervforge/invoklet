@@ -6,6 +6,7 @@ using Invoklet.Contracts;
 using Invoklet.Desktop;
 using Invoklet.Format.MdRun;
 using Invoklet.Languages.DotnetCommon.Sdk;
+using Invoklet.Plugins.Hosting;
 using Invoklet.Services;
 using Invoklet.Services.Desktop;
 using Invoklet.Services.Preferences;
@@ -35,6 +36,7 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
     private static readonly SettingsNode KeyboardNode = new("keyboard", "Keyboard");
     private static readonly SettingsNode SystemNode = new("system", "System");
     private static readonly SettingsNode LoggingNode = new("logging", "Logging");
+    private static readonly SettingsNode PluginsNode = new("plugins", "Plugins");
     private static readonly SettingsNode ExperimentalNode = new("experimental", "Experimental");
 
     private readonly IThemeService _themeService;
@@ -59,11 +61,13 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
     public ObservableCollection<EditorTheme> AvailableEditorThemes { get; } = [];
 
     public ObservableCollection<SettingsNode> Nodes { get; } = [];
+    public PluginsPageViewModel PluginsPage { get; }
 
     public PreferencesWindowViewModel(
         IThemeService themeService, IPreferencesService prefs, ILanguageHostRegistry languageRegistry,
-        IDesktopIntegration? desktop = null)
+        IDesktopIntegration? desktop = null, PluginsPageViewModel? pluginsPage = null)
     {
+        PluginsPage = pluginsPage ?? new PluginsPageViewModel(PluginSession.Empty, () => PluginInventory.Empty, () => Task.CompletedTask);
         _desktop = desktop ?? DesktopIntegration.Current;
         _themeService = themeService;
         _prefs = prefs;
@@ -89,7 +93,7 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         // Interface → System holds only the OS integration's settings, so it is left out where none apply.
         SystemSettings = [.. _desktop.Settings.Where(s => s.IsAvailable()).Select(s => new SystemSettingViewModel(s, prefs))];
         _interfaceNode = new SettingsNode("interface", "Interface", SystemSettings.Count > 0 ? [SystemNode] : null);
-        _fullTree = [_interfaceNode, EditorNode, KeyboardNode, _languagesNode, LoggingNode, ExperimentalNode];
+        _fullTree = [_interfaceNode, EditorNode, KeyboardNode, _languagesNode, PluginsNode, LoggingNode, ExperimentalNode];
 
         // Initialize directly — no bindings exist yet, so no RaisePropertyChanged needed
         var theme = themeService.CurrentTheme;
@@ -106,6 +110,7 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         // on its pages (AddSearchKeys).
         AddSearchKeys("keyboard", () => KeyBindings.SelectMany(row => new[] { row.Category, row.Title, row.Key, row.DefaultKey }));
         AddSearchKeys(SystemNode.Id, () => SystemSettings.SelectMany(setting => new[] { setting.Title, setting.Description }));
+        AddSearchKeys(PluginsNode.Id, () => PluginsPage.Rows.SelectMany(row => new[] { row.Name, row.Id, row.Status, row.Metadata }));
 
         RebuildNodes();
         _selectedNode = _interfaceNode;
@@ -176,12 +181,14 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         {
             if (ReferenceEquals(_selectedNode, value)) return;
             this.RaiseAndSetIfChanged(ref _selectedNode, value);
+            if (IsPluginsSelected) PluginsPage.Refresh();
             this.RaisePropertyChanged(nameof(IsInterfaceSelected));
             this.RaisePropertyChanged(nameof(IsEditorSelected));
             this.RaisePropertyChanged(nameof(IsDotnetSelected));
             this.RaisePropertyChanged(nameof(IsKeyboardSelected));
             this.RaisePropertyChanged(nameof(IsSystemSelected));
             this.RaisePropertyChanged(nameof(IsLoggingSelected));
+            this.RaisePropertyChanged(nameof(IsPluginsSelected));
             this.RaisePropertyChanged(nameof(IsExperimentalSelected));
             this.RaisePropertyChanged(nameof(IsLanguagesSelected));
             this.RaisePropertyChanged(nameof(IsLanguageNodeSelected));
@@ -197,6 +204,7 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
     public bool IsKeyboardSelected => _selectedNode?.Id == "keyboard";
     public bool IsSystemSelected => _selectedNode?.Id == "system";
     public bool IsLoggingSelected => _selectedNode?.Id == "logging";
+    public bool IsPluginsSelected => _selectedNode?.Id == PluginsNode.Id;
     public bool IsExperimentalSelected => _selectedNode?.Id == "experimental";
     public bool IsLanguagesSelected => _selectedNode?.Id == "languages";
 

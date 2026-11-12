@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -14,6 +15,7 @@ using Invoklet.UserControls;
 using Invoklet.Windows;
 using Invoklet.Windows.Healpers;
 using Invoklet.Windows.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -74,6 +76,40 @@ public class MainWindowClosingTests
     {
         await TestWait.WhileAsync(() => SoleControl(window) is null);
         return SoleControl(window)!;
+    }
+
+    [AvaloniaTheory]
+    [InlineData(UnsavedChangesResult.Cancel, false)]
+    [InlineData(UnsavedChangesResult.DontSave, true)]
+    public async Task ApplicationRestart_WithADirtyTab_LaunchesOnlyAfterConfirmedExit(UnsavedChangesResult answer, bool exits)
+    {
+        var (window, _, windowService) = CreateMainWindow();
+        var tab = await GetSoleControlAsync(window);
+        tab.State.Editor.Text = "Console.WriteLine(1);";
+        windowService.Setup(service => service.ShowUnsavedChangesDialogAsync(It.IsAny<string>())).ReturnsAsync(answer);
+        var desktop = new Mock<IClassicDesktopStyleApplicationLifetime>();
+        desktop.SetupGet(lifetime => lifetime.MainWindow).Returns(window);
+        desktop.SetupGet(lifetime => lifetime.Args).Returns(["--plugins-dev", "example path"]);
+        var launches = new List<System.Diagnostics.ProcessStartInfo>();
+        var restart = new ApplicationRestart(desktop.Object, NullLogger<ApplicationRestart>.Instance, launches.Add);
+
+        await restart.RequestAsync();
+        Assert.Empty(launches);
+        Assert.Equal(!exits, window.IsVisible);
+        if (window.IsVisible)
+        {
+            windowService.Setup(service => service.ShowUnsavedChangesDialogAsync(It.IsAny<string>()))
+                .ReturnsAsync(UnsavedChangesResult.DontSave);
+            window.Close();
+            await window.ClosingTask;
+        }
+        restart.StartReplacementAfterExit();
+        restart.StartReplacementAfterExit();
+
+        if (exits)
+            Assert.Equal(["--plugins-dev", "example path"], Assert.Single(launches).ArgumentList.TakeLast(2));
+        else
+            Assert.Empty(launches);
     }
 
     [AvaloniaFact]

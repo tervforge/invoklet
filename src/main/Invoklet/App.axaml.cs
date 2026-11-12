@@ -126,9 +126,11 @@ public class App : Application
             desktop.MainWindow = splash;
 
             ApplicationExit.Attach(() => desktop.MainWindow, serviceProvider.GetRequiredService<IPreferencesService>(), desktop);
+            var restart = serviceProvider.GetRequiredService<ApplicationRestart>();
             desktop.Exit += (_, _) =>
             {
                 viewScale.Flush();
+                restart.StartReplacementAfterExit();
                 serviceProvider.Dispose();
             };
 
@@ -267,6 +269,11 @@ public class App : Application
         var services = new ServiceCollection();
         services.AddSingleton(plugins);
         services.AddSingleton(sp => PluginStartup.Load(plugins.Directory, sp.GetRequiredService<ILoggerFactory>()));
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            services.AddSingleton(desktop);
+            services.AddSingleton<ApplicationRestart>();
+        }
 
         services.AddSingleton<Application>(this);
         services.AddSingleton<IPreferencesService, PreferencesService>();
@@ -341,6 +348,8 @@ public class App : Application
         services.AddSingleton<ISessionSnapshotLoader, DiskSessionSnapshotLoader>();
         services.AddTransient<ISessionRecoveryCoordinator, SessionRecoveryCoordinator>();
         services.AddTransient<MainWindowViewModel>();
+        services.AddTransient(sp => new PluginsPageViewModel(sp.GetRequiredService<PluginSession>(), PluginStartup.ReadUserInventory,
+            () => sp.GetService<ApplicationRestart>()?.RequestAsync() ?? Task.CompletedTask));
         services.AddTransient<PreferencesWindowViewModel>();
         services.AddTransient<DependenciesWindowViewModel>();
         services.AddTransient<Windows_PreferencesWindow>();

@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using Invoklet.UserControls;
 using Invoklet.Windows.Models;
 
@@ -19,6 +21,18 @@ public partial class PreferencesWindow : Window
     }
 
     public PreferencesWindow() => InitializeComponent();
+
+    private void RefreshPlugins_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel viewModel) viewModel.PluginsPage.Refresh();
+    }
+
+    private async void RestartForPlugins_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.HasPendingRestart: true } viewModel) return;
+        Close();
+        await Dispatcher.UIThread.InvokeAsync(viewModel.PluginsPage.RestartAsync, DispatcherPriority.Background);
+    }
 
     // Escape closes it, as it does every dialog; settings apply as they change, so nothing is lost. A control that takes Escape itself keeps it.
     protected override void OnKeyDown(KeyEventArgs e)

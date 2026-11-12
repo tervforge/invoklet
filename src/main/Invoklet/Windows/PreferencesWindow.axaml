@@ -252,6 +252,52 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <StackPanel x:Name="PluginsSettingsPage" Tag="plugins" IsVisible="{Binding IsPluginsSelected}" Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock Classes="settings-heading" Text="Plugins" VerticalAlignment="Center"/>
+                        <Button x:Name="RefreshPluginsButton" Grid.Column="1" Content="Refresh" Click="RefreshPlugins_Click"/>
+                    </Grid>
+                    <StackPanel IsVisible="{Binding PluginsPage.HasPendingRestart}" Spacing="6">
+                        <TextBlock Text="Plugin changes will take effect after restarting Invoklet." TextWrapping="Wrap"/>
+                        <Button x:Name="RestartForPluginsButton" Content="Restart now" Click="RestartForPlugins_Click"/>
+                    </StackPanel>
+                    <TextBlock IsVisible="{Binding PluginsPage.IsEmpty}" Text="No plugins were discovered for this session."
+                               Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}" TextWrapping="Wrap"/>
+                    <ItemsControl ItemsSource="{Binding PluginsPage.Diagnostics}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding .}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding PluginsPage.Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:PluginStatusRow">
+                                <Border BorderBrush="{DynamicResource Invoklet.Separator.BackgroundBrush}" BorderThickness="0,0,0,1"
+                                        Padding="0,0,0,8" Margin="0,0,0,8">
+                                    <StackPanel Spacing="3">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Status}"/>
+                                        </Grid>
+                                        <TextBlock Text="{Binding Id}" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+                                        <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+                                        <ItemsControl ItemsSource="{Binding Diagnostics}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{Binding .}" TextWrapping="Wrap"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
                 <StackPanel Tag="logging" IsVisible="{Binding IsLoggingSelected}" Spacing="6">
                     <TextBlock Text="Logging:" FontWeight="SemiBold"
                                ToolTip.Tip="What Invoklet writes about its own work to its log files and console. Output of your scripts is never part of it."/>
