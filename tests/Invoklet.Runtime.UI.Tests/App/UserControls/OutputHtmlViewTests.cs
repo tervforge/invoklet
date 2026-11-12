@@ -1,8 +1,12 @@
+using System.Net;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
+using Invoklet.Avalonia.Themes;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Xunit;
@@ -73,10 +77,10 @@ public class OutputHtmlViewTests
 
     private const string OuterWithFoldedInner = """<div class="dp-box" data-dp-node="o"><div class="dp-count">P[1]</div><table class="dp-table"><thead><tr><th class="dp-th">Home</th></tr></thead><tbody><tr><td class="dp-td"><div class="dp-box" data-dp-node="i" data-dp-collapsed="1"><div class="dp-type">A</div><table class="dp-table"><thead><tr><th class="dp-th">City</th></tr></thead><tbody><tr><td class="dp-td">Oslo</td></tr></tbody></table></div></td></tr></tbody></table></div>""";
 
-    private static async Task<(Window Window, OutputHtmlView View)> ShowFocusedAsync(string content)
+    private static async Task<(Window Window, OutputHtmlView View)> ShowFocusedAsync(string content, string css = "")
     {
         var view = new OutputHtmlView();
-        var vm = new OutputHtmlViewModel();
+        var vm = new OutputHtmlViewModel { Css = css };
         vm.Append(content);
         view.DataContext = vm;
         var window = new Window { Width = 600, Height = 300, Content = view };
@@ -85,6 +89,44 @@ public class OutputHtmlViewTests
         window.UpdateLayout();
         view.FindControl<global::Invoklet.Avalonia.HtmlRenderer.HtmlPanel>("OutputHtml")!.Focus(NavigationMethod.Tab);
         return (window, view);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CodeCopy_Should_CopyTheOriginalTextFromItsTopRightIcon(bool useKeyboard)
+    {
+        const string source = "  if (x < 2)\r\n    return;\r\n";
+        var css = HtmlThemeStylesheet.Generate(global::Avalonia.Styling.ThemeVariant.Dark, isDark: true);
+        var (window, view) = await ShowFocusedAsync(
+            $"<div id=\"sample\"><pre class=\"dp-code\" data-language=\"csharp\">{WebUtility.HtmlEncode(source)}</pre></div>", css);
+        try
+        {
+            var output = view.FindControl<global::Invoklet.Avalonia.HtmlRenderer.HtmlPanel>("OutputHtml")!;
+            var link = Assert.Single(output.Container.GetLinks());
+            var sample = output.GetElementRectangle("sample");
+            Assert.NotNull(sample);
+            Assert.InRange(link.Rectangle.X, sample.Value.Right - 26, sample.Value.Right - 20);
+            Assert.InRange(link.Rectangle.Y, sample.Value.Top, sample.Value.Top + 10);
+
+            if (useKeyboard)
+            {
+                window.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+                Assert.Equal(link.Href, view.KeyboardLinkForTests);
+                window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+            }
+            else
+            {
+                var point = output.TranslatePoint(link.Rectangle.Center, window)!.Value;
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+            }
+            Assert.Equal(source, await window.Clipboard!.TryGetTextAsync());
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     [AvaloniaFact]

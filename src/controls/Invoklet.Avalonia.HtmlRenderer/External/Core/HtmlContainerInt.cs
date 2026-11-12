@@ -655,6 +655,8 @@ public sealed class HtmlContainerInt : IDisposable
                 _root.PerformLayout(g);
             }
 
+            _root.ApplyAbsolutePositions(_root);
+
             if (_keptSelection != null)
             {
                 _selectionHandler?.Resume(_keptSelection);

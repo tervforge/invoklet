@@ -43,7 +43,18 @@ public sealed class TextMateHighlighter : ICodeHighlighter
         if (grammar == null)
             return null;
 
-        return TokenizeLine(grammar, line);
+        IStateStack? state = null;
+        return TokenizeLine(grammar, line, ref state);
+    }
+
+    /// <summary>Highlights a complete block, carrying grammar state between its lines.</summary>
+    public IEnumerable<IReadOnlyList<(string Text, IBrush? Foreground)>?> HighlightLines(
+        IEnumerable<string> lines, string language)
+    {
+        var grammar = GetGrammar(language);
+        IStateStack? state = null;
+        foreach (var line in lines)
+            yield return grammar is null ? null : TokenizeLine(grammar, line.AsMemory(), ref state);
     }
 
     private IGrammar? GetGrammar(string language)
@@ -64,11 +75,13 @@ public sealed class TextMateHighlighter : ICodeHighlighter
         return grammar;
     }
 
-    private IReadOnlyList<(string Text, IBrush? Foreground)> TokenizeLine(IGrammar grammar, ReadOnlyMemory<char> line)
+    private IReadOnlyList<(string Text, IBrush? Foreground)> TokenizeLine(
+        IGrammar grammar, ReadOnlyMemory<char> line, ref IStateStack? state)
     {
         // Implicit ReadOnlyMemory<char> → LineText conversion; TextMateSharp 2.x uses
         // ArrayPool internally for the required trailing '\n', avoiding a string allocation.
-        var result = grammar.TokenizeLine(line, null, TimeSpan.MaxValue);
+        var result = grammar.TokenizeLine(line, state, TimeSpan.MaxValue);
+        state = result.RuleStack;
         var tokens = new List<(string Text, IBrush? Foreground)>(result.Tokens.Length);
 
         for (int i = 0; i < result.Tokens.Length; i++)

@@ -5,6 +5,10 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ## [Unreleased]
 
+### Added
+
+- `Util.Code(...).Dump()` displays C#, SQL, JSON, XML, and plain text as code blocks with a copy action.
+
 ### Fixed
 
 - Asked for Secret Store access again after an externally changed script is reloaded and saved.

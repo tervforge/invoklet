@@ -1,0 +1,35 @@
+---
+version: "1.0"
+language: csharp
+targetSdk: latest
+kind: Statements
+---
+
+# Formatted code output
+
+`Util.Code` renders multi-line code in a readable block and applies syntax
+highlighting for the selected language.
+
+```csharp run
+Util.Code("""
+    SELECT u.Id, u.Name
+    FROM Users AS u
+    WHERE u.IsActive = 1;
+    """, CodeLanguage.Sql).Dump("SQL");
+
+Util.Code("""
+    { "name": "Invoklet", "enabled": true }
+    """, CodeLanguage.Json).Dump("JSON");
+
+Util.Code("""
+    <configuration>
+      <appSettings />
+    </configuration>
+    """, CodeLanguage.Xml).Dump("XML");
+
+Util.Code("""
+    var result = await service.LoadAsync(cancellationToken);
+    """, CodeLanguage.CSharp).Dump("C#");
+
+Util.Code("Unformatted diagnostic output", CodeLanguage.PlainText).Dump("Plain text");
+```

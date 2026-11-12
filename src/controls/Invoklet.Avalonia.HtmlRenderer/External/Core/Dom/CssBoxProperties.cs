@@ -51,7 +51,7 @@ internal abstract class CssBoxProperties
     private string _borderLeftStyle = "none";
     private string _borderSpacing = "0";
     private string _borderCollapse = "separate";
-    private string _bottom;
+    private string _bottom = "auto";
     private string _color = "black";
     private string _content = "normal";
     private string _cornerNwRadius = "0";
@@ -85,7 +85,7 @@ internal abstract class CssBoxProperties
     private string _paddingRight = "0";
     private string _paddingTop = "0";
     private string _pageBreakInside = CssConstants.Auto;
-    private string _right;
+    private string _right = "auto";
     private string _textAlign = string.Empty;
     private string _textDecoration = string.Empty;
     private string _textIndent = "0";
@@ -423,6 +423,12 @@ internal abstract class CssBoxProperties
             }
     }
 
+    public string Right
+    {
+        get { return _right; }
+        set { _right = value; }
+    }
+
     public string Top
     {
         get { return _top; }
@@ -436,6 +442,12 @@ internal abstract class CssBoxProperties
                 }
 
             }
+    }
+
+    public string Bottom
+    {
+        get { return _bottom; }
+        set { _bottom = value; }
     }
 
     public string Width

@@ -1,8 +1,11 @@
 using System.ComponentModel;
+using System.Net;
+using System.Text;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -141,6 +144,7 @@ public partial class OutputHtmlView : UserControl
         var content = vm.Content;
         var body = ResultsBoxes.Show(content, _toggledBoxes, ShowGeneratedLabels);
         if (!ResultsBoxes.AnyIn(content)) body = ResultsTables.WithMenus(body);
+        body = CodeOutputHighlighter.Highlight(body, ActualThemeVariant);
         return $"""
                 <html>
                 <head><style>{vm.Css}</style></head>
@@ -188,7 +192,18 @@ public partial class OutputHtmlView : UserControl
     // What a click on a link does, and Enter on it. False for a link of no table.
     private bool Activate(string link, bool atPointer)
     {
-        if (ResultsBoxes.ToggleOf(link) is { } toggle)
+        if (link.StartsWith(CodeOutputHighlighter.CopyPrefix, StringComparison.Ordinal))
+        {
+            try
+            {
+                var fragment = link.IndexOf('#');
+                var encoded = link[CodeOutputHighlighter.CopyPrefix.Length..(fragment < 0 ? link.Length : fragment)];
+                if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                    _ = CopyToClipboardAsync(clipboard, Encoding.UTF8.GetString(Convert.FromBase64String(WebUtility.UrlDecode(encoded))));
+            }
+            catch (FormatException) { }
+        }
+        else if (ResultsBoxes.ToggleOf(link) is { } toggle)
         {
             if (!_toggledBoxes.Remove(toggle)) _toggledBoxes.Add(toggle);
             ShowAgainInPlace();
@@ -207,6 +222,18 @@ public partial class OutputHtmlView : UserControl
             return false;
         }
         return true;
+    }
+
+    private static async Task CopyToClipboardAsync(IClipboard clipboard, string text)
+    {
+        try
+        {
+            await clipboard.SetTextAsync(text);
+        }
+        catch (InvalidOperationException)
+        {
+            // Clipboard ownership can disappear while the output window is closing.
+        }
     }
 
     private void ShowExportMenu(Action export, bool atPointer)
@@ -240,6 +267,7 @@ public partial class OutputHtmlView : UserControl
     {
         _keyboardLink = link;
         AutomationProperties.SetName(OutputHtml, link is null ? "Results"
+            : link.StartsWith(CodeOutputHighlighter.CopyPrefix, StringComparison.Ordinal) ? "Copy code"
             : ResultsBoxes.ToggleOf(link) is not null ? "Results: fold or open this table" : "Results: table actions");
         PlaceFocusRing(true);
     }

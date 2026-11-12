@@ -86,6 +86,10 @@ public static class HtmlThemeStylesheet
             .dp-datetime{ color:{{dpDate}}; }
             .dp-error   { color:{{errFg}}; }
             .dp-truncated{ color:{{fgSec}}; }
+            .dp-code-shell { position:relative; margin:4px 0; background-color:{{dpEven}}; border:1px solid {{dpTh}}; border-radius:3px; }
+            .dp-code    { margin:0; padding:4px 30px 8px 10px; background-color:transparent; color:{{fg}}; border:none; font-family:Consolas, 'Cascadia Mono', monospace; font-size:12px; white-space:pre; }
+            .dp-code span { font-family:inherit; font-size:inherit; }
+            .dp-code-copy { display:block; position:absolute; top:4px; right:7px; width:16px; height:16px; z-index:1; color:{{fgSec}}; text-decoration:none; font-size:16px; line-height:1; }
             .dp-progressbar        { position:relative; width:240px; height:14px; background-color:{{dpBorder}}; border-radius:3px; overflow:hidden; margin:2px 0; }
             .dp-progressbar-fill   { height:100%; background-color:{{dpAccent}}; }
             .dp-progressbar-caption{ color:{{fgSec}}; font-size:0.85em; margin-bottom:2px; }
