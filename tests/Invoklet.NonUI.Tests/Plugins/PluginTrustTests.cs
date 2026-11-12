@@ -90,6 +90,29 @@ public sealed class PluginTrustTests : IDisposable
     }
 
     [Fact]
+    public void Load_Should_RejectSymbolsChangedBetweenAdmissionAndLoading()
+    {
+        AddSample("sample");
+        const string symbolsId = "invoklet.fixture.symbols";
+        var folder = _fixture.AddThrowingPluginWithSymbols(symbolsId);
+        var symbols = Path.Combine(folder, Path.ChangeExtension(PluginLoaderFixture.SymbolsSourceFile, ".pdb"));
+        _fixture.Connections.OnApply = registration =>
+        {
+            if (registration.Context.Manifest.Id == SampleId)
+                File.AppendAllText(symbols, "changed during startup");
+        };
+
+        var session = _fixture.CreateUserLoader(_fixture.ApproveDiscovered()).Load();
+
+        Assert.Equal(SampleId, Assert.Single(session.Loaded).Id);
+        var rejected = Assert.Single(session.Rejected);
+        Assert.Equal(symbolsId, rejected.Id);
+        var diagnostic = Assert.Single(rejected.Diagnostics);
+        Assert.Equal(PluginDiagnosticCode.EntryAssemblyUnloadable, diagnostic.Code);
+        Assert.Contains("changed after verification", diagnostic.Detail);
+    }
+
+    [Fact]
     public void Load_Should_RejectAChangedDependencyWhenItIsFirstResolvedAfterStartup()
     {
         const string id = "invoklet.fixture.lazy";
@@ -126,6 +149,7 @@ public sealed class PluginTrustTests : IDisposable
             BundledCatalog = BundledPluginCatalog.Read(catalogPath),
             UserDirectory = userRoot,
             Inventory = new PluginInventory([PluginLoaderFixture.Approve(user)]),
+            NativeLibraryCacheDirectory = _fixture.NativeCache,
         }).Load();
 
         Assert.Equal(PluginTrust.Bundled, Assert.Single(session.Loaded).Trust);
@@ -150,6 +174,20 @@ public sealed class PluginTrustTests : IDisposable
     }
 
     [Fact]
+    public void Read_AnEntryTheInventoryRejects_FailsClosedLikeMalformedJson()
+    {
+        var entry = new PluginInventoryEntry("Bad Id", "1.0.0", ["theme"], "fixture", null, new string('a', 64), "none", true, true);
+        var path = Path.Combine(_fixture.Root, PluginInventory.FileName);
+        File.WriteAllText(path, new PluginInventory([]).ToJson().Replace("[]", $"[{System.Text.Json.JsonSerializer.Serialize(entry, PluginCatalogJson.Options)}]"));
+
+        var error = Assert.Throws<ArgumentException>(() => new PluginInventory([entry]));
+        var session = _fixture.CreateUserLoader(PluginInventory.Read(path)).Load();
+
+        Assert.Contains("Invalid plugin inventory entry", error.Message);
+        Assert.Contains(session.Diagnostics, diagnostic => diagnostic.Code == PluginDiagnosticCode.InventoryUnreadable);
+    }
+
+    [Fact]
     public void Load_UnconfiguredDevelopmentRoot_RejectsTheCandidate()
     {
         var folder = AddSample("sample");
@@ -167,7 +205,12 @@ public sealed class PluginTrustTests : IDisposable
     public void Load_ExplicitDevelopmentRoot_LoadsUnlistedCodeWithAWarning()
     {
         var folder = AddSample("sample");
-        var options = new PluginLoaderOptions { ApplicationVersion = _fixture.ApplicationVersion, DevelopmentDirectory = folder };
+        var options = new PluginLoaderOptions
+        {
+            ApplicationVersion = _fixture.ApplicationVersion,
+            DevelopmentDirectory = folder,
+            NativeLibraryCacheDirectory = _fixture.NativeCache,
+        };
 
         var session = _fixture.CreateSut(options).Load();
 

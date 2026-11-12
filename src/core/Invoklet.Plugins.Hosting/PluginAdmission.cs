@@ -48,7 +48,7 @@ internal sealed class PluginAdmission(PluginLoaderOptions options)
         try
         {
             PluginFiles.RejectLinksBetween(Path.GetFullPath(configured.Directory), plugin.Directory);
-            files = PluginFiles.Read(plugin.Directory);
+            files = PluginFiles.Read(plugin.Directory, options.NativeLibraryCacheDirectory);
             var expectedHash = source.Trust == PluginTrust.Bundled ? bundled!.ContentHash : user!.ContentHash;
             if (!string.Equals(files.ContentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
                 return PluginDiagnostic.Error(id, PluginDiagnosticCode.PluginContentChanged, $"The contents of '{id}' changed since they were approved.");

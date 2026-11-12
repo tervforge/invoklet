@@ -11,7 +11,9 @@ public sealed record PluginStatusRow(string Name, string Id, string? Version, st
     public string Metadata => string.Join(" · ", new[] { Version, Roles, Trust }.Where(value => !string.IsNullOrEmpty(value)));
 }
 
-public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInventory> readInventory, Func<Task> restart) : ViewModelBase
+/// <param name="startupError">What kept the host from applying its plugin arguments at this start, if anything; shown first.</param>
+public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInventory> readInventory, Func<Task> restart,
+    string? startupError = null, Func<string, bool>? directoryExists = null) : ViewModelBase
 {
     private IReadOnlyList<PluginStatusRow> _rows = [];
     private IReadOnlyList<string> _diagnostics = [];
@@ -31,6 +33,7 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
             .Concat(session.Rejected.SelectMany(plugin => plugin.Diagnostics)).ToHashSet();
         var diagnostics = session.Diagnostics.Where(diagnostic => !rowDiagnostics.Contains(diagnostic))
             .Select(diagnostic => diagnostic.Message).Distinct(StringComparer.Ordinal).ToList();
+        if (!string.IsNullOrWhiteSpace(startupError)) diagnostics.Insert(0, startupError);
 
         var inventory = readInventory();
         IReadOnlyList<string> pending;
@@ -43,18 +46,22 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
         }
 
         var entries = inventory.Entries.ToDictionary(entry => entry.Id, StringComparer.Ordinal);
-        foreach (var id in pending)
+        var missing = directoryExists is null ? [] : session.Loaded
+            .Where(plugin => plugin.Trust == PluginTrust.Trusted && entries.TryGetValue(plugin.Id, out var entry)
+                && entry.Version == plugin.Manifest.Version && !directoryExists(plugin.Directory))
+            .Select(plugin => plugin.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var id in pending.Union(missing, StringComparer.Ordinal))
         {
             var current = rows.Find(row => row.Id == id && row.Trust == nameof(PluginTrust.Trusted));
             var desired = entries.GetValueOrDefault(id);
             rows.Add(new PluginStatusRow(current?.Name ?? id, id, desired?.Version ?? current?.Version,
                 desired is null ? current?.Roles ?? "" : string.Join(", ", desired.Roles), nameof(PluginTrust.Trusted), "Pending restart",
-                desired is null ? ["Removed from the plugin inventory."] : []));
+                desired is null ? ["Removed from the plugin inventory."] : missing.Contains(id) ? ["The plugin folder is missing."] : []));
         }
 
         this.RaiseAndSetIfChanged(ref _rows, rows.AsReadOnly(), nameof(Rows));
         this.RaiseAndSetIfChanged(ref _diagnostics, diagnostics.AsReadOnly(), nameof(Diagnostics));
-        this.RaiseAndSetIfChanged(ref _hasPendingRestart, pending.Count > 0, nameof(HasPendingRestart));
+        this.RaiseAndSetIfChanged(ref _hasPendingRestart, pending.Count > 0 || missing.Count > 0, nameof(HasPendingRestart));
         this.RaisePropertyChanged(nameof(IsEmpty));
     }
 

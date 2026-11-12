@@ -30,4 +30,11 @@ public sealed class PluginLoaderOptions
 
     /// <summary>An explicitly opted-in plugin directory or directory of plugins.</summary>
     public string? DevelopmentDirectory { get; init; }
+
+    /// <summary>
+    /// Where verified copies of plugins' native libraries are kept, one folder per plugin content hash, reused across starts and
+    /// pruned of plugins that are gone. The host puts it in its machine-local data, not in a temporary folder: a temporary folder
+    /// may forbid executing from it, and nothing would clean it.
+    /// </summary>
+    public required string NativeLibraryCacheDirectory { get; init; }
 }

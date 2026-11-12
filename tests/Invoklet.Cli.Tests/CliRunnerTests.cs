@@ -5,6 +5,8 @@ using Invoklet.Format.MdRun;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
+using Invoklet.Plugins;
+using Invoklet.Plugins.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console.Testing;
 using Xunit;
@@ -464,6 +466,32 @@ public class CliRunnerTests
 
         Assert.Equal(CliRunner.NotRunExitCode, exitCode);
         Assert.Contains("Usage:", stderr.Output);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_PluginDiagnostics_QuietSuppressesWarningsAndKeepsErrors(bool quiet)
+    {
+        var rejected = new RejectedPlugin("example.plugin", null, "/plugins/example", PluginTrust.Trusted,
+            [PluginDiagnostic.Error("example.plugin", PluginDiagnosticCode.PluginNotApproved, "'example.plugin' needs approval before it can load.")]);
+        var warnings = new RejectedPlugin("example.warning", null, "/plugins/warning", PluginTrust.Development,
+            [PluginDiagnostic.Warning("example.warning", PluginDiagnosticCode.DevelopmentPlugin, "Example plugin warning.")]);
+        var services = new CliServices(new LanguageHostRegistry(), new DotnetSdkProvider())
+        {
+            Plugins = new PluginSession([], [rejected, warnings]),
+        };
+        var path = Path.Combine(Path.GetTempPath(), $"Invoklet-plugin-diagnostics-{Guid.NewGuid():N}.inv");
+        await File.WriteAllTextAsync(path, "---\nlanguage: csharp\n---\n\n```csharp run\nConsole.WriteLine(1);\n```\n");
+        try
+        {
+            var stderr = new TestConsole().Width(1000);
+            await CliRunner.RunAsync(quiet ? ["-q", path] : [path], services, new TestConsole(), stderr, CancellationToken.None);
+
+            Assert.Contains("error: 'example.plugin' needs approval", stderr.Output);
+            Assert.Equal(!quiet, stderr.Output.Contains("warning: Example plugin warning.", StringComparison.Ordinal));
+        }
+        finally { File.Delete(path); }
     }
 
     [Fact]

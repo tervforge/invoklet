@@ -91,6 +91,20 @@ jobs:
           cmp "$source/theme/invoklet.fixture.packaging/invoklet-plugin.json" "$build/$plugin/invoklet-plugin.json"
           cmp "$build/$plugin/theme.json" "$published/$plugin/theme.json"
           cmp "$build/plugins/bundled.json" "$published/plugins/bundled.json"
+          printf '\nchanged output\n' >> "$build/$plugin/theme.json"
+          if dotnet "$packager" verify "$build"; then
+            echo 'Expected verification to reject a changed bundled file.' >&2
+            exit 1
+          fi
+          dotnet build "$project" -c Release --no-restore -p:InvokletBundledPluginsSource="$source"
+          dotnet "$packager" verify "$build"
+          cmp "$build/$plugin/theme.json" "$published/$plugin/theme.json"
+          printf '\nchanged output again\n' >> "$build/$plugin/theme.json"
+          empty="$RUNNER_TEMP/invoklet-empty-plugin-source"
+          mkdir -p "$empty"
+          dotnet build "$project" -c Release --no-restore -p:InvokletBundledPluginsSource="$empty"
+          dotnet "$packager" verify "$build"
+          test ! -e "$build/$plugin"
 
   build-windows:
     name: Build & Test (windows-latest)
@@ -416,7 +430,13 @@ jobs:
           mkdir -p "$smoke"
           cp -R tests/fixtures/plugins/bundled "$smoke/source"
           packager=build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll
-          dotnet publish src/main/Invoklet/Invoklet.csproj -c Release --no-build --no-restore -o "$smoke/publish"
+          case "$(uname -m)" in
+            arm64) rid=osx-arm64 ;;
+            x86_64) rid=osx-x64 ;;
+            *) echo 'Unsupported macOS runner architecture.' >&2; exit 1 ;;
+          esac
+          dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r "$rid" --self-contained true -o "$smoke/publish"
+          test ! -d "$smoke/publish/runtimes"
           payload="$smoke/source/theme/invoklet.fixture.packaging/native-payload"
           cp "$smoke/publish/Invoklet" "$payload"
           codesign --force --sign - "$payload"

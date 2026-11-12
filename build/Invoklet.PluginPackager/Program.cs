@@ -37,9 +37,11 @@ static void Stage(string source, string output)
     if (Directory.Exists(target))
     {
         RejectLink(target);
-        if (File.Exists(Path.Combine(target, BundledPluginCatalog.FileName)))
+        var cataloguePath = Path.Combine(target, BundledPluginCatalog.FileName);
+        if (File.Exists(cataloguePath))
         {
-            if (Verify(target) == catalogue && SameLayout(packages, ReadPackages(target))) return;
+            RejectLink(cataloguePath);
+            if (MatchesGeneratedLayout(target, cataloguePath, catalogue, packages)) return;
         }
         else if (Directory.EnumerateFileSystemEntries(target).Any())
             throw new IOException($"Existing plugin folder has no bundled catalogue: {target}");
@@ -51,12 +53,12 @@ static void Stage(string source, string output)
     Directory.CreateDirectory(temporary);
     try
     {
-        foreach (var (directory, role, entry) in packages)
+        foreach (var package in packages)
         {
-            var destination = Path.Combine(temporary, role, entry.Id);
-            foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            var destination = Path.Combine(temporary, package.Role, package.Entry.Id);
+            foreach (var file in Directory.EnumerateFiles(package.Directory, "*", SearchOption.AllDirectories))
             {
-                var destinationFile = Path.Combine(destination, Path.GetRelativePath(directory, file));
+                var destinationFile = Path.Combine(destination, Path.GetRelativePath(package.Directory, file));
                 Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
                 File.Copy(file, destinationFile);
             }
@@ -76,6 +78,22 @@ static void Stage(string source, string output)
     finally
     {
         if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+    }
+}
+
+static bool MatchesGeneratedLayout(string target, string cataloguePath, string catalogue, IReadOnlyList<Package> packages)
+{
+    try
+    {
+        if (File.ReadAllText(cataloguePath) != catalogue) return false;
+        var existing = ReadPackages(target);
+        return SameLayout(packages, existing)
+            && new BundledPluginCatalog(existing.Select(package => package.Entry)).ToJson() == catalogue;
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+    {
+        // The catalogue marks a generated layout. Stage a fresh one when its files cannot be reused.
+        return false;
     }
 }
 
@@ -121,6 +139,7 @@ static IReadOnlyList<Package> ReadPackages(string root)
         RejectLink(roleDirectory);
         var role = Path.GetFileName(roleDirectory);
         if (role == BundledPluginCatalog.FileName && File.Exists(roleDirectory)) continue;
+        // Themes ship under plugins/themes/<id>, as the plan lays them out; every other role folder is named after the role.
         var kind = role == "themes" ? PluginRole.Theme : PluginRoles.Parse(role);
         if (kind is null || !Directory.Exists(roleDirectory)) throw new IOException($"Unknown plugin role folder: {roleDirectory}");
         foreach (var directory in Directory.EnumerateFileSystemEntries(roleDirectory))
@@ -133,9 +152,16 @@ static IReadOnlyList<Package> ReadPackages(string root)
                 throw new IOException($"Manifest id or role does not match the package folder: {directory}");
             if (manifest.Entry is { } entry && !File.Exists(Path.Combine(directory, entry.Assembly)))
                 throw new IOException($"Missing entry assembly '{entry.Assembly}' in {directory}.");
-            packages.Add(new Package(directory, role, new BundledPluginEntry(manifest.Id, manifest.Version, PluginContent.ComputeHash(directory))));
+            packages.Add(new Package(directory, role, new BundledPluginEntry(manifest.Id, manifest.Version, PluginContent.ComputeHash(directory)),
+                manifest.DependsOn));
         }
     }
+    // What ships together must load together: a bundled plugin can't depend on one the user has to install.
+    var ids = packages.Select(package => package.Entry.Id).ToHashSet(StringComparer.Ordinal);
+    foreach (var package in packages)
+        foreach (var dependency in package.DependsOn)
+            if (!ids.Contains(dependency))
+                throw new IOException($"'{package.Entry.Id}' depends on '{dependency}', which is not among the bundled plugins.");
     return packages.OrderBy(package => package.Entry.Id, StringComparer.Ordinal).ToArray();
 }
 
@@ -145,4 +171,4 @@ static void RejectLink(string path)
         throw new IOException($"Plugin packaging does not follow links: {path}");
 }
 
-file sealed record Package(string Directory, string Role, BundledPluginEntry Entry);
+file sealed record Package(string Directory, string Role, BundledPluginEntry Entry, IReadOnlyList<string> DependsOn);

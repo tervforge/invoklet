@@ -20,6 +20,8 @@ namespace Invoklet.Runtime.UI.Tests.App.Windows;
 
 public sealed class PreferencesPluginsTests
 {
+    private readonly PreferencesPluginsFixture _fixture = new();
+
     [AvaloniaFact]
     public void PluginsPage_RejectedPlugin_ShowsSafeReasonAndMetadata()
     {
@@ -29,14 +31,13 @@ public sealed class PreferencesPluginsTests
         var diagnostic = PluginDiagnostic.Error(manifest.Id, PluginDiagnosticCode.RegistrationFailed,
             "The plugin failed to initialize.", "Private path /home/person/plugins and token=secret-value");
         var session = new PluginSession([], [new RejectedPlugin(manifest.Id, manifest, "/home/person/plugins", PluginTrust.Trusted, [diagnostic])]);
-        var window = CreateWindow(new PluginsPageViewModel(session, () => PluginInventory.Empty, () => Task.CompletedTask));
+        var window = _fixture.CreateSut(new PluginsPageViewModel(session, () => PluginInventory.Empty, () => Task.CompletedTask));
 
         try
         {
-            ShowPlugins(window);
+            PreferencesPluginsFixture.ShowPlugins(window);
 
-            var text = window.FindControl<StackPanel>("PluginsSettingsPage")!.GetVisualDescendants()
-                .OfType<TextBlock>().Select(block => block.Text).ToArray();
+            var text = PreferencesPluginsFixture.PageText(window);
             Assert.Contains("Example plugin", text);
             Assert.Contains("test.plugin", text);
             Assert.Contains("1.0.0 · theme · Trusted", text);
@@ -50,16 +51,83 @@ public sealed class PreferencesPluginsTests
     }
 
     [AvaloniaFact]
+    public void PluginsPage_StartupArgumentError_IsShownFirst()
+    {
+        var window = _fixture.CreateSut(new PluginsPageViewModel(PluginSession.Empty, () => PluginInventory.Empty, () => Task.CompletedTask,
+            "--plugins-dev requires a directory."));
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+
+            Assert.Contains("--plugins-dev requires a directory.", PreferencesPluginsFixture.PageText(window));
+            Assert.False(window.FindControl<Button>("RestartForPluginsButton")!.IsEffectivelyVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void Search_BeforeThePageWasOpened_FindsAPluginByName()
+    {
+        var manifest = PluginManifestReader.Read("""
+            {"id":"test.plugin","version":"1.0.0","displayName":"Example plugin","roles":{"theme":1}}
+            """).Manifest!;
+        var session = new PluginSession([new LoadedPlugin(manifest, "/plugins/test", PluginTrust.Trusted, [])], []);
+        var window = _fixture.CreateSut(new PluginsPageViewModel(session, () => PluginInventory.Empty, () => Task.CompletedTask));
+
+        try
+        {
+            window.Show();
+            var viewModel = (PreferencesWindowViewModel)window.DataContext!;
+            viewModel.FilterText = "Example plugin";
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Contains(viewModel.Nodes, node => node.Id == "plugins");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PluginsPage_PluginFolderDisappears_RefreshShowsTheReasonWhileKeepingTheLoadedEntry()
+    {
+        var manifest = PluginManifestReader.Read("""
+            {"id":"test.plugin","version":"1.0.0","displayName":"Example plugin","roles":{"theme":1}}
+            """).Manifest!;
+        var session = new PluginSession([new LoadedPlugin(manifest, "/plugins/test", PluginTrust.Trusted, [])], []);
+        var inventory = new PluginInventory([new PluginInventoryEntry(manifest.Id, manifest.Version, ["theme"], "fixture", null,
+            new string('a', 64), "none", Enabled: true, Approved: true)]);
+        var exists = true;
+        var window = _fixture.CreateSut(new PluginsPageViewModel(session, () => inventory, () => Task.CompletedTask,
+            directoryExists: _ => exists));
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            Assert.DoesNotContain("The plugin folder is missing.", PreferencesPluginsFixture.PageText(window));
+            exists = false;
+
+            window.FindControl<Button>("RefreshPluginsButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            var text = PreferencesPluginsFixture.PageText(window);
+            Assert.Contains("Loaded", text);
+            Assert.Contains("Pending restart", text);
+            Assert.Contains("The plugin folder is missing.", text);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void PluginsPage_InventoryChanges_ShowsPendingStateAndInvokesRestartAfterClosingPreferences()
     {
         var inventory = PluginInventory.Empty;
         var restart = new Mock<Func<Task>>();
         restart.Setup(run => run()).Returns(Task.CompletedTask);
-        var window = CreateWindow(new PluginsPageViewModel(PluginSession.Empty, () => inventory, restart.Object));
+        var window = _fixture.CreateSut(new PluginsPageViewModel(PluginSession.Empty, () => inventory, restart.Object));
 
         try
         {
-            ShowPlugins(window);
+            PreferencesPluginsFixture.ShowPlugins(window);
             var restartButton = window.FindControl<Button>("RestartForPluginsButton")!;
             Assert.False(restartButton.IsEffectivelyVisible);
             inventory = new PluginInventory([new PluginInventoryEntry("test.plugin", "2.0.0", ["theme"], "fixture", null,
@@ -78,30 +146,40 @@ public sealed class PreferencesPluginsTests
         }
         finally { if (window.IsVisible) window.Close(); }
     }
+}
 
-    private static PreferencesWindow CreateWindow(PluginsPageViewModel plugins)
+/// <summary>The Preferences window with the services its view model needs mocked; the Plugins page model is the test's own.</summary>
+public sealed class PreferencesPluginsFixture
+{
+    public Mock<IThemeService> Theme { get; } = new();
+    public Mock<IPreferencesService> Preferences { get; } = new();
+
+    public PreferencesPluginsFixture()
     {
         var settings = new AppSettings();
-        var theme = new Mock<IThemeService>();
-        theme.SetupGet(service => service.CurrentTheme).Returns(new ActiveTheme(
+        Theme.SetupGet(service => service.CurrentTheme).Returns(new ActiveTheme(
             new InterfaceTheme("Test", ThemeVariant.Light, false), new EditorTheme("Test", ThemeName.LightPlus, false)));
-        theme.SetupGet(service => service.InterfaceThemes).Returns([]);
-        theme.SetupGet(service => service.EditorThemes).Returns([]);
-        var prefs = new Mock<IPreferencesService>();
-        prefs.SetupGet(service => service.Keyboard).Returns(settings.Keyboard);
-        prefs.SetupGet(service => service.Experimental).Returns(settings.Experimental);
-        prefs.SetupGet(service => service.Editor).Returns(settings.Editor);
-        prefs.SetupGet(service => service.Session).Returns(settings.Session);
-        prefs.SetupGet(service => service.CSharp).Returns(settings.CSharp);
-        prefs.SetupGet(service => service.Logging).Returns(settings.Logging);
-        return new PreferencesWindow(new PreferencesWindowViewModel(theme.Object, prefs.Object, new LanguageHostRegistry(), pluginsPage: plugins));
+        Theme.SetupGet(service => service.InterfaceThemes).Returns([]);
+        Theme.SetupGet(service => service.EditorThemes).Returns([]);
+        Preferences.SetupGet(service => service.Keyboard).Returns(settings.Keyboard);
+        Preferences.SetupGet(service => service.Experimental).Returns(settings.Experimental);
+        Preferences.SetupGet(service => service.Editor).Returns(settings.Editor);
+        Preferences.SetupGet(service => service.Session).Returns(settings.Session);
+        Preferences.SetupGet(service => service.CSharp).Returns(settings.CSharp);
+        Preferences.SetupGet(service => service.Logging).Returns(settings.Logging);
     }
 
-    private static void ShowPlugins(PreferencesWindow window)
+    public PreferencesWindow CreateSut(PluginsPageViewModel plugins) =>
+        new(new PreferencesWindowViewModel(Theme.Object, Preferences.Object, new LanguageHostRegistry(), pluginsPage: plugins));
+
+    public static void ShowPlugins(PreferencesWindow window)
     {
         window.Show();
         var viewModel = (PreferencesWindowViewModel)window.DataContext!;
         viewModel.SelectedNode = viewModel.Nodes.Single(node => node.Id == "plugins");
         Dispatcher.UIThread.RunJobs();
     }
+
+    public static string?[] PageText(PreferencesWindow window) =>
+        window.FindControl<StackPanel>("PluginsSettingsPage")!.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
 }

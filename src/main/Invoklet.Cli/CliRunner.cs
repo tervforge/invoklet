@@ -102,6 +102,13 @@ public static class CliRunner
         if (cli.Kind is { } kind) document.FrontMatter.Kind = kind;
         if (cli.TargetSdk is { } targetSdk) document.FrontMatter.TargetSdk = targetSdk;
 
+        if (services.PluginDevelopmentEnabled && !cli.Quiet) stderr.WriteLine("Warning: plugin development mode is enabled.");
+        foreach (var diagnostic in services.Plugins.Diagnostics)
+        {
+            if (cli.Quiet && !diagnostic.IsError) continue;
+            stderr.WriteLine((diagnostic.IsError ? "error: " : "warning: ") + diagnostic.Message);
+        }
+
         // The same choice as the window's: given arguments, else --args-set, the selected set or defaults.
         var arguments = MdRunArguments.Resolve(document.FrontMatter, cli.ScriptArguments, cli.ArgumentSet);
         if (arguments.Error is { } argumentsError)

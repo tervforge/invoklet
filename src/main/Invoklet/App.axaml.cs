@@ -87,7 +87,7 @@ public class App : Application
             pluginArgumentError = ex.Message;
             plugins = new PluginDevelopmentOptions(null, args);
         }
-        var serviceProvider = ConfigureServices(plugins);
+        var serviceProvider = ConfigureServices(plugins, pluginArgumentError);
         _serviceProvider = serviceProvider;
 
         // Preferences → Logging takes effect at once.
@@ -130,8 +130,9 @@ public class App : Application
             desktop.Exit += (_, _) =>
             {
                 viewScale.Flush();
-                restart.StartReplacementAfterExit();
+                // The recovery store releases its session lock when the provider is disposed.
                 serviceProvider.Dispose();
+                restart.StartReplacementAfterExit();
             };
 
             base.OnFrameworkInitializationCompleted();
@@ -264,7 +265,7 @@ public class App : Application
         }, DispatcherPriority.Background);
     }
 
-    private ServiceProvider ConfigureServices(PluginDevelopmentOptions plugins)
+    private ServiceProvider ConfigureServices(PluginDevelopmentOptions plugins, string? pluginArgumentError)
     {
         var services = new ServiceCollection();
         services.AddSingleton(plugins);
@@ -348,8 +349,11 @@ public class App : Application
         services.AddSingleton<ISessionSnapshotLoader, DiskSessionSnapshotLoader>();
         services.AddTransient<ISessionRecoveryCoordinator, SessionRecoveryCoordinator>();
         services.AddTransient<MainWindowViewModel>();
+        // A rejected --plugins-dev is told on the Plugins page too, not only in the log: the window started without the mode.
         services.AddTransient(sp => new PluginsPageViewModel(sp.GetRequiredService<PluginSession>(), PluginStartup.ReadUserInventory,
-            () => sp.GetService<ApplicationRestart>()?.RequestAsync() ?? Task.CompletedTask));
+            () => sp.GetService<ApplicationRestart>()?.RequestAsync() ?? Task.CompletedTask,
+            pluginArgumentError is null ? null : "Plugin development mode could not be enabled. Check --plugins-dev or INVOKLET_PLUGINS_DEV.",
+            Directory.Exists));
         services.AddTransient<PreferencesWindowViewModel>();
         services.AddTransient<DependenciesWindowViewModel>();
         services.AddTransient<Windows_PreferencesWindow>();

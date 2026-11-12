@@ -31,6 +31,8 @@ public static class PluginStartup
             UserDirectory = Path.Combine(UserDataDirectory, "plugins"),
             Inventory = ReadUserInventory(),
             DevelopmentDirectory = developmentDirectory,
+            // Machine-local: copies of native libraries are neither roamed nor kept in a temporary folder.
+            NativeLibraryCacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Invoklet", "plugin-native"),
         }, [], loggerFactory).Load();
     }
 }

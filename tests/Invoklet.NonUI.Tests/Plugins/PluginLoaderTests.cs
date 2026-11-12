@@ -74,6 +74,19 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Equal("invoklet.fixture.sample", Assert.Single(_fixture.Connections.Registrations).Plugin!.Descriptor.Id);
     }
 
+    // Assemblies load from verified bytes, so the symbols must be handed over too, or a plugin's stack traces lose their lines.
+    [Fact]
+    public void Load_Should_LoadTheSymbolsBesideAnApprovedAssembly()
+    {
+        _fixture.AddThrowingPluginWithSymbols("invoklet.fixture.symbols");
+
+        var session = Load();
+
+        var error = TheError(Assert.Single(session.Rejected));
+        Assert.Equal(PluginDiagnosticCode.RegistrationFailed, error.Code);
+        Assert.Contains(PluginLoaderFixture.SymbolsSourceFile, error.Detail);
+    }
+
     [Fact]
     public void Load_Should_RejectAPluginWhoseHandlerThrows()
     {

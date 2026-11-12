@@ -68,8 +68,12 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     internal Assembly LoadPluginAssembly(string path)
     {
         if (_files is null) return LoadFromAssemblyPath(path);
+        // Loaded from verified bytes, not by path, so Assembly.Location is empty: a plugin finds its files through PluginContext.Directory.
+        // The symbols come along when the approved set has them, so a plugin's stack traces keep their line numbers.
         using var assembly = _files.ReadVerified(path);
-        return LoadFromStream(assembly);
+        var symbolsPath = Path.ChangeExtension(path, ".pdb");
+        using var symbols = _files.Contains(symbolsPath) ? _files.ReadVerified(symbolsPath) : null;
+        return symbols is null ? LoadFromStream(assembly) : LoadFromStream(assembly, symbols);
     }
 
     private IntPtr LoadNative(string path) => LoadUnmanagedDllFromPath(_files?.GetNativeLoadPath(path) ?? path);

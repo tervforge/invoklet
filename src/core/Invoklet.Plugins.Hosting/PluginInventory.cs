@@ -31,13 +31,13 @@ public sealed class PluginInventory
                 || entry.Roles is not { Count: > 0 } || entry.Roles.Any(role => role is null || PluginRoles.Parse(role) is null)
                 || entry.Roles.Distinct(StringComparer.Ordinal).Count() != entry.Roles.Count
                 || string.IsNullOrWhiteSpace(entry.Source) || entry.SignatureStatus != "none")
-                throw new JsonException("Invalid plugin inventory entry.");
+                throw new ArgumentException("Invalid plugin inventory entry.", nameof(entries));
             var snapshot = entry with
             {
                 Roles = Array.AsReadOnly(entry.Roles.Order(StringComparer.Ordinal).ToArray()),
                 ContentHash = entry.ContentHash.ToLowerInvariant(),
             };
-            if (!indexed.TryAdd(entry.Id, snapshot)) throw new JsonException("Duplicate plugin id in the inventory.");
+            if (!indexed.TryAdd(entry.Id, snapshot)) throw new ArgumentException("Duplicate plugin id in the inventory.", nameof(entries));
         }
         _entries = indexed;
         Entries = Array.AsReadOnly(indexed.Values.OrderBy(entry => entry.Id, StringComparer.Ordinal).ToArray());
@@ -81,8 +81,8 @@ public sealed class BundledPluginCatalog
         foreach (var entry in entries)
         {
             if (entry is null || !PluginCatalogJson.IsValid(entry.Id, entry.Version, entry.ContentHash))
-                throw new JsonException("Invalid bundled plugin entry.");
-            if (!_entries.TryAdd(entry.Id, entry)) throw new JsonException("Duplicate plugin id in the bundled catalogue.");
+                throw new ArgumentException("Invalid bundled plugin entry.", nameof(entries));
+            if (!_entries.TryAdd(entry.Id, entry)) throw new ArgumentException("Duplicate plugin id in the bundled catalogue.", nameof(entries));
         }
     }
 
@@ -118,6 +118,6 @@ internal static class PluginCatalogJson
             return create(JsonSerializer.Deserialize<TEntry[]>(file, Options) ?? throw new JsonException("Missing plugin entries."));
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return empty; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return invalid(ex.Message); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException) { return invalid(ex.Message); }
     }
 }

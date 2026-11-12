@@ -43,6 +43,8 @@ public sealed class PluginLoader
         RejectUnreadable(candidates);
         foreach (var candidate in candidates.Where(c => !c.Rejected)) CheckAdmission(candidate);
         RejectDuplicates(candidates);
+        PluginFiles.PruneNativeCache(_options.NativeLibraryCacheDirectory,
+            candidates.Where(c => !c.Rejected && c.Files is not null).Select(c => c.Files!.ContentHash).ToHashSet(StringComparer.Ordinal));
         foreach (var candidate in candidates.Where(c => !c.Rejected)) CheckRolesAndVersion(candidate);
         var order = OrderByDependencies(candidates);
         var shared = new HashSet<string>(_options.SharedAssemblies, StringComparer.OrdinalIgnoreCase);

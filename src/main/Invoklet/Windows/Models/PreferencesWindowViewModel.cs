@@ -110,6 +110,8 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
         // on its pages (AddSearchKeys).
         AddSearchKeys("keyboard", () => KeyBindings.SelectMany(row => new[] { row.Category, row.Title, row.Key, row.DefaultKey }));
         AddSearchKeys(SystemNode.Id, () => SystemSettings.SelectMany(setting => new[] { setting.Title, setting.Description }));
+        // Filled now, so a search finds a plugin before its page was ever opened; opening the page reads the inventory again.
+        PluginsPage.Refresh();
         AddSearchKeys(PluginsNode.Id, () => PluginsPage.Rows.SelectMany(row => new[] { row.Name, row.Id, row.Status, row.Metadata }));
 
         RebuildNodes();

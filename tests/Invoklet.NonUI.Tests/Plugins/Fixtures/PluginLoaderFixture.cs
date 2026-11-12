@@ -3,6 +3,7 @@ using Invoklet.Plugins;
 using Invoklet.Plugins.Hosting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Emit;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -21,6 +22,9 @@ public sealed class PluginLoaderFixture : IDisposable
 
     public string Root { get; } = Directory.CreateTempSubdirectory("Invoklet-plugin-loader").FullName;
 
+    /// <summary>Where the loader keeps verified copies of native libraries; apart from <see cref="Root"/>, which is scanned.</summary>
+    public string NativeCache { get; } = Directory.CreateTempSubdirectory("Invoklet-plugin-native").FullName;
+
     public PluginSource Source => new(Root, PluginTrust.Trusted);
 
     public Version ApplicationVersion { get; init; } = new(1, 2, 3);
@@ -33,12 +37,15 @@ public sealed class PluginLoaderFixture : IDisposable
     // can't go until the test process ends. What can be deleted is; the rest goes with the temp folder.
     public void Dispose()
     {
-        try
+        foreach (var folder in new[] { Root, NativeCache })
         {
-            Directory.Delete(Root, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
         }
     }
 
@@ -109,17 +116,46 @@ public sealed class PluginLoaderFixture : IDisposable
         return libraryPath;
     }
 
-    private static void EmitLibrary(string path, string source, IEnumerable<MetadataReference> references)
+    /// <summary>A plugin built here with its portable symbols beside it, whose <c>Initialize</c> throws from a known source file.</summary>
+    public string AddThrowingPluginWithSymbols(string id)
     {
+        const string entry = "SymbolsPlugin";
+        var directory = AddPlugin(id, CodeManifest(id, entry, assembly: $"{entry}.dll"));
+        var framework = new CSharpReferenceService().GetDefault().Select(path => MetadataReference.CreateFromFile(path)).ToArray();
+        EmitLibrary(Path.Combine(directory, $"{entry}.dll"), $$"""
+            using Invoklet.Plugins;
+            public sealed class {{entry}} : IInvokletPlugin
+            {
+                public PluginDescriptor Descriptor => new("{{id}}", "1.0.0");
+                public void Initialize(PluginContext context) => throw new System.InvalidOperationException("fails with symbols");
+            }
+            """, [.. framework, MetadataReference.CreateFromFile(typeof(IInvokletPlugin).Assembly.Location)], SymbolsSourceFile);
+        return directory;
+    }
+
+    public const string SymbolsSourceFile = "SymbolsPlugin.cs";
+
+    private static void EmitLibrary(string path, string source, IEnumerable<MetadataReference> references, string? sourceFileName = null)
+    {
+        var tree = sourceFileName is null
+            ? CSharpSyntaxTree.ParseText(source)
+            : CSharpSyntaxTree.ParseText(Microsoft.CodeAnalysis.Text.SourceText.From(source, System.Text.Encoding.UTF8), path: sourceFileName);
         var compilation = CSharpCompilation.Create(Path.GetFileNameWithoutExtension(path),
-            [CSharpSyntaxTree.ParseText(source)], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        var result = compilation.Emit(path);
+            [tree], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        using var assembly = File.Create(path);
+        using var symbols = sourceFileName is null ? null : File.Create(Path.ChangeExtension(path, ".pdb"));
+        var result = compilation.Emit(assembly, symbols, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
         Assert.True(result.Success, string.Join(Environment.NewLine, result.Diagnostics));
     }
 
     public PluginLoader CreateSut(params IPluginRoleHandler[] handlers) =>
-        new(new PluginLoaderOptions { ApplicationVersion = ApplicationVersion, UserDirectory = Root, Inventory = ApproveDiscovered() },
-            handlers.Length == 0 ? [Connections, Themes] : handlers, NullLoggerFactory.Instance);
+        new(new PluginLoaderOptions
+        {
+            ApplicationVersion = ApplicationVersion,
+            UserDirectory = Root,
+            Inventory = ApproveDiscovered(),
+            NativeLibraryCacheDirectory = NativeCache,
+        }, handlers.Length == 0 ? [Connections, Themes] : handlers, NullLoggerFactory.Instance);
 
     public PluginLoader CreateSut(PluginLoaderOptions options) =>
         new(options, [Connections, Themes], NullLoggerFactory.Instance);
@@ -129,6 +165,7 @@ public sealed class PluginLoaderFixture : IDisposable
         ApplicationVersion = ApplicationVersion,
         UserDirectory = Root,
         Inventory = inventory,
+        NativeLibraryCacheDirectory = NativeCache,
     });
 
     public IReadOnlyList<DiscoveredPlugin> Discover() => PluginDiscovery.Scan([Source]);

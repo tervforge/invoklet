@@ -23,8 +23,6 @@ catch (ArgumentException ex)
     return CliRunner.NotRunExitCode;
 }
 
-if (plugins.Directory is not null) stderr.WriteLine("Warning: plugin development mode is enabled.");
 // Scripts are built in a folder kept for each, so an unchanged one isn't built again.
 var services = CliServices.CreateDefault(plugins.Directory) with { BuildsFolder = CliServices.DefaultBuildsFolder };
-foreach (var diagnostic in services.Plugins.Diagnostics) stderr.WriteLine(diagnostic.Message);
 return await CliRunner.RunAsync(plugins.RemainingArguments.ToArray(), services, stdout, stderr, cts.Token);

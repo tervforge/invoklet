@@ -24,7 +24,15 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
     public static string DefaultBuildsFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "cli-builds");
 
-    public PluginSession Plugins { get; init; } = PluginSession.Empty;
+    private Lazy<PluginSession>? _plugins;
+
+    public PluginSession Plugins
+    {
+        get => _plugins?.Value ?? PluginSession.Empty;
+        init => _plugins = new Lazy<PluginSession>(() => value);
+    }
+
+    internal bool PluginDevelopmentEnabled { get; init; }
 
     public static CliServices CreateDefault(string? developmentDirectory = null)
     {
@@ -38,7 +46,8 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
             DotnetConnectionTools.Default, Secret);
         return new CliServices(registry, new DotnetSdkProvider(), connectionDrivers, schemas)
         {
-            Plugins = PluginStartup.Load(developmentDirectory, NullLoggerFactory.Instance),
+            _plugins = new Lazy<PluginSession>(() => PluginStartup.Load(developmentDirectory, NullLoggerFactory.Instance)),
+            PluginDevelopmentEnabled = developmentDirectory is not null,
         };
     }
 
