@@ -467,24 +467,30 @@ public static partial class Util
     public static string GetSecret(string name)
     {
         if (name is null) throw new ArgumentNullException(nameof(name));
+        if (GetCachedSecret(name) is { } cached) return cached;
         var path = SecretStorePath();
         var missing = new KeyNotFoundException(
             $"Invoklet's Secret Store has no secret named '{name}'. Add it in Tools → Secret Store ({path}).");
-        lock (AskedSecrets)
-        {
-            if (AskedSecrets.TryGetValue(name, out var asked)) return asked;
-        }
         if (Environment.GetEnvironmentVariable(InputEnvVar) == "1")
         {
-            if (AskInvokletForSecret(name) is { } kept)
+            // A host response and its cache update belong to the same input transaction.
+            lock (InputRequestLock)
             {
+                // A read or a write may have populated the cache while we waited for stdin.
+                if (GetCachedSecret(name) is { } existing) return existing;
+                var kept = AskInvokletForSecret(name) ?? AskForSecret(name) ?? throw missing;
                 lock (AskedSecrets) AskedSecrets[name] = kept;
                 return kept;
             }
-            return AskForSecret(name) ?? throw missing;
         }
         // Not started by Invoklet: the store is read here, which an encrypted one can't be without its key.
         return ReadStoredSecret(path, name, Environment.GetEnvironmentVariable(SecretCipher.KeyEnvVar)) ?? throw missing;
+    }
+
+    private static string? GetCachedSecret(string name)
+    {
+        lock (AskedSecrets)
+            return AskedSecrets.TryGetValue(name, out var value) ? value : null;
     }
 
     internal static string SecretStorePath() =>
@@ -497,8 +503,7 @@ public static partial class Util
     private static string? AskInvokletForSecret(string name)
     {
         var json = "{\"Secret\":" + JsonString(name) + ",\"Read\":true}";
-        Console.WriteLine(InputRequestPrefixChar + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
-        var answer = Console.In.ReadLine();
+        var answer = RequestInput(json);
         if (answer is null || answer.Length == 0) return null;
         var payload = answer.Length > 1 ? Encoding.UTF8.GetString(Convert.FromBase64String(answer.Substring(1))) : "";
         return answer[0] switch
@@ -523,7 +528,9 @@ public static partial class Util
         SecretStoreFile? store;
         try
         {
-            store = (SecretStoreFile?)ScriptJson.Deserialize(File.ReadAllText(path), typeof(SecretStoreFile));
+            var json = File.ReadAllText(path);
+            ScriptJson.CheckSecretStoreNames(json);
+            store = (SecretStoreFile?)ScriptJson.Deserialize(json, typeof(SecretStoreFile));
         }
         catch (Exception ex) when (ScriptJson.IsJsonException(ex))
         {
@@ -599,14 +606,16 @@ public static partial class Util
         // An input request with the value (or Remove, as a request without a value asks the user): Invoklet keeps it and
         // answers 1 (kept) or 0, asking nobody.
         var json = "{\"Secret\":" + JsonString(name) + (value is null ? ",\"Remove\":true}" : ",\"Value\":" + JsonString(value) + "}");
-        Console.WriteLine(InputRequestPrefixChar + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
-        var answer = Console.In.ReadLine();
-        if (answer == "3") throw new UnauthorizedAccessException($"You didn't let this script change the secret '{name}'.");
-        if (answer != "1") throw new IOException($"Invoklet couldn't save the secret '{name}' in its Secret Store.");
-        lock (AskedSecrets)
+        lock (InputRequestLock)
         {
-            if (value is null) AskedSecrets.Remove(name);
-            else AskedSecrets[name] = value;
+            var answer = RequestInput(json);
+            if (answer == "3") throw new UnauthorizedAccessException($"You didn't let this script change the secret '{name}'.");
+            if (answer != "1") throw new IOException($"Invoklet couldn't save the secret '{name}' in its Secret Store.");
+            lock (AskedSecrets)
+            {
+                if (value is null) AskedSecrets.Remove(name);
+                else AskedSecrets[name] = value;
+            }
         }
     }
 
@@ -628,8 +637,7 @@ public static partial class Util
         // Invoklet answers a digit, with a text (Base64) after it for some: 1 and the path, 0 for none, 2 and why the store can't be
         // read, 4 and why the name isn't valid.
         var json = "{\"Path\":" + JsonString(name) + ",\"Read\":true}";
-        Console.WriteLine(InputRequestPrefixChar + Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
-        var answer = Console.In.ReadLine();
+        var answer = RequestInput(json);
         if (answer is null || answer.Length == 0) throw new InvalidOperationException("Util.GetPath: the run ended before Invoklet answered.");
         var payload = answer.Length > 1 ? Encoding.UTF8.GetString(Convert.FromBase64String(answer.Substring(1))) : "";
         return answer[0] switch
@@ -653,9 +661,7 @@ public static partial class Util
             $"The Secret Store has no secret named '{name}'. Enter it; Invoklet keeps it there for next time:",
             isPassword: true, secret: name);
         // An empty answer (or the end of the command line's stdin) is no secret: the script hears it is missing.
-        if (value is null || value.Length == 0) return null;
-        lock (AskedSecrets) AskedSecrets[name] = value;
-        return value;
+        return string.IsNullOrEmpty(value) ? null : value;
     }
 
     private static string? ReadLineCore(string? prompt, bool isPassword, string? secret = null)
@@ -665,9 +671,20 @@ public static partial class Util
         // secret Util.GetSecret asks for: the host keeps the answer in the Secret Store.
         var json = "{\"Prompt\":" + JsonString(prompt) + ",\"IsPassword\":" + (isPassword ? "true" : "false")
             + (secret is null ? "" : ",\"Secret\":" + JsonString(secret)) + "}";
+        return RequestInput(json);
+    }
+
+    private static readonly object InputRequestLock = new();
+
+    private static string? RequestInput(string json)
+    {
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
-        Console.WriteLine(InputRequestPrefixChar + encoded);
-        return Console.In.ReadLine();
+        // Every Util input operation shares stdin. Only one request may be awaiting a reply.
+        lock (InputRequestLock)
+        {
+            Console.WriteLine(InputRequestPrefixChar + encoded);
+            return Console.In.ReadLine();
+        }
     }
 
     // A JSON string literal (or null), escaped per RFC 8259.
@@ -722,6 +739,31 @@ public static partial class Util
         public static object? Deserialize(string json, Type type) => Invoke(Api.Value.Deserialize, json, type);
 
         public static bool IsJsonException(Exception ex) => Api.Value.JsonException.IsInstanceOfType(ex);
+
+        // .NET 6 and later have JsonElement, even when the serializer does not have AllowDuplicateProperties.
+        public static void CheckSecretStoreNames(string json)
+        {
+            var elementType = Api.Value.JsonException.Assembly.GetType("System.Text.Json.JsonElement", throwOnError: true)!;
+            var enumerate = elementType.GetMethod("EnumerateObject", Type.EmptyTypes)!;
+            var kind = elementType.GetProperty("ValueKind")!;
+            var propertyType = Api.Value.JsonException.Assembly.GetType("System.Text.Json.JsonProperty", throwOnError: true)!;
+            var name = propertyType.GetProperty("Name")!;
+            var value = propertyType.GetProperty("Value")!;
+            var root = Deserialize(json, elementType)!;
+            CheckObject(root, isSecretList: false);
+
+            void CheckObject(object element, bool isSecretList)
+            {
+                if (kind.GetValue(element)?.ToString() != "Object") return;
+                var names = new HashSet<string>(isSecretList ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+                foreach (var property in (System.Collections.IEnumerable)enumerate.Invoke(element, null)!)
+                {
+                    var key = (string)name.GetValue(property)!;
+                    if (!names.Add(key)) throw new InvalidDataException("Invoklet's Secret Store contains duplicate names.");
+                    if (!isSecretList && key == "Secrets") CheckObject(value.GetValue(property)!, isSecretList: true);
+                }
+            }
+        }
 
         // Default options (null), and the serializer's own exception rather than the reflection wrapper.
         private static object? Invoke(MethodInfo method, object? value, Type type)

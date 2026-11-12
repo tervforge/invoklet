@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using System.Text.Json;
 using Invoklet.Secrets;
 using Xunit;
 
@@ -102,6 +103,47 @@ public sealed class FilePathStoreTests : IDisposable
         // Assert
         Assert.IsType<InvalidDataException>(thrown);
         Assert.Equal(content, File.ReadAllText(StorePath));
+    }
+
+    [Fact]
+    public void LoadSnapshot_AnExactDuplicateName_RejectsTheFile()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        var first = JsonSerializer.Serialize(At("first"));
+        var second = JsonSerializer.Serialize(At("second"));
+        var content = $$"""{"Version":1,"Paths":{"data":{{first}},"data":{{second}}} }""";
+        File.WriteAllText(StorePath, content);
+
+        Assert.Throws<InvalidDataException>(() => new FilePathStore(StorePath).LoadSnapshot());
+        Assert.Equal(content, File.ReadAllText(StorePath));
+    }
+
+    [Theory]
+    [InlineData("*.csv")]
+    [InlineData("data<old>")]
+    [InlineData("a\"b")]
+    public void LoadSnapshot_ALegacyInvalidWindowsPath_KeepsValidPathsReadableAndAllowsRepair(string fileName)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "These characters are legal in Unix file names.");
+        var valid = At("data");
+        var legacy = At(fileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
+        File.WriteAllText(StorePath, JsonSerializer.Serialize(new
+        {
+            Version = 1,
+            Paths = new Dictionary<string, string> { ["data"] = valid, ["legacy"] = legacy },
+        }));
+        var store = new FilePathStore(StorePath);
+
+        var snapshot = store.LoadSnapshot();
+        Assert.Equal([new NamedPath("data", valid), new NamedPath("legacy", legacy)], snapshot.Paths);
+        Assert.Equal(valid, store.Read("data"));
+        Assert.Throws<InvalidDataException>(() => store.Read("legacy"));
+        Assert.Throws<ArgumentException>(() => store.Save(snapshot.Paths, snapshot.Version));
+
+        var repaired = At("input.csv");
+        store.Save([snapshot.Paths[0], new("legacy", repaired)], snapshot.Version);
+        Assert.Equal(repaired, store.Read("legacy"));
     }
 
     [Fact]

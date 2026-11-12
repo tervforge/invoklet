@@ -71,6 +71,7 @@ public sealed class SecretStoreTests : IDisposable
     [InlineData("{\"Version\":1,\"Protection\":\"Vault\",\"Secrets\":{}}", "The secret store uses an unknown protection (Vault).")]
     [InlineData("{\"Version\":1,\"Protection\":\"None\",\"Secrets\":{\"db\":null}}", "The secret store file is damaged.")]
     [InlineData("{\"Version\":1,\"Protection\":\"DPAPI\",\"Secrets\":{\"db\":null}}", "The secret store file is damaged.")]
+    [InlineData("{\"Version\":1,\"Protection\":\"None\",\"Secrets\":{\"db\":\"a\",\"db\":\"b\"}}", "The secret store file is damaged.")]
     [InlineData("{\"Version\":1,\"Protection\":\"None\",\"Secrets\":{\"db\":\"a\",\"DB\":\"b\"}}",
         "The secret store file is damaged: two secrets are named 'DB' (letter case aside).")]
     public void AStoreThatCantBeRead_Should_FailToLoad_AndStayUnchanged(string content, string message)
@@ -266,14 +267,16 @@ public sealed class SecretStoreTests : IDisposable
         var folder = Path.GetDirectoryName(StorePath)!;
         var leftover = Path.Combine(folder, "secrets.json." + Guid.NewGuid().ToString("N") + ".tmp");
         var unrelated = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".tmp");
+        var backup = Path.Combine(folder, "secrets.json.backup.tmp");
         File.WriteAllText(leftover, "{\"Secrets\":{\"db\":\"stale\"}}");
         File.WriteAllText(unrelated, "someone else's");
+        File.WriteAllText(backup, "backup");
 
         SaveSecrets([new Secret("db", "changed")]);
 
         Assert.False(File.Exists(leftover));
         Assert.True(File.Exists(unrelated));
-        Assert.Empty(Directory.GetFiles(folder, "secrets.json.*.tmp"));
+        Assert.Equal("backup", File.ReadAllText(backup));
     }
 
     [Fact]

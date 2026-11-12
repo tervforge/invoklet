@@ -13,6 +13,12 @@ Notable changes in each Invoklet release. Downloads are on the
 - Rejected stale code actions after a context change and showed when a script change cancelled Fix All.
 - Refreshed lightbulb actions when references or other analysis context changed without an edit.
 - Applied script warning suppression from the start of the script and hid suppression for compiler errors.
+- Rejected new wildcard patterns in Windows Path Store entries while allowing older entries to be repaired.
+- Kept parallel `Util.GetPath` calls from receiving each other's responses and rejected duplicate names in `paths.json`.
+- Kept concurrent secret reads from restoring old values after an update or removal.
+- Scoped unsaved-script secret permissions to one run and required a new permission after external edits.
+- Preserved unrelated files when cleaning up interrupted store writes and rejected duplicate secret names in JSON.
+- Accepted extended Windows paths with forward slashes and rejected invalid Windows path characters.
 
 ### Changed
 

@@ -37,6 +37,7 @@ internal sealed class SecretAccessGateFixture
     public List<(string Script, string Secret, bool Remove)> ChangesAsked { get; } = [];
 
     public string ScriptPath { get; } = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "report.inv"));
+    private readonly object _run = new();
 
     // What the script's file holds, as its SHA-256: changed by the test as another program would; nothing is read from the disk.
     public string? FileContents { get; set; } = "AAAA";
@@ -48,7 +49,7 @@ internal sealed class SecretAccessGateFixture
     }
 
     public SecretAccess Request(string secret = "billing", bool isSave = false, bool unsaved = false, SecretChange change = SecretChange.None) =>
-        new(unsaved ? null : ScriptPath, secret, isSave, change);
+        new(unsaved ? null : ScriptPath, secret, isSave, change) { RunIdentity = _run };
 
     public SecretAccessGate CreateSut() => new(Preferences.Object, (script, secret, isSave, token) =>
     {

@@ -34,6 +34,31 @@ public sealed class PathStoreRulesResolveTests
         => Assert.Throws<ArgumentException>(() => PathStoreRules.Resolve(Path.Combine("..", "data")));
 
     [Theory]
+    [InlineData("*.csv")]
+    [InlineData("data?.csv")]
+    [InlineData("a<b")]
+    [InlineData("a>b")]
+    [InlineData("a\"b")]
+    public void Resolve_AWindowsOnlyInvalidCharacter_IsRejectedOnWindowsAndKeptOnUnix(string name)
+    {
+        var path = Path.Combine(Root, name);
+
+        if (OperatingSystem.IsWindows())
+            Assert.Throws<ArgumentException>(() => PathStoreRules.Resolve(path));
+        else
+            Assert.Equal(path, PathStoreRules.Resolve(path));
+    }
+
+    [Fact]
+    public void Resolve_AnExtendedWindowsPathWithForwardSlashes_IsNormalized()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var path = "//?/" + Path.Combine(Root, "data").Replace('\\', '/');
+
+        Assert.Equal(Path.GetFullPath(path), PathStoreRules.Resolve(path));
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("  ")]

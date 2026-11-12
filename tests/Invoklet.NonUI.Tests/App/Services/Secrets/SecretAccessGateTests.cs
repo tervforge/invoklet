@@ -189,7 +189,8 @@ public sealed class SecretAccessGateTests
 
         // Assert
         Assert.True(allowed);
-        Assert.Single(fixture.ChangesAsked);
+        Assert.Equal(2, fixture.Asked.Count);
+        Assert.Empty(fixture.ChangesAsked);
     }
 
     // Write access allowed once for the old contents, then kept in the settings for the new ones: the kept one counts.
@@ -333,9 +334,9 @@ public sealed class SecretAccessGateTests
         Assert.Equal(2, fixture.Asked.Count);
     }
 
-    // An unsaved script has no file to remember: Always Allow lasts until Invoklet closes, and nothing is saved.
+    // An unsaved script has no file to remember: Always Allow lasts for its run, and nothing is saved.
     [Fact]
-    public async Task MayAccessAsync_AnUnsavedScriptAlwaysAllowed_AllowsUntilInvokletClosesWithoutSaving()
+    public async Task MayAccessAsync_AnUnsavedScriptAlwaysAllowed_AllowsTheSameRunWithoutSaving()
     {
         // Arrange
         var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
@@ -349,6 +350,39 @@ public sealed class SecretAccessGateTests
         Assert.True(allowed);
         Assert.Equal([("an unsaved script", "billing", false)], fixture.Asked);
         Assert.Empty(fixture.Settings.AllowedScripts);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MayAccessAsync_AnAllowedUnsavedRun_DoesNotGrantAnotherRunAccess(bool isSave)
+    {
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+        var first = fixture.Request(isSave: isSave, unsaved: true);
+        var second = first with { RunIdentity = new object() };
+        Assert.True(await sut.MayAccessAsync(first, CancellationToken.None));
+        fixture.Answer = SecretAccessChoice.Deny;
+
+        var allowed = await sut.MayAccessAsync(second, CancellationToken.None);
+
+        Assert.False(allowed);
+        Assert.Equal(2, fixture.Asked.Count);
+    }
+
+    [Fact]
+    public async Task MayAccessAsync_AnExternalEditAfterAllowOnce_AsksAgain()
+    {
+        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Once };
+        var sut = fixture.CreateSut();
+        Assert.True(await sut.MayAccessAsync(fixture.Request(), CancellationToken.None));
+        fixture.FileContents = "BBBB";
+        fixture.Answer = SecretAccessChoice.Deny;
+
+        var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
+
+        Assert.False(allowed);
+        Assert.Equal(2, fixture.Asked.Count);
     }
 
     // Two requests while the question is open (a script asking for two secrets, two runs at once) get one question.

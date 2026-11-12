@@ -2,8 +2,10 @@ using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
+using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console.Testing;
 using Xunit;
 
@@ -133,6 +135,46 @@ public class CliRunnerTests
             Assert.DoesNotContain("CS0219", stdout.Output);
             Assert.DoesNotContain('\x1e', stdout.Output[..]);
             Assert.Contains("CS0219", stderr.Output);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task RunAsync_ConcurrentPathRequests_ReturnTheValueOfEachRequestedName()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var path = Path.Combine(Path.GetTempPath(), $"Invoklet-cli-paths-{Guid.NewGuid():N}.inv");
+        var root = Path.GetPathRoot(path)!;
+        var registry = new LanguageHostRegistry { PathReader = name => Path.Combine(root, name) };
+        registry.Register(new CSharpLanguageHostFactory(NullLoggerFactory.Instance, new DotnetRuntimeReferenceLocator()));
+        var services = new CliServices(registry, new DotnetSdkProvider());
+        try
+        {
+            await File.WriteAllTextAsync(path, """
+                ---
+                language: csharp
+                kind: statements
+                ---
+
+                ```csharp run
+                var root = System.IO.Path.GetPathRoot(Util.CurrentQueryPath);
+                System.Threading.Tasks.Parallel.For(0, 128, i =>
+                {
+                    var name = $"path{i}";
+                    var actual = Util.GetPath(name);
+                    if (actual != System.IO.Path.Combine(root, name))
+                        throw new InvalidOperationException($"Wrong path for {name}: {actual}");
+                });
+                Console.WriteLine("all paths matched");
+                ```
+                """, timeout.Token);
+            var stdout = new TestConsole();
+            var stderr = new TestConsole();
+
+            var exit = await CliRunner.RunAsync([path], services, stdout, stderr, timeout.Token);
+
+            Assert.True(exit == 0, stderr.Output);
+            Assert.Contains("all paths matched", stdout.Output);
         }
         finally { File.Delete(path); }
     }

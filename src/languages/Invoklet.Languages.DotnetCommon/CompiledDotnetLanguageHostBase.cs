@@ -619,7 +619,9 @@ public abstract class CompiledDotnetLanguageHostBase : LanguageHostBase
         if (SecretAccessApprover is not { } approve) return true;
         try
         {
-            return await approve(new SecretAccess(_options.CurrentQueryPath, name, isSave, change), _runCts?.Token ?? CancellationToken.None);
+            var run = _runCts;
+            return await approve(new SecretAccess(_options.CurrentQueryPath, name, isSave, change) { RunIdentity = run },
+                run?.Token ?? CancellationToken.None);
         }
         catch (Exception ex)
         {

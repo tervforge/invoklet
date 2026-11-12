@@ -37,6 +37,7 @@ public interface IPathStore
 public static class PathStoreRules
 {
     private const int MaxNameLength = 100;
+    private static readonly char[] WindowsInvalidPathCharacters = ['*', '?', '<', '>', '"'];
 
     /// <summary>The name trimmed; letters, digits, <c>_</c>, <c>-</c> and <c>.</c>, compared letter case aside.</summary>
     /// <exception cref="ArgumentException">The name is empty, too long or has another character.</exception>
@@ -59,14 +60,32 @@ public static class PathStoreRules
     {
         var path = value?.Trim() ?? "";
         if (path.Length == 0) throw new ArgumentException("A path can't be empty.");
-        if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0) throw new ArgumentException($"'{path}' isn't a valid path.");
+        if (HasInvalidPathCharacters(path)) throw new ArgumentException($"'{path}' isn't a valid path.");
         if (path == "~" || path.StartsWith("~/", StringComparison.Ordinal) || OperatingSystem.IsWindows() && path.StartsWith(@"~\", StringComparison.Ordinal))
             path = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[1..]);
         else if (!Path.IsPathFullyQualified(path))
             throw new ArgumentException($"'{path}' is relative: give a full path, or one starting with ~ for your home folder.");
-        var full = Path.GetFullPath(path);
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch (PathTooLongException ex) { throw new ArgumentException("The path is too long.", ex); }
         return Path.GetPathRoot(full) == full ? full : Path.TrimEndingDirectorySeparator(full);
     }
+
+    internal static bool IsValidFullPath(string path, bool allowLegacyWindowsCharacters = false) =>
+        !HasInvalidPathCharacters(path, allowLegacyWindowsCharacters) && Path.IsPathFullyQualified(path);
+
+    private static bool HasInvalidPathCharacters(string path, bool allowLegacyWindowsCharacters = false)
+    {
+        if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return true;
+        if (allowLegacyWindowsCharacters || !OperatingSystem.IsWindows()) return false;
+
+        // The question mark in a Windows device prefix is part of the path syntax.
+        var start = path.Length >= 4 && IsWindowsSeparator(path[0]) && IsWindowsSeparator(path[1])
+            && path[2] == '?' && IsWindowsSeparator(path[3]) ? 4 : 0;
+        return path.IndexOfAny(WindowsInvalidPathCharacters, start) >= 0;
+    }
+
+    private static bool IsWindowsSeparator(char character) => character is '\\' or '/';
 }
 
 public static class PathStoreExtensions
@@ -77,7 +96,10 @@ public static class PathStoreExtensions
     public static string? Read(this IPathStore store, string name)
     {
         var valid = PathStoreRules.Name(name);
-        return store.LoadSnapshot().Paths.FirstOrDefault(p => string.Equals(p.Name, valid, StringComparison.OrdinalIgnoreCase))?.Path;
+        var path = store.LoadSnapshot().Paths.FirstOrDefault(p => string.Equals(p.Name, valid, StringComparison.OrdinalIgnoreCase))?.Path;
+        if (path is not null && !PathStoreRules.IsValidFullPath(path))
+            throw new InvalidDataException($"The saved path '{valid}' is invalid. Correct it in Tools → Path Store.");
+        return path;
     }
 
     /// <summary>
@@ -121,6 +143,7 @@ public sealed class FilePathStore(string? filePath = null) : IPathStore
     private const int FormatVersion = 1;
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions ReadOptions = new() { AllowDuplicateProperties = false };
 
     public string FilePath { get; } = filePath ?? DefaultPath();
 
@@ -139,7 +162,7 @@ public sealed class FilePathStore(string? filePath = null) : IPathStore
         StoreFile file;
         try
         {
-            file = JsonSerializer.Deserialize<StoreFile>(bytes) ?? throw new InvalidDataException("The path store is empty.");
+            file = JsonSerializer.Deserialize<StoreFile>(bytes, ReadOptions) ?? throw new InvalidDataException("The path store is empty.");
         }
         catch (JsonException ex)
         {
@@ -153,7 +176,8 @@ public sealed class FilePathStore(string? filePath = null) : IPathStore
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, path) in file.Paths ?? [])
         {
-            if (path is null || !Path.IsPathFullyQualified(path) || !IsValidName(name))
+            // Older versions accepted additional characters on Windows. Load these rows so they can be repaired.
+            if (path is null || !PathStoreRules.IsValidFullPath(path, allowLegacyWindowsCharacters: true) || !IsValidName(name))
                 throw new InvalidDataException("The path store file is damaged.");
             // Util.GetPath finds a path by name letter case aside: names differing only in case would make the path it reads
             // depend on the file's order.
@@ -170,7 +194,7 @@ public sealed class FilePathStore(string? filePath = null) : IPathStore
         foreach (var path in paths)
         {
             if (PathStoreRules.Name(path.Name) != path.Name) throw new ArgumentException($"The path name '{path.Name}' has spaces around it.", nameof(paths));
-            if (!Path.IsPathFullyQualified(path.Path)) throw new ArgumentException($"The path '{path.Path}' of '{path.Name}' isn't a full path.", nameof(paths));
+            if (!PathStoreRules.IsValidFullPath(path.Path)) throw new ArgumentException($"The path '{path.Path}' of '{path.Name}' isn't a valid full path.", nameof(paths));
             if (!names.Add(path.Name)) throw new ArgumentException($"Two paths are named '{path.Name}' (letter case aside).", nameof(paths));
         }
         var file = new StoreFile { Version = FormatVersion, Paths = paths.ToDictionary(p => p.Name, string? (p) => p.Path) };

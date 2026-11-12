@@ -123,6 +123,7 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
     private const string NoProtection = "None";
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions ReadOptions = new() { AllowDuplicateProperties = false };
 
     private readonly ISecretKeySource? _keys;
 
@@ -209,7 +210,7 @@ public sealed class FileSecretStore : ISecretStore, ISecretNames
         StoreFile file;
         try
         {
-            file = JsonSerializer.Deserialize<StoreFile>(bytes)
+            file = JsonSerializer.Deserialize<StoreFile>(bytes, ReadOptions)
                 ?? throw new InvalidDataException("The secret store is empty.");
         }
         catch (JsonException ex)

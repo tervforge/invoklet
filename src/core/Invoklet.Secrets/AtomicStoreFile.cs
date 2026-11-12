@@ -38,11 +38,11 @@ internal static class AtomicStoreFile
         var lockOptions = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
         if (!windows) lockOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         using var writer = WhileInUse(() => new FileStream(fullPath + ".lock", lockOptions), busy);
-        DeleteLeftoverTemps(folder, Path.GetFileName(fullPath));
         var current = Read(fullPath);
         var currentVersion = current is null ? null : VersionOf(current);
         if (!string.Equals(expectedVersion, currentVersion, StringComparison.Ordinal))
             throw conflict();
+        DeleteLeftoverTemps(folder, Path.GetFileName(fullPath));
         // Under the lock, so what the store adds to its contents (a new key, say) is made by one writer only.
         var bytes = build(fullPath, current);
 
@@ -87,8 +87,14 @@ internal static class AtomicStoreFile
     // Called under the lock, so no other save is between writing and moving its own temp file.
     private static void DeleteLeftoverTemps(string folder, string storeName)
     {
-        foreach (var path in Directory.EnumerateFiles(folder, TempPrefix(storeName) + "*.tmp"))
+        var prefix = TempPrefix(storeName);
+        const string suffix = ".tmp";
+        foreach (var path in Directory.EnumerateFiles(folder, "*.tmp"))
         {
+            var name = Path.GetFileName(path);
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (name.Length != prefix.Length + 32 + suffix.Length || !name.StartsWith(prefix, comparison)
+                || !name.EndsWith(suffix, comparison) || !Guid.TryParseExact(name.AsSpan(prefix.Length, 32), "N", out _)) continue;
             try { File.Delete(path); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
