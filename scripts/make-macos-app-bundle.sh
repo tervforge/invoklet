@@ -10,12 +10,13 @@
 # ID signature or notarization, so Gatekeeper may still ask the user to allow the first launch.
 # Nothing may modify the bundle after signing.
 #
-# Usage: make-macos-app-bundle.sh <publish-dir> <output-dir>
+# Usage: make-macos-app-bundle.sh <publish-dir> <output-dir> [plugin-packager-dll]
 set -euo pipefail
 
 PUBLISH_DIR="$1"
 OUTPUT_DIR="$2"
 APP="$OUTPUT_DIR/Invoklet.app"
+PLUGIN_PACKAGER="${3:-build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll}"
 
 if ! command -v codesign > /dev/null; then
     echo "error: codesign not found — the bundle must be built on macOS with the Xcode command line tools" >&2
@@ -28,6 +29,10 @@ VERSION=$(awk -F'</?Version>' 'NF > 2 { print $2; exit }' "$CSPROJ")
 if [[ -z "$VERSION" ]]; then
     echo "error: no <Version> found in $CSPROJ" >&2
     exit 1
+fi
+
+if [[ -d "$PUBLISH_DIR/plugins" ]]; then
+    dotnet "$PLUGIN_PACKAGER" verify "$PUBLISH_DIR"
 fi
 
 rm -rf "$APP"
@@ -128,6 +133,10 @@ while IFS= read -r -d '' FILE; do
         codesign --force --sign - "$FILE"
     fi
 done < <(find "$APP/Contents" -type f -print0)
+if [[ -d "$APP/Contents/Resources/plugins" ]]; then
+    # Signing changes native bytes. Record the finished package before the outer signature seals it.
+    dotnet "$PLUGIN_PACKAGER" refresh-after-signing "$APP/Contents/Resources"
+fi
 codesign --force --sign - "$APP"
 
 # Fail the build rather than ship a bundle macOS would reject.

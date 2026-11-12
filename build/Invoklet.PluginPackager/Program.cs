@@ -12,8 +12,11 @@ try
         case ["verify", var output]:
             Verify(Path.Combine(Path.GetFullPath(output), "plugins"));
             return 0;
+        case ["refresh-after-signing", var output]:
+            RefreshAfterSigning(Path.Combine(Path.GetFullPath(output), "plugins"));
+            return 0;
         default:
-            Console.Error.WriteLine("Usage: Invoklet.PluginPackager stage <source> <output> | verify <output>");
+            Console.Error.WriteLine("Usage: Invoklet.PluginPackager stage <source> <output> | verify <output> | refresh-after-signing <output>");
             return 2;
     }
 }
@@ -91,6 +94,20 @@ static string Verify(string root)
     var catalogue = File.ReadAllText(Path.Combine(root, BundledPluginCatalog.FileName));
     if (catalogue != expected) throw new IOException($"Bundled catalogue does not match the plugin layout and contents in {root}.");
     return catalogue;
+}
+
+static void RefreshAfterSigning(string root)
+{
+    var packages = ReadPackages(root);
+    var path = Path.Combine(root, BundledPluginCatalog.FileName);
+    var previous = JsonSerializer.Deserialize<BundledPluginEntry[]>(File.ReadAllText(path), new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        AllowDuplicateProperties = false,
+    }) ?? throw new IOException($"Missing bundled catalogue entries in {root}.");
+    if (!previous.Select(entry => (entry.Id, entry.Version)).SequenceEqual(packages.Select(package => (package.Entry.Id, package.Entry.Version))))
+        throw new IOException($"Bundled plugin ids or versions changed during signing in {root}.");
+    File.WriteAllText(path, new BundledPluginCatalog(packages.Select(package => package.Entry)).ToJson());
 }
 
 static IReadOnlyList<Package> ReadPackages(string root)

@@ -407,6 +407,29 @@ jobs:
         if: github.event_name != 'pull_request'
         run: dotnet test --no-build --configuration Release --verbosity normal --filter "Platform!=Independent"
 
+      - name: Verify signed macOS bundle with a plugin payload
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -e
+          smoke="$RUNNER_TEMP/invoklet-macos-plugin-layout"
+          mkdir -p "$smoke"
+          cp -R tests/fixtures/plugins/bundled "$smoke/source"
+          packager=build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll
+          dotnet publish src/main/Invoklet/Invoklet.csproj -c Release --no-build --no-restore -o "$smoke/publish"
+          payload="$smoke/source/theme/invoklet.fixture.packaging/native-payload"
+          cp "$smoke/publish/Invoklet" "$payload"
+          codesign --force --sign - "$payload"
+          codesign --remove-signature "$payload"
+          dotnet "$packager" stage "$smoke/source" "$smoke/publish"
+          bash scripts/make-macos-app-bundle.sh "$smoke/publish" "$smoke/output" "$packager"
+          resources="$smoke/output/Invoklet.app/Contents/Resources"
+          dotnet "$packager" verify "$resources"
+          if cmp -s "$smoke/publish/plugins/bundled.json" "$resources/plugins/bundled.json"; then
+            echo 'Expected the bundled plugin hash to change when signing the native payload.' >&2
+            exit 1
+          fi
+
       # Release assets — only built on an actual merge to main, not on every PR. Bundled as a real
       # Invoklet.app (Contents/MacOS + Info.plist + icon), not just a raw publish folder, so it's
       # double-clickable/shows up properly in Finder/Dock, then shipped as one disk image per
