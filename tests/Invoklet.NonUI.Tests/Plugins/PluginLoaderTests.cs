@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Plugins;
 
+[Trait("Category", "Integration")]
 public sealed class PluginLoaderTests : IDisposable
 {
     private const string Sample = PluginLoaderFixture.SampleNamespace;

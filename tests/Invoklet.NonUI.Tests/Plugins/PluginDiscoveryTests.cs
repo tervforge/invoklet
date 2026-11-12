@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Invoklet.NonUI.Tests.Plugins;
 
+[Trait("Category", "Integration")]
 public sealed class PluginDiscoveryTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("Invoklet-plugin-discovery").FullName;

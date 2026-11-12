@@ -15,10 +15,12 @@ public sealed class PluginLoader
     private readonly IReadOnlyDictionary<PluginRole, IPluginRoleHandler> _handlers;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
+    private readonly PluginAdmission _admission;
 
     public PluginLoader(PluginLoaderOptions options, IReadOnlyList<IPluginRoleHandler> handlers, ILoggerFactory loggerFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _admission = new PluginAdmission(_options);
         ArgumentNullException.ThrowIfNull(handlers);
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = loggerFactory.CreateLogger<PluginLoader>();
@@ -31,12 +33,15 @@ public sealed class PluginLoader
         _handlers = byRole;
     }
 
+    public PluginSession Load() => Load(PluginDiscovery.Scan(_admission.Sources()));
+
     public PluginSession Load(IReadOnlyList<DiscoveredPlugin> discovered)
     {
         ArgumentNullException.ThrowIfNull(discovered);
-        var candidates = discovered.Select(d => new Candidate(d)).ToList();
+        var candidates = discovered.Select(d => new Candidate(d with { Directory = Path.GetFullPath(d.Directory) })).ToList();
 
         RejectUnreadable(candidates);
+        foreach (var candidate in candidates.Where(c => !c.Rejected)) CheckAdmission(candidate);
         RejectDuplicates(candidates);
         foreach (var candidate in candidates.Where(c => !c.Rejected)) CheckRolesAndVersion(candidate);
         var order = OrderByDependencies(candidates);
@@ -51,7 +56,25 @@ public sealed class PluginLoader
         foreach (var plugin in rejected)
             _logger.LogWarning("Rejected plugin {PluginId}: {Reasons}", plugin.Id,
                 string.Join("; ", plugin.Diagnostics.Where(d => d.IsError).Select(d => $"{d.Code}: {d.Message}{(d.Detail is null ? "" : $" [{d.Detail}]")}")));
-        return new PluginSession(loaded, rejected);
+        var sourceDiagnostics = new List<PluginDiagnostic>();
+        if (_options.Inventory.ReadError is { } inventoryError)
+            sourceDiagnostics.Add(PluginDiagnostic.Error("plugins.json", PluginDiagnosticCode.InventoryUnreadable, "The user plugin inventory could not be read.", inventoryError));
+        if (_options.BundledCatalog.ReadError is { } catalogueError)
+            sourceDiagnostics.Add(PluginDiagnostic.Error("bundled.json", PluginDiagnosticCode.InventoryUnreadable, "The bundled plugin catalogue could not be read.", catalogueError));
+        return new PluginSession(loaded, rejected, _options.Inventory, sourceDiagnostics);
+    }
+
+    private void CheckAdmission(Candidate candidate)
+    {
+        if (candidate.Manifest is { RequiresCode: false, Entry: not null })
+        {
+            candidate.Reject(PluginDiagnosticCode.ManifestInvalid, $"'{candidate.Id}' declares code for a data-only plugin.");
+            return;
+        }
+        var diagnostic = _admission.Check(candidate.Discovered, out var files, out var manifest);
+        if (diagnostic is not null) candidate.AddDiagnostic(diagnostic);
+        candidate.Manifest = manifest;
+        candidate.Files = files;
     }
 
     private static void RejectUnreadable(List<Candidate> candidates)
@@ -77,11 +100,6 @@ public sealed class PluginLoader
     private void CheckRolesAndVersion(Candidate candidate)
     {
         var manifest = candidate.Manifest!;
-        if (!manifest.RequiresCode && manifest.Entry is not null)
-        {
-            candidate.Reject(PluginDiagnosticCode.ManifestInvalid, $"'{candidate.Id}' declares code for a data-only plugin.");
-            return;
-        }
         foreach (var (role, version) in manifest.Roles)
         {
             if (!PluginRoles.IsRegistered(role))
@@ -237,8 +255,8 @@ public sealed class PluginLoader
         try
         {
             candidate.LoadContext = new PluginLoadContext(candidate.Id, assemblyPath, shared,
-                [.. candidate.Dependencies.Select(d => d.LoadContext).OfType<PluginLoadContext>()]);
-            assembly = candidate.LoadContext.LoadFromAssemblyPath(assemblyPath);
+                [.. candidate.Dependencies.Select(d => d.LoadContext).OfType<PluginLoadContext>()], candidate.Files);
+            assembly = candidate.LoadContext.LoadPluginAssembly(assemblyPath);
         }
         catch (Exception ex)
         {
@@ -312,7 +330,9 @@ public sealed class PluginLoader
         private readonly List<PluginDiagnostic> _diagnostics = [.. discovered.Diagnostics];
 
         public string Id => discovered.Id;
-        public PluginManifest? Manifest => discovered.Manifest;
+        public DiscoveredPlugin Discovered => discovered;
+        public PluginManifest? Manifest { get; set; } = discovered.Manifest;
+        public PluginFiles? Files { get; set; }
         public string Directory => discovered.Directory;
         public PluginTrust Trust => discovered.Source.Trust;
         public IReadOnlyList<PluginDiagnostic> Diagnostics => _diagnostics;
@@ -321,9 +341,12 @@ public sealed class PluginLoader
         public PluginLoadContext? LoadContext { get; set; }
 
         public void Reject(PluginDiagnosticCode code, string message, string? detail = null)
+            => AddDiagnostic(PluginDiagnostic.Error(Id, code, message, detail));
+
+        public void AddDiagnostic(PluginDiagnostic diagnostic)
         {
-            _diagnostics.Add(PluginDiagnostic.Error(Id, code, message, detail));
-            Rejected = true;
+            _diagnostics.Add(diagnostic);
+            Rejected |= diagnostic.IsError;
         }
     }
 }

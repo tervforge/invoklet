@@ -28,6 +28,14 @@ public enum PluginDiagnosticCode
     DescriptorMismatch,
     RegistrationFailed,
     DirectoryUnreadable,
+    PluginSourceNotConfigured,
+    InventoryUnreadable,
+    PluginNotListed,
+    PluginDisabled,
+    PluginNotApproved,
+    PluginContentChanged,
+    PluginContentUnreadable,
+    DevelopmentPlugin,
 }
 
 /// <summary>

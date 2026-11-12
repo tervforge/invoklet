@@ -21,4 +21,13 @@ public sealed class PluginLoaderOptions
 
     /// <summary>See <see cref="DefaultSharedAssemblies"/>; the application adds what its contracts expose.</summary>
     public IReadOnlyList<string> SharedAssemblies { get; init; } = DefaultSharedAssemblies;
+
+    public string? BundledDirectory { get; init; }
+    public BundledPluginCatalog BundledCatalog { get; init; } = BundledPluginCatalog.Empty;
+
+    public string? UserDirectory { get; init; }
+    public PluginInventory Inventory { get; init; } = PluginInventory.Empty;
+
+    /// <summary>An explicitly opted-in plugin directory or directory of plugins.</summary>
+    public string? DevelopmentDirectory { get; init; }
 }

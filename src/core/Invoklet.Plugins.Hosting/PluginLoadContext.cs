@@ -14,15 +14,18 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     private readonly AssemblyDependencyResolver _resolver;
     private readonly IReadOnlySet<string> _shared;
     private readonly IReadOnlyList<PluginLoadContext> _dependencies;
+    private readonly PluginFiles? _files;
 
     public PluginLoadContext(string pluginId, string entryAssemblyPath, IReadOnlySet<string> sharedAssemblies,
-        IReadOnlyList<PluginLoadContext> dependencies)
+        IReadOnlyList<PluginLoadContext> dependencies, PluginFiles? files)
         : base($"Invoklet plugin: {pluginId}", isCollectible: false)
     {
         PluginId = pluginId;
+        using var manifest = files?.OpenResolverManifest(Path.ChangeExtension(entryAssemblyPath, ".deps.json"));
         _resolver = new AssemblyDependencyResolver(entryAssemblyPath);
         _shared = sharedAssemblies;
         _dependencies = dependencies;
+        _files = files;
     }
 
     public string PluginId { get; }
@@ -40,9 +43,9 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     {
         foreach (var dependency in _dependencies)
             if (dependency._resolver.ResolveUnmanagedDllToPath(unmanagedDllName) is { } fromDependency)
-                return LoadUnmanagedDllFromPath(fromDependency);
+                return dependency.LoadNative(fromDependency);
         var path = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
-        return path is null ? IntPtr.Zero : LoadUnmanagedDllFromPath(path);
+        return path is null ? IntPtr.Zero : LoadNative(path);
     }
 
     // An assembly of this plugin or of what it depends on, for a plugin that depends on this one; loaded into the context that owns
@@ -59,8 +62,17 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     private Assembly? LoadFromOwnFolder(AssemblyName assemblyName)
     {
         var path = _resolver.ResolveAssemblyToPath(assemblyName);
-        return path is null ? null : LoadFromAssemblyPath(path);
+        return path is null ? null : LoadPluginAssembly(path);
     }
+
+    internal Assembly LoadPluginAssembly(string path)
+    {
+        if (_files is null) return LoadFromAssemblyPath(path);
+        using var assembly = _files.ReadVerified(path);
+        return LoadFromStream(assembly);
+    }
+
+    private IntPtr LoadNative(string path) => LoadUnmanagedDllFromPath(_files?.GetNativeLoadPath(path) ?? path);
 
     private bool IsShared(AssemblyName assemblyName)
     {

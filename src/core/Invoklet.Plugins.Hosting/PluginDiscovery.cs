@@ -4,7 +4,8 @@ namespace Invoklet.Plugins.Hosting;
 /// Finds the manifests under the plugin sources, in an order that is the same on every start and every machine: sources in the order
 /// given (the application's own folder before the user's), and within one, by plugin id then relative path, ordinal. A plugin is a
 /// folder with <c>invoklet-plugin.json</c> at most two levels under the source (<c>plugins/&lt;id&gt;</c> or
-/// <c>plugins/&lt;role&gt;/&lt;id&gt;</c>); nothing under a plugin's folder is scanned further. Reading only; nothing is loaded.
+/// <c>plugins/&lt;role&gt;/&lt;id&gt;</c> or <c>plugins/&lt;id&gt;/&lt;version&gt;</c>). An explicit development source can also be a plugin folder itself.
+/// Nothing under a plugin's folder is scanned further. Reading only; nothing is loaded.
 /// </summary>
 public static class PluginDiscovery
 {
@@ -35,7 +36,7 @@ public static class PluginDiscovery
     private static void Collect(string directory, int depth, PluginSource source, List<DiscoveredPlugin> found)
     {
         var manifest = Path.Combine(directory, PluginContracts.ManifestFileName);
-        if (depth > 0 && Read(manifest, source, ignoreMissing: true) is { } plugin)
+        if ((depth > 0 || source.Trust == PluginTrust.Development) && Read(manifest, source, ignoreMissing: true) is { } plugin)
         {
             found.Add(plugin);
             return;

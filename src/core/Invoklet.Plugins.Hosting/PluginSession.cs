@@ -17,14 +17,20 @@ public sealed record RejectedPlugin(string Id, PluginManifest? Manifest, string 
 public sealed class PluginSession
 {
     public static readonly PluginSession Empty = new([], []);
+    private readonly PluginInventory _startupInventory;
 
     public PluginSession(IReadOnlyList<LoadedPlugin> loaded, IReadOnlyList<RejectedPlugin> rejected)
+        : this(loaded, rejected, PluginInventory.Empty, []) { }
+
+    internal PluginSession(IReadOnlyList<LoadedPlugin> loaded, IReadOnlyList<RejectedPlugin> rejected,
+        PluginInventory startupInventory, IReadOnlyList<PluginDiagnostic> sourceDiagnostics)
     {
         ArgumentNullException.ThrowIfNull(loaded);
         ArgumentNullException.ThrowIfNull(rejected);
         Loaded = Array.AsReadOnly(loaded.Select(p => p with { Diagnostics = Array.AsReadOnly(p.Diagnostics.ToArray()) }).ToArray());
         Rejected = Array.AsReadOnly(rejected.Select(p => p with { Diagnostics = Array.AsReadOnly(p.Diagnostics.ToArray()) }).ToArray());
-        Diagnostics = Array.AsReadOnly(Loaded.SelectMany(p => p.Diagnostics).Concat(Rejected.SelectMany(p => p.Diagnostics)).ToArray());
+        _startupInventory = startupInventory;
+        Diagnostics = Array.AsReadOnly(Loaded.SelectMany(p => p.Diagnostics).Concat(Rejected.SelectMany(p => p.Diagnostics)).Concat(sourceDiagnostics).ToArray());
     }
 
     /// <summary>In the order they loaded, which is the order their roles registered.</summary>
@@ -39,4 +45,13 @@ public sealed class PluginSession
         Loaded.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
 
     public bool IsLoaded(string id) => Find(id) is not null;
+
+    /// <summary>Plugin ids whose desired inventory entry changed since this session started.</summary>
+    public IReadOnlyList<string> GetPendingRestart(PluginInventory currentInventory)
+    {
+        ArgumentNullException.ThrowIfNull(currentInventory);
+        if (currentInventory.ReadError is not null) throw new InvalidOperationException("The plugin inventory could not be read.");
+        return _startupInventory.Entries.Select(entry => entry.Id).Union(currentInventory.Entries.Select(entry => entry.Id), StringComparer.Ordinal)
+            .Where(id => !_startupInventory.SameEntry(id, currentInventory)).Order(StringComparer.Ordinal).ToArray();
+    }
 }

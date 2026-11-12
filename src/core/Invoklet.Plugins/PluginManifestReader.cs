@@ -31,6 +31,9 @@ public static partial class PluginManifestReader
     /// <summary>Whether a text is a well-formed plugin id.</summary>
     public static bool IsValidId(string id) => IdPattern().IsMatch(id);
 
+    /// <summary>Whether a text is a well-formed plugin version.</summary>
+    public static bool IsValidVersion(string version) => VersionPattern().IsMatch(version);
+
     /// <param name="json">The manifest's text.</param>
     /// <param name="fallbackId">What to name the plugin in diagnostics when the manifest has no usable id: its folder's name.</param>
     public static PluginManifestResult Read(string json, string? fallbackId = null)
@@ -72,7 +75,7 @@ public static partial class PluginManifestReader
             else diagnostics.Add(Invalid(pluginId, "'id' must be lower-case segments joined by dots, such as 'invoklet.connector.postgres'."));
 
             var version = ReadString(root, "version");
-            if (version is null || !VersionPattern().IsMatch(version))
+            if (version is null || !IsValidVersion(version))
                 diagnostics.Add(Invalid(pluginId, "'version' must be 'major.minor.patch', optionally with a pre-release tag."));
 
             var displayName = ReadString(root, "displayName");

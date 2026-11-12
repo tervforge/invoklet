@@ -69,7 +69,7 @@ public sealed class PluginLoaderFixture : IDisposable
     public static string ThemeManifest(string id, string version = "1.0.0", string contractVersion = "1") =>
         $$"""{ "id": "{{id}}", "version": "{{version}}", "displayName": "{{id}}", "roles": { "theme": {{contractVersion}} } }""";
 
-    public void AddPluginWithPrivateLibrary(string id, string version)
+    public string AddPluginWithPrivateLibrary(string id, string version, bool resolveLibraryInDescriptor = true)
     {
         const string entry = "VersionedPlugin";
         const string library = "PrivatePluginLibrary";
@@ -81,11 +81,12 @@ public sealed class PluginLoaderFixture : IDisposable
             [assembly: System.Reflection.AssemblyVersion("{{version}}")]
             public sealed class PrivateLibraryMarker { }
             """, framework);
+        var descriptorVersion = resolveLibraryInDescriptor ? "typeof(PrivateLibraryMarker).Assembly.GetName().Version.ToString(3)" : $"\"{version}\"";
         EmitLibrary(Path.Combine(directory, $"{entry}.dll"), $$"""
             using Invoklet.Plugins;
             public sealed class {{entry}} : IInvokletPlugin
             {
-                public PluginDescriptor Descriptor => new("{{id}}", typeof(PrivateLibraryMarker).Assembly.GetName().Version.ToString(3));
+                public PluginDescriptor Descriptor => new("{{id}}", {{descriptorVersion}});
             }
             """, [.. framework, MetadataReference.CreateFromFile(libraryPath),
                 MetadataReference.CreateFromFile(typeof(IInvokletPlugin).Assembly.Location)]);
@@ -105,6 +106,7 @@ public sealed class PluginLoaderFixture : IDisposable
               }
             }
             """);
+        return libraryPath;
     }
 
     private static void EmitLibrary(string path, string source, IEnumerable<MetadataReference> references)
@@ -116,10 +118,30 @@ public sealed class PluginLoaderFixture : IDisposable
     }
 
     public PluginLoader CreateSut(params IPluginRoleHandler[] handlers) =>
-        new(new PluginLoaderOptions { ApplicationVersion = ApplicationVersion },
+        new(new PluginLoaderOptions { ApplicationVersion = ApplicationVersion, UserDirectory = Root, Inventory = ApproveDiscovered() },
             handlers.Length == 0 ? [Connections, Themes] : handlers, NullLoggerFactory.Instance);
 
+    public PluginLoader CreateSut(PluginLoaderOptions options) =>
+        new(options, [Connections, Themes], NullLoggerFactory.Instance);
+
+    public PluginLoader CreateUserLoader(PluginInventory inventory) => CreateSut(new PluginLoaderOptions
+    {
+        ApplicationVersion = ApplicationVersion,
+        UserDirectory = Root,
+        Inventory = inventory,
+    });
+
     public IReadOnlyList<DiscoveredPlugin> Discover() => PluginDiscovery.Scan([Source]);
+
+    public PluginInventory ApproveDiscovered() => new(Discover().Where(plugin => plugin.Manifest is not null)
+        .DistinctBy(plugin => plugin.Id).Select(Approve));
+
+    public static PluginInventoryEntry Approve(DiscoveredPlugin plugin)
+    {
+        var manifest = plugin.Manifest!;
+        return new PluginInventoryEntry(manifest.Id, manifest.Version, manifest.Roles.Keys.Select(PluginRoles.Name).ToArray(),
+            "fixture", manifest.Publisher, PluginContent.ComputeHash(plugin.Directory), "none", Enabled: true, Approved: true);
+    }
 
     public sealed class RecordingHandler(PluginRole role, int contractVersion) : IPluginRoleHandler
     {
@@ -127,11 +149,13 @@ public sealed class PluginLoaderFixture : IDisposable
         public int ContractVersion => contractVersion;
         public List<PluginRegistration> Registrations { get; } = [];
         public Exception? Throws { get; set; }
+        public Action<PluginRegistration>? OnApply { get; set; }
 
         public PluginRoleRegistration Prepare(PluginRegistration registration) => new(
             () =>
             {
                 Registrations.Add(registration);
+                OnApply?.Invoke(registration);
                 if (Throws is not null) throw Throws;
             },
             () => Registrations.Remove(registration));
