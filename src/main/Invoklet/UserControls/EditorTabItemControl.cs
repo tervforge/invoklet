@@ -409,9 +409,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var written = _documentWriter.Serialize(State.MdRunDocument, State.Editor.Text, path, _vm.FilePath, _vm.ReferenceAnchorPath);
         // A write that fails leaves the file as it was (and so the tab's idea of it): the ID and the state are taken only after it.
         AtomicFile.WriteAllBytes(path, written.Bytes);
-        ScriptFileWrites.Report(path, written.Bytes);
+        var saved = ScriptFileState.Of(written.Bytes);
+        if (path == _vm.FilePath && !_vm.RequiresBaselineConfirmation && _vm.DiskState?.Hash is { } baselineHash)
+            ScriptFileWrites.Report(path, baselineHash, saved.Hash!);
         if (written.DocumentId is { } id) _writtenId = (path, id);
-        _vm.LastWrite = (path, ScriptFileState.Of(written.Bytes));
+        _vm.LastWrite = (path, saved);
     }
 
     // Save As rebinds the tab to its new file: the references written there become its own, and

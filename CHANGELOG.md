@@ -7,6 +7,8 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- Asked for Secret Store access again after an externally changed script is reloaded and saved.
+- Rejected malformed Windows stream paths in Path Store while accepting valid NTFS streams.
 - Cancelled Rename Symbol if the script changes before the edit can be applied.
 - Prioritized C# import fixes over type generation and refreshed analysis after imports.
 - Kept member completion scoped to the receiver, including queries against generated connections.

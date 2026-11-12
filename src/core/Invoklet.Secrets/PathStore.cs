@@ -38,6 +38,11 @@ public static class PathStoreRules
 {
     private const int MaxNameLength = 100;
     private static readonly char[] WindowsInvalidPathCharacters = ['*', '?', '<', '>', '"'];
+    private static readonly string[] NtfsStreamTypes =
+    [
+        "$DATA", "$EA", "$EA_INFORMATION", "$FILE_NAME", "$INDEX_ALLOCATION", "$INDEX_ROOT",
+        "$LOGGED_UTILITY_STREAM", "$OBJECT_ID", "$REPARSE_POINT",
+    ];
 
     /// <summary>The name trimmed; letters, digits, <c>_</c>, <c>-</c> and <c>.</c>, compared letter case aside.</summary>
     /// <exception cref="ArgumentException">The name is empty, too long or has another character.</exception>
@@ -79,10 +84,26 @@ public static class PathStoreRules
         if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return true;
         if (allowLegacyWindowsCharacters || !OperatingSystem.IsWindows()) return false;
 
-        // The question mark in a Windows device prefix is part of the path syntax.
+        // The question mark in an extended path prefix is part of the path syntax.
         var start = path.Length >= 4 && IsWindowsSeparator(path[0]) && IsWindowsSeparator(path[1])
             && path[2] == '?' && IsWindowsSeparator(path[3]) ? 4 : 0;
-        return path.IndexOfAny(WindowsInvalidPathCharacters, start) >= 0;
+        if (path.IndexOfAny(WindowsInvalidPathCharacters, start) >= 0) return true;
+
+        // Win32 device paths can also put the drive letter after a prefix, as in \\.\C:.
+        if (start == 0 && path.Length >= 4 && IsWindowsSeparator(path[0]) && IsWindowsSeparator(path[1])
+            && path[2] == '.' && IsWindowsSeparator(path[3])) start = 4;
+        if (path.Length >= start + 2 && char.IsAsciiLetter(path[start]) && path[start + 1] == ':'
+            && (path.Length == start + 2 || IsWindowsSeparator(path[start + 2]))) start += 2;
+
+        var colon = path.IndexOf(':', start);
+        if (colon < 0) return false;
+
+        // A stream suffix belongs to the last component. It can name a stream, a type, or both.
+        var suffix = path.AsSpan(colon + 1);
+        if (colon == start || IsWindowsSeparator(path[colon - 1]) || suffix.IsEmpty || suffix.IndexOfAny('\\', '/') >= 0)
+            return true;
+        var typeSeparator = suffix.IndexOf(':');
+        return typeSeparator >= 0 && !NtfsStreamTypes.Contains(suffix[(typeSeparator + 1)..].ToString(), StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool IsWindowsSeparator(char character) => character is '\\' or '/';

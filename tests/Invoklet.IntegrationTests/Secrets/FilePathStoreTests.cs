@@ -122,6 +122,7 @@ public sealed class FilePathStoreTests : IDisposable
     [InlineData("*.csv")]
     [InlineData("data<old>")]
     [InlineData("a\"b")]
+    [InlineData("one:two:three.txt")]
     public void LoadSnapshot_ALegacyInvalidWindowsPath_KeepsValidPathsReadableAndAllowsRepair(string fileName)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "These characters are legal in Unix file names.");

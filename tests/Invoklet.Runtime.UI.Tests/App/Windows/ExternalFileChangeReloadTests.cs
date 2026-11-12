@@ -14,6 +14,7 @@ using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
+using Invoklet.Services.Secrets;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows;
@@ -41,6 +42,7 @@ public class ExternalFileChangeReloadTests
         public string Path { get; }
         public EditorTabsControl Tabs { get; }
         public MainWindowViewModel MainVm { get; }
+        public Mock<IPreferencesService> Preferences { get; } = new();
         public Mock<IWindowService> Windows { get; } = new();
         public IReadOnlyList<Window> Dialogs => _host.OwnedWindows;
 
@@ -50,13 +52,14 @@ public class ExternalFileChangeReloadTests
             Path = System.IO.Path.Combine(Folder, "demo.inv");
             File.WriteAllText(Path, MdRunWriter.NewFile(Original + "\n"));
 
-            var prefs = new Mock<IPreferencesService>();
+            var prefs = Preferences;
             prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
             prefs.Setup(p => p.Keyboard).Returns(new KeyboardSettings());
             prefs.Setup(p => p.Editor).Returns(new EditorSettings());
             prefs.Setup(p => p.CSharp).Returns(new CSharpLanguageSettings());
             prefs.Setup(p => p.Session).Returns(new SessionSettings());
             prefs.Setup(p => p.Debugger).Returns(new DebuggerSettings());
+            prefs.Setup(p => p.Secrets).Returns(new SecretsSettings());
 
             var fileSystem = new Mock<IFileSystemService>();
             fileSystem.Setup(f => f.Folder).Returns(Folder);
@@ -214,6 +217,46 @@ public class ExternalFileChangeReloadTests
 
         h.Windows.Verify(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>()), Times.Never);
         Assert.Equal(EditedHere, MdRunParser.TryParse(File.ReadAllText(h.Path))!.RunCode.Trim());
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Save_Should_CarrySecretPermissionOnlyFromAnAllowedBaseline(bool reloadExternalVersion)
+    {
+        using var h = new Harness();
+        var (vm, ctrl) = await h.OpenAsync();
+        var answer = SecretAccessChoice.Always;
+        var gate = new SecretAccessGate(h.Preferences.Object, (_, _, _, _) => Task.FromResult(answer));
+        var request = new SecretAccess(h.Path, "billing", IsSave: false);
+        void Report(string path, string baseline, string saved)
+        {
+            if (path == h.Path) gate.ScriptWritten(path, baseline, saved);
+        }
+
+        Assert.True(await gate.MayAccessAsync(request, CancellationToken.None));
+        answer = SecretAccessChoice.Deny;
+        ScriptFileWrites.Written += Report;
+        try
+        {
+            if (reloadExternalVersion)
+            {
+                WriteExternally(h.Path, External);
+                await h.Tabs.CheckFilesChangedOnDiskAsync();
+                Assert.Equal(External, ctrl.State.Editor.Text.Trim());
+            }
+
+            ctrl.State.Editor.Text = EditedHere + "\n";
+            await ctrl.SaveAsync();
+
+            Assert.False(vm.IsDirty);
+            Assert.Equal(EditedHere, MdRunParser.TryParse(File.ReadAllText(h.Path))!.RunCode.Trim());
+            Assert.Equal(!reloadExternalVersion, await gate.MayAccessAsync(request, CancellationToken.None));
+        }
+        finally
+        {
+            ScriptFileWrites.Written -= Report;
+        }
     }
 
     [AvaloniaFact]

@@ -1,13 +1,13 @@
 namespace Invoklet.Services;
 
 /// <summary>
-/// Invoklet writing a script's file itself (a save from its tab). What trusts a file by its contents, such as a script allowed to use the
-/// secrets, follows Invoklet's own writes and so notices only another program's.
+/// An in-place save of a script whose editor has a known baseline. Content-based permissions can follow edits from that baseline.
 /// </summary>
 internal static class ScriptFileWrites
 {
-    /// <summary>The full path written and the bytes now in it; raised on the thread that wrote.</summary>
-    public static event Action<string, byte[]>? Written;
+    /// <summary>The full path, baseline fingerprint and saved fingerprint; raised on the thread that wrote.</summary>
+    public static event Action<string, string, string>? Written;
 
-    internal static void Report(string path, byte[] bytes) => Written?.Invoke(Path.GetFullPath(path), bytes);
+    internal static void Report(string path, byte[] baselineHash, byte[] savedHash) =>
+        Written?.Invoke(Path.GetFullPath(path), Convert.ToHexString(baselineHash), Convert.ToHexString(savedHash));
 }

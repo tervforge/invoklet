@@ -121,15 +121,16 @@ public sealed class SecretAccessGate(IPreferencesService preferences, Func<strin
     }
 
     /// <summary>
-    /// Invoklet saved <paramref name="path"/> with these <paramref name="bytes"/>: an allowed script stays allowed with its new contents.
+    /// Carries a grant forward only when the saved edits started from the script version that was granted access.
     /// </summary>
-    public void ScriptWritten(string path, byte[] bytes)
+    public void ScriptWritten(string path, string baselineFingerprint, string savedFingerprint)
     {
-        var hash = Convert.ToHexString(SHA256.HashData(bytes));
         lock (_sessionGrants)
-            if (_sessionGrants.TryGetValue(path, out var grant)) _sessionGrants[path] = grant with { Fingerprint = hash };
-        if (preferences.Secrets is not { } settings || !settings.AllowedScripts.Contains(path, PathComparer)) return;
-        settings.AllowedScriptHashes[Stored(settings, path) ?? path] = hash;
+            if (_sessionGrants.TryGetValue(path, out var grant)
+                && string.Equals(grant.Fingerprint, baselineFingerprint, StringComparison.OrdinalIgnoreCase))
+                _sessionGrants[path] = grant with { Fingerprint = savedFingerprint };
+        if (PersistedPermissionKey(path, baselineFingerprint) is not { } key) return;
+        preferences.Secrets.AllowedScriptHashes[key] = savedFingerprint;
         preferences.Save();
     }
 

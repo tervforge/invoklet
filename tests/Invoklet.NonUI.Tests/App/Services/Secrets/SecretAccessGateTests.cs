@@ -60,18 +60,20 @@ public sealed class SecretAccessGateTests
     }
 
     // The user's own edits, saved by Invoklet, keep the script allowed.
-    [Fact]
-    public async Task ScriptWritten_AnAllowedScriptSavedByInvoklet_KeepsItAllowed()
+    [Theory]
+    [InlineData(SecretAccessChoice.Once)]
+    [InlineData(SecretAccessChoice.Always)]
+    public async Task ScriptWritten_AnAllowedScriptSavedByInvoklet_KeepsItAllowed(SecretAccessChoice choice)
     {
         // Arrange
-        var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
+        var fixture = new SecretAccessGateFixture { Answer = choice };
         var sut = fixture.CreateSut();
         await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
-        byte[] saved = [1, 2, 3];
-        fixture.FileContents = SecretAccessGateFixture.HashOf(saved);
+        var baseline = fixture.FileContents!;
+        fixture.FileContents = SecretAccessGateFixture.HashOf([1, 2, 3]);
 
         // Act
-        sut.ScriptWritten(fixture.ScriptPath, saved);
+        sut.ScriptWritten(fixture.ScriptPath, baseline, fixture.FileContents);
         var allowed = await sut.MayAccessAsync(fixture.Request(), CancellationToken.None);
 
         // Assert
@@ -86,15 +88,38 @@ public sealed class SecretAccessGateTests
         var fixture = new SecretAccessGateFixture { Answer = SecretAccessChoice.Always };
         var sut = fixture.CreateSut();
         await sut.MayAccessAsync(fixture.Request("db", isSave: true), CancellationToken.None);
-        byte[] saved = [1, 2, 3];
-        fixture.FileContents = SecretAccessGateFixture.HashOf(saved);
+        var baseline = fixture.FileContents!;
+        fixture.FileContents = SecretAccessGateFixture.HashOf([1, 2, 3]);
 
         // Act
-        sut.ScriptWritten(fixture.ScriptPath, saved);
+        sut.ScriptWritten(fixture.ScriptPath, baseline, fixture.FileContents);
         var allowed = await sut.MayAccessAsync(fixture.Request("db", isSave: true, change: SecretChange.Replace), CancellationToken.None);
 
         // Assert
         Assert.True(allowed);
+        Assert.Empty(fixture.ChangesAsked);
+    }
+
+    [Theory]
+    [InlineData(SecretAccessChoice.Once, false)]
+    [InlineData(SecretAccessChoice.Always, false)]
+    [InlineData(SecretAccessChoice.Once, true)]
+    [InlineData(SecretAccessChoice.Always, true)]
+    public async Task ScriptWritten_AfterReloadingAnExternalReplacement_RequiresPermissionAgain(SecretAccessChoice choice, bool isWrite)
+    {
+        var fixture = new SecretAccessGateFixture { Answer = choice };
+        var sut = fixture.CreateSut();
+        var request = fixture.Request(isSave: isWrite, change: isWrite ? SecretChange.Replace : SecretChange.None);
+        await sut.MayAccessAsync(request, CancellationToken.None);
+        var externalBaseline = SecretAccessGateFixture.HashOf([4, 5, 6]);
+        fixture.FileContents = SecretAccessGateFixture.HashOf([4, 5, 6, 7]);
+        fixture.Answer = SecretAccessChoice.Deny;
+
+        sut.ScriptWritten(fixture.ScriptPath, externalBaseline, fixture.FileContents);
+        var allowed = await sut.MayAccessAsync(request, CancellationToken.None);
+
+        Assert.False(allowed);
+        Assert.Equal(2, fixture.Asked.Count);
         Assert.Empty(fixture.ChangesAsked);
     }
 

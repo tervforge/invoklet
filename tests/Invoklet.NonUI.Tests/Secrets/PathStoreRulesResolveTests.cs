@@ -39,6 +39,10 @@ public sealed class PathStoreRulesResolveTests
     [InlineData("a<b")]
     [InlineData("a>b")]
     [InlineData("a\"b")]
+    [InlineData("one:two:three.txt")]
+    [InlineData("file:stream:")]
+    [InlineData("file:stream:$NO_SUCH_TYPE")]
+    [InlineData("file:stream:$DATA:extra")]
     public void Resolve_AWindowsOnlyInvalidCharacter_IsRejectedOnWindowsAndKeptOnUnix(string name)
     {
         var path = Path.Combine(Root, name);
@@ -47,6 +51,32 @@ public sealed class PathStoreRulesResolveTests
             Assert.Throws<ArgumentException>(() => PathStoreRules.Resolve(path));
         else
             Assert.Equal(path, PathStoreRules.Resolve(path));
+    }
+
+    [Theory]
+    [InlineData(@"C:\dir\file.txt")]
+    [InlineData(@"C:\dir\file.txt:notes")]
+    [InlineData(@"C:\dir\file.txt:notes:$data")]
+    [InlineData(@"C:\dir\file.txt::$DATA")]
+    [InlineData(@"\\?\C:\dir\file.txt:notes:$DATA")]
+    [InlineData(@"\\server\share\file.txt:notes")]
+    [InlineData(@"C:\dir::$INDEX_ALLOCATION")]
+    public void Resolve_AWindowsDriveOrStreamPath_IsAccepted(string path)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows path syntax.");
+
+        Assert.Equal(path, PathStoreRules.Resolve(path));
+    }
+
+    [Theory]
+    [InlineData(@"C:\dir:notes\file.txt")]
+    [InlineData(@"C:\dir\:notes")]
+    [InlineData(@"C:\dir\file.txt:")]
+    public void Resolve_AMisplacedOrEmptyStreamSuffix_IsRejectedOnWindows(string path)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows path syntax.");
+
+        Assert.Throws<ArgumentException>(() => PathStoreRules.Resolve(path));
     }
 
     [Fact]
