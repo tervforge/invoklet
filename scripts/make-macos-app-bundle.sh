@@ -70,7 +70,7 @@ chmod +x "$APP/Contents/MacOS/Invoklet"
 # codesign treats every file under Contents/MacOS as nested code, so strict verification rejects the
 # publish output's managed assemblies and data files (System.*.dll, Invoklet.deps.json, …) and its
 # satellite folders (de/, zh-Hans/, … holding *.resources.dll) as "code object is not signed at all".
-# Only Mach-O binaries stay in Contents/MacOS; every other top-level file and each culture folder is
+# Only Mach-O binaries stay in Contents/MacOS; other top-level files, culture folders and plugins are
 # moved to Contents/Resources and replaced by a relative symlink, which is sealed as-is, so
 # Contents/MacOS/X.dll and Contents/MacOS/<culture>/X.resources.dll still exist. Existing symlinks are left as they are; any other kind of subfolder, or a name
 # that already exists in Contents/Resources, fails the build instead of guessing.
@@ -90,7 +90,7 @@ for ENTRY in "$APP/Contents/MacOS"/*; do
     if [[ -L "$ENTRY" ]]; then
         continue
     elif [[ -d "$ENTRY" ]]; then
-        if [[ -n "$(find "$ENTRY" -mindepth 1 ! \( -type f -name '*.resources.dll' \) -print -quit)" ]]; then
+        if [[ "$NAME" != plugins && -n "$(find "$ENTRY" -mindepth 1 ! \( -type f -name '*.resources.dll' \) -print -quit)" ]]; then
             echo "error: Contents/MacOS/$NAME is not a satellite resource folder (only *.resources.dll expected)" >&2
             exit 1
         fi

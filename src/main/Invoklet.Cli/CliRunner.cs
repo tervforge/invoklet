@@ -256,6 +256,7 @@ public static class CliRunner
         console.WriteLine("  --refresh-connections             Read the connections' descriptions (gRPC services) again");
         console.WriteLine("  -q, --quiet                       Show no warnings, only errors and the script's output");
         console.WriteLine("  --args-set <name>                 Run with the script's argument set of that name");
+        console.WriteLine("  --plugins-dev <directory>         Load development plugins from the specified directory");
         console.WriteLine("  -h, --help                        Show this help");
         console.WriteLine("  --version                         Show the version");
         console.WriteLine();

@@ -85,8 +85,11 @@
 
                 </StackPanel>
 
-                <!-- Middle: drag region (empty) -->
-                <Border Grid.Column="1" Background="Transparent"/>
+                <Border Grid.Column="1" Background="Transparent">
+                    <TextBlock x:Name="PluginDevelopmentWarning" Text="Plugin development mode" IsVisible="False"
+                               IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" FontWeight="SemiBold"/>
+                </Border>
 
                 <!-- Right: window control buttons -->
                 <StackPanel x:Name="WindowControlButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch" chrome:WindowDecorationProperties.ElementRole="User">

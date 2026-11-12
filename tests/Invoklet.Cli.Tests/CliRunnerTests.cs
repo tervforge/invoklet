@@ -225,11 +225,14 @@ public class CliRunnerTests
     }
 
     [Fact]
-    public void CreateDefault_Should_RegisterCSharpAndVb()
+    [Trait("Category", "Integration")]
+    public void CreateDefault_Should_RegisterBuiltInsInTheExistingOrder()
     {
         var services = CliServices.CreateDefault();
 
         Assert.Equal(["csharp", "vb"], services.Registry.SupportedLanguages);
+        Assert.Equal(["http", "openapi", "grpc", "sqlite", "postgres", "sqlserver"],
+            services.ConnectionDrivers!.Drivers.Select(driver => driver.Id));
     }
 
     // The runner's request is the window's: the shared front-matter mapping, built in the temporary

@@ -75,6 +75,23 @@ jobs:
             dotnet test "$proj" --no-build --configuration Release --verbosity normal --filter "Platform=Independent"
           done
 
+      - name: Verify bundled plugin build and publish layouts
+        run: |
+          set -e
+          project=src/main/Invoklet.Cli/Invoklet.Cli.csproj
+          source="$PWD/tests/fixtures/plugins/bundled"
+          packager=build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll
+          build=src/main/Invoklet.Cli/bin/Release/net10.0
+          published="$RUNNER_TEMP/invoklet-plugin-layout"
+          dotnet build "$project" -c Release -p:InvokletBundledPluginsSource="$source"
+          dotnet publish "$project" -c Release -o "$published" -p:InvokletBundledPluginsSource="$source"
+          dotnet "$packager" verify "$build"
+          dotnet "$packager" verify "$published"
+          plugin=plugins/theme/invoklet.fixture.packaging
+          cmp "$source/theme/invoklet.fixture.packaging/invoklet-plugin.json" "$build/$plugin/invoklet-plugin.json"
+          cmp "$build/$plugin/theme.json" "$published/$plugin/theme.json"
+          cmp "$build/plugins/bundled.json" "$published/plugins/bundled.json"
+
   build-windows:
     name: Build & Test (windows-latest)
     needs: format
@@ -182,7 +199,11 @@ jobs:
       # next version via the fixed UpgradeCode in installer/windows/Package.wxs).
       - name: 📦 Publish (win-x64)
         if: github.event_name == 'push'
-        run: dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
+        shell: pwsh
+        run: |
+          dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify publish/win-x64
 
       - name: 🗜️ Archive (win-x64)
         if: github.event_name == 'push'
@@ -276,7 +297,9 @@ jobs:
       # install, Start Menu-equivalent .desktop entry).
       - name: 📦 Publish (linux-x64)
         if: github.event_name == 'push'
-        run: dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r linux-x64 --self-contained true -o publish/linux-x64
+        run: |
+          dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r linux-x64 --self-contained true -o publish/linux-x64
+          dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify publish/linux-x64
 
       - name: 🗜️ Archive (linux-x64)
         if: github.event_name == 'push'
@@ -406,6 +429,12 @@ jobs:
       - name: 🧳 Bundle .app (osx-arm64)
         if: github.event_name == 'push'
         run: bash scripts/make-macos-app-bundle.sh publish/osx-arm64 Invoklet-osx-arm64
+
+      - name: Verify bundled plugin catalogues in macOS applications
+        if: github.event_name == 'push'
+        run: |
+          dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify Invoklet-osx-x64/Invoklet.app/Contents/Resources
+          dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify Invoklet-osx-arm64/Invoklet.app/Contents/Resources
 
       - name: 💿 Bundle DMG (osx-x64)
         if: github.event_name == 'push'

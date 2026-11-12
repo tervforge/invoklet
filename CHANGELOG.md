@@ -8,6 +8,7 @@ Notable changes in each Invoklet release. Downloads are on the
 ### Added
 
 - `Util.Code(...).Dump()` displays C#, SQL, JSON, XML, and plain text as code blocks with a copy action.
+- Added `--plugins-dev <directory>` for plugin development, with a visible warning when enabled.
 
 ### Fixed
 

@@ -3,18 +3,14 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using Invoklet.Connectors.Grpc;
-using Invoklet.Connectors.Http;
-using Invoklet.Connectors.Postgres;
-using Invoklet.Connectors.Sqlite;
-using Invoklet.Connectors.SqlServer;
+using Invoklet.BuiltIns;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
-using Invoklet.Languages.VB;
 using Invoklet.Logging;
+using Invoklet.Plugins.Hosting;
 using Invoklet.Secrets;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
@@ -82,7 +78,16 @@ public class App : Application
         // App-wide setup of this OS's desktop integration (macOS's Control-click, Linux's UI font, …).
         DesktopIntegration.Current.OnApplicationStarted(this);
         WindowChrome.Install(this, DesktopIntegration.Current);
-        var serviceProvider = ConfigureServices();
+        var args = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Args ?? [];
+        string? pluginArgumentError = null;
+        PluginDevelopmentOptions plugins;
+        try { plugins = PluginStartup.ParseArguments(args); }
+        catch (ArgumentException ex)
+        {
+            pluginArgumentError = ex.Message;
+            plugins = new PluginDevelopmentOptions(null, args);
+        }
+        var serviceProvider = ConfigureServices(plugins);
         _serviceProvider = serviceProvider;
 
         // Preferences → Logging takes effect at once.
@@ -91,6 +96,7 @@ public class App : Application
         preferences.Changed += () => logSwitch.Apply(preferences.Logging.Level);
 
         ILogger logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<App>();
+        if (pluginArgumentError is not null) logger.LogWarning("{PluginArgumentError}", pluginArgumentError);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             logger.LogCritical(e.ExceptionObject as Exception, "Unhandled exception (IsTerminating: {IsTerminating})", e.IsTerminating);
         TaskScheduler.UnobservedTaskException += (_, e) =>
@@ -134,7 +140,11 @@ public class App : Application
                 () =>
                 {
                     var prerequisites = serviceProvider.GetRequiredService<IPrerequisiteService>();
-                    return Task.Run(() => prerequisites.Check().IsComplete);
+                    return Task.Run(() =>
+                    {
+                        serviceProvider.GetRequiredService<PluginSession>();
+                        return prerequisites.Check().IsComplete;
+                    });
                 },
                 complete => CreateStartupWindow(complete, desktop, serviceProvider, logger), logger), DispatcherPriority.Background);
             return;
@@ -171,12 +181,12 @@ public class App : Application
     private static Window CreateStartupWindow(bool complete,
         IClassicDesktopStyleApplicationLifetime desktop, ServiceProvider services, ILogger logger)
     {
-        if (complete) return services.GetRequiredService<Windows_MainWindow>();
+        if (complete) return CreateMainWindow();
 
         var wizard = services.GetRequiredService<Windows_SetupWizardWindow>();
         wizard.Continued += () =>
         {
-            try { ShowStartupWindow(services.GetRequiredService<Windows_MainWindow>(), desktop); }
+            try { ShowStartupWindow(CreateMainWindow(), desktop); }
             catch (Exception ex)
             {
                 // The same error window as a failure before the wizard, instead of a wizard that seems to do nothing.
@@ -189,6 +199,14 @@ public class App : Application
             }
         };
         return wizard;
+
+        Windows_MainWindow CreateMainWindow()
+        {
+            var window = services.GetRequiredService<Windows_MainWindow>();
+            if (services.GetRequiredService<PluginDevelopmentOptions>().Directory is not null)
+                window.ShowPluginDevelopmentWarning();
+            return window;
+        }
     }
 
     internal static void ShowStartupWindow(Window window, IClassicDesktopStyleApplicationLifetime desktop,
@@ -244,9 +262,11 @@ public class App : Application
         }, DispatcherPriority.Background);
     }
 
-    private ServiceProvider ConfigureServices()
+    private ServiceProvider ConfigureServices(PluginDevelopmentOptions plugins)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(plugins);
+        services.AddSingleton(sp => PluginStartup.Load(plugins.Directory, sp.GetRequiredService<ILoggerFactory>()));
 
         services.AddSingleton<Application>(this);
         services.AddSingleton<IPreferencesService, PreferencesService>();
@@ -309,8 +329,7 @@ public class App : Application
                 PathReader = paths.Read,
             };
             var runtimeReferences = sp.GetRequiredService<IRuntimeReferenceLocator>();
-            registry.Register(new CSharpLanguageHostFactory(loggerFactory, runtimeReferences));
-            registry.Register(new VbLanguageHostFactory(loggerFactory, runtimeReferences));
+            BuiltInCatalog.RegisterLanguages(registry, loggerFactory, runtimeReferences);
             return registry;
         });
 
@@ -332,18 +351,7 @@ public class App : Application
         services.AddTransient<Windows_SecretStoreWindow>();
         services.AddTransient<PathStoreWindowViewModel>();
         services.AddTransient<Windows_PathStoreWindow>();
-        // Connection drivers are part of Invoklet for now, registered here like the languages above.
-        services.AddSingleton(_ =>
-        {
-            var registry = new ConnectionDriverRegistry();
-            registry.Register(new HttpConnectionDriver());
-            registry.Register(new OpenApiConnectionDriver());
-            registry.Register(new GrpcConnectionDriver());
-            registry.Register(new SqliteConnectionDriver());
-            registry.Register(new PostgresConnectionDriver());
-            registry.Register(new SqlServerConnectionDriver());
-            return registry;
-        });
+        services.AddSingleton(_ => BuiltInCatalog.CreateConnectionDrivers());
         // What some drivers read from the endpoint before a build (a gRPC server's services), kept
         // on disk; secrets for reading it come from the Secret Store.
         services.AddSingleton(sp => new ConnectionSchemas(sp.GetRequiredService<ConnectionDriverRegistry>(),
