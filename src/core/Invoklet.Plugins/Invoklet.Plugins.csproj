@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The contract a plugin is written against: the manifest, the entry point, the roles and the diagnostics the host
+       reports. Nothing of the host or the application is here, and nothing beyond logging abstractions, so a plugin
+       author references this project (and the role contracts in Invoklet.Contracts) and no more. -->
+  <PropertyGroup>
+    <RootNamespace>Invoklet.Plugins</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Invoklet.Plugins.Hosting" />
+    <InternalsVisibleTo Include="Invoklet.NonUI.Tests" />
+  </ItemGroup>
+</Project>

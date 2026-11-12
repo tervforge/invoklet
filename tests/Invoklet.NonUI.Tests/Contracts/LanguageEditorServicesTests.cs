@@ -56,10 +56,10 @@ public sealed class LanguageEditorServicesTests : IDisposable
             ],
             registry.Languages);
 
-        // Registering a language again keeps its place; unregistering removes it.
-        registry.Register(new FakeLanguage("VB", "Basic"));
+        // A language is registered once, letter case aside; unregistering removes it.
+        Assert.Throws<InvalidOperationException>(() => registry.Register(new FakeLanguage("VB", "Basic")));
         registry.Unregister("fs");
-        Assert.Equal(["Basic", "C#"], registry.Languages.Select(l => l.DisplayName));
+        Assert.Equal(["Visual Basic", "C#"], registry.Languages.Select(l => l.DisplayName));
         Assert.Equal(["vb", "csharp"], registry.SupportedLanguages);
     }
 

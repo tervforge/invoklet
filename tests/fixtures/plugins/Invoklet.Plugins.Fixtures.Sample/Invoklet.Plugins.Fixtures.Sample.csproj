@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plugin entry types for the loader's tests: a well-behaved plugin, one that throws, one whose descriptor contradicts its manifest.
+       The tests copy the built assembly into temporary plugin folders beside manifests they write. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Invoklet.Plugins.Fixtures.Sample</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\core\Invoklet.Plugins\Invoklet.Plugins.csproj" />
+  </ItemGroup>
+</Project>
