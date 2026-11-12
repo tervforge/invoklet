@@ -843,6 +843,7 @@ public class CodeFixMarginTests
         Assert.Same(margin, menu.Target);
         Assert.Equal(t, menu.Popup.PlacementRect);
         Assert.Equal(PlacementMode.BottomEdgeAlignedLeft, menu.Popup.Placement);
+        Assert.Equal(FlyoutShowMode.Standard, menu.ShowMode);
         var presenter = Assert.IsAssignableFrom<Control>(menu.Popup.Child);
         var topLeft = presenter.TranslatePoint(default, margin)!.Value;
         // popups are placed on whole pixels

@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
+using AvaloniaEdit.Document;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.TextMate;
@@ -1018,9 +1019,6 @@ public class CodeTextEditor : TextEditor, IDisposable
     internal static bool IsMemberAccessContext(
         string text, int offset, IReadOnlySet<char> identifierChars, IReadOnlySet<char> triggerChars)
     {
-        // offset can be stale relative to text — ShowCompletion captures the caret offset before an
-        // await, and the document may have since changed (fast typing/backspacing during that gap) —
-        // clamp instead of indexing past the current end.
         var pos = Math.Clamp(offset, 0, text.Length);
         while (pos > 0 && (char.IsLetterOrDigit(text[pos - 1]) || identifierChars.Contains(text[pos - 1])))
             pos--;
@@ -1212,6 +1210,14 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     private async Task ShowCompletionAsync(char trigger, bool explicitInvoke)
     {
+        if (Document is not { } document) return;
+
+        // A member-access request may legitimately return no items when Roslyn cannot resolve the
+        // receiver yet. Do not leave an older, general-scope popup visible in that case: it looks
+        // like completion is suggesting unrelated symbols for `q.`.
+        if (CompletionTriggers.Contains(trigger) || IsMemberAccessContext(TextArea.Caret.Offset))
+            _completionWindow?.Hide();
+
         // Fast typing can start a new completion request before the previous one has resolved (e.g.
         // 'C' triggers the 24/7 auto-invoke, then '.' triggers again before that first request comes
         // back) — cancelling the previous request's token here means a provider that threads it
@@ -1227,6 +1233,7 @@ public class CodeTextEditor : TextEditor, IDisposable
         var cts = new CancellationTokenSource();
         _completionCts = cts;
 
+        var version = document.Version;
         var args = new CompletionRequestedEventArgs(trigger, TextArea.Caret.Offset, explicitInvoke, cts.Token);
 
         try
@@ -1245,12 +1252,14 @@ public class CodeTextEditor : TextEditor, IDisposable
         // Belt-and-suspenders: a provider that doesn't observe the token (a test double, or the
         // synchronous CompletionRequested event) can still return normally after being superseded.
         if (cts.IsCancellationRequested) return;
+        if (!IsCompletionContextCurrent(document, version, args.CaretOffset)) return;
 
         // The provider found the caret in a fresh, not-yet-typed call argument — the
         // user's Ctrl+Space is really asking for parameter info there, not a completion list.
         if (args.RedirectToOverloads)
         {
-            ShowOverloads(trigger);
+            if (TextArea.Caret.Offset == args.CaretOffset)
+                ShowOverloads(trigger);
             return;
         }
 
@@ -1321,6 +1330,25 @@ public class CodeTextEditor : TextEditor, IDisposable
             if (window.CompletionList.ListBox.ItemCount == 0)
                 window.Hide();
         }
+    }
+
+    private bool IsCompletionContextCurrent(TextDocument document, ITextSourceVersion version, int requestedOffset)
+    {
+        if (!ReferenceEquals(Document, document)) return false;
+
+        // The only edits that can reuse this list are identifier characters typed at the request
+        // position. An edit elsewhere can change the symbols even if the caret offset stays put.
+        var prefixEnd = requestedOffset;
+        foreach (var change in version.GetChangesTo(document.Version))
+        {
+            if (change.Offset != prefixEnd || change.RemovalLength != 0
+                || !change.InsertedText.Text.All(ch => char.IsLetterOrDigit(ch) || IdentifierChars.Contains(ch)))
+                return false;
+
+            prefixEnd += change.InsertionLength;
+        }
+
+        return TextArea.Caret.Offset == prefixEnd;
     }
 
     private int GetWordStart(int offset) => GetWordStart(Document.Text, offset, IdentifierChars);

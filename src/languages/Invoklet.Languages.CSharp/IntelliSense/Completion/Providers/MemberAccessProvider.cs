@@ -53,7 +53,7 @@ internal sealed class MemberAccessProvider : ICompletionProvider
                 type = typeInfo.Type ?? typeInfo.ConvertedType;
             }
 
-            if (type != null)
+            if (type is { TypeKind: not TypeKind.Error })
             {
                 var generatedApiRoot = IsGeneratedApiRoot(qualifier);
                 var beforeCaret = request.BeforeCaret;
@@ -75,10 +75,15 @@ internal sealed class MemberAccessProvider : ICompletionProvider
                     : CompletionContextKind.InstanceMember;
                 return new SimpleCompletionList(memberItems, kind);
             }
+
+            // An unresolved receiver has no members. Stop even for Ctrl+Space on its member name.
+            return new SimpleCompletionList([], CompletionContextKind.None);
         }
 
         // A typed '.' with nothing to complete has nothing to fall back to; an explicit invoke
         // elsewhere goes on to the general list.
-        return request.IsDotInsertion ? new SimpleCompletionList([], CompletionContextKind.None) : null;
+        return request.IsDotInsertion || request.BeforeCaret.EndsWith('.')
+            ? new SimpleCompletionList([], CompletionContextKind.None)
+            : null;
     }
 }

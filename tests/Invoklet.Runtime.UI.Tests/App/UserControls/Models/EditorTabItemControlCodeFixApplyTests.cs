@@ -175,5 +175,6 @@ public class EditorTabItemControlCodeFixApplyTests
         Assert.NotNull(namespaces);
         Assert.Contains("System.Text.RegularExpressions", namespaces);
         Assert.Equal(code, editor.Text); // visible script body itself is untouched
+        await TestWait.WhileAsync(() => margin.Fixes.Any(f => f.DiagnosticId == "CS0103"));
     }
 }

@@ -7,6 +7,11 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- Cancelled Rename Symbol if the script changes before the edit can be applied.
+- Prioritized C# import fixes over type generation and refreshed analysis after imports.
+- Kept member completion scoped to the receiver, including queries against generated connections.
+- Kept editor suggestions open while dragging their scrollbar.
+- Discarded pending completion results after moving the caret or editing their context.
 - Passed PostgreSQL and SQL Server connection strings to the script at startup without embedding their values in the generated assembly.
 - Passed HTTP and OpenAPI header values and gRPC metadata values through the same startup channel.
 - Kept connection schema refreshes visible and prevented an older read from replacing a newer result after a credential change.

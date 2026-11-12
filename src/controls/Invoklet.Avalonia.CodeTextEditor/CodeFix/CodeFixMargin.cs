@@ -225,7 +225,12 @@ public class CodeFixMargin : AbstractMargin
         // Always go through the menu, even for a single candidate — VS/Rider-style, so the lightbulb
         // never applies anything sight-unseen and there's a consistent place to add more entries later
         // (Suppress, Fix all in file/project, ...) without a special case for "exactly one fix".
-        var menu = new MenuFlyout();
+        var menu = new MenuFlyout
+        {
+            // Keep the lightbulb menu active while its presenter/scroll bar is being interacted
+            // with. Transient dismissal treats a scrollbar press as leaving the context action.
+            ShowMode = FlyoutShowMode.Standard,
+        };
         foreach (var item in BuildMenuItems(candidates))
             menu.Items.Add(item);
         // Anchored to the bulb's square, just below it. Not to the margin control (it spans the whole

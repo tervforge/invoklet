@@ -41,6 +41,32 @@ public sealed class CSharpIntelliSenseContextUpdateTests
     }
 
     [Fact]
+    public async Task QueryMemberCompletion_Should_UseTheGeneratedConnectionReceiver()
+    {
+        using var service = Create();
+        const string code = "var q = Connections.Db.Users.Where(u => u.Id == 1);\nq.";
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.Null(await service.GetCompletionsAsync(code, code.Length, CompletionTrigger.Insertion('.'), ct));
+        Assert.Null(await service.GetCompletionsAsync(code, code.Length, CompletionTrigger.Invoked, ct));
+
+        await service.UpdateExecutionContextAsync(new ExecutionRequest
+        {
+            Connections = new GeneratedConnections("""
+                public static partial class Connections { public static Database Db => new(); }
+                public sealed class Database { public System.Linq.IQueryable<User> Users => throw new System.NotImplementedException(); }
+                public sealed class User { public int Id { get; set; } }
+                """, [], []),
+        });
+
+        var list = await service.GetCompletionsAsync(code, code.Length, CompletionTrigger.Insertion('.'), ct);
+        Assert.NotNull(list);
+        Assert.Contains(list.Items, i => i.DisplayText == "Provider");
+        Assert.Contains(list.Items, i => i.DisplayText == "Select");
+        Assert.DoesNotContain(list.Items, i => i.DisplayText == "Connections");
+    }
+
+    [Fact]
     public async Task ACancelledRequest_Should_ChangeNothing()
     {
         using var service = Create();

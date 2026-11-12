@@ -54,12 +54,13 @@ internal sealed class CompletionService(
         string code, int position, CompletionTrigger trigger, CancellationToken ct)
     {
         var version = new StrongBox<int>();
-        for (var attempt = 0; ; attempt++)
+        for (var attempt = 0; attempt < MaxCompletionAttempts; attempt++)
         {
             var list = await ComputeCompletionsAsync(code, position, trigger, version, ct);
-            if (attempt == MaxCompletionAttempts - 1 || _session.IsCurrent(version.Value)) return list;
+            if (_session.IsCurrent(version.Value)) return list;
             ct.ThrowIfCancellationRequested();
         }
+        return null;
     }
 
     private const int MaxCompletionAttempts = 3;
@@ -70,9 +71,11 @@ internal sealed class CompletionService(
         try
         {
             Microsoft.CodeAnalysis.Document document;
+            int pos;
             lock (_session.SyncLock)
             {
                 document = _syncDocument(code);
+                pos = _layout.ToDocumentOffset(code, position);
                 contextVersion.Value = _session.ContextVersion;
             }
             if (SnapshotTakenForTests is { } snapshotTaken) await snapshotTaken();
@@ -82,7 +85,6 @@ internal sealed class CompletionService(
             var root = await document.GetSyntaxRootAsync(ct);
             if (root == null) return null;
 
-            var pos = _layout.ToDocumentOffset(code, position);
             return ProvideCompletions(new CompletionRequest(code, position, trigger, model, root, pos));
         }
         // A superseded request (see CodeTextEditor.ShowCompletion) cancels its token —

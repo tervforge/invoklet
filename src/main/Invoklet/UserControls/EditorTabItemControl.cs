@@ -1074,24 +1074,44 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var owner = TopLevel.GetTopLevel(this) as Window;
         if (owner is null) return;
 
+        var document = editor.Document;
+        var version = document.Version;
+        var script = State.MdRunDocument;
+        var code = document.Text;
         var caretOffset = editor.TextArea.Caret.Offset;
-        var info = await intelliSense.GetRenameInfoAsync(State.Editor.Text, caretOffset, CancellationToken.None);
+        var info = await intelliSense.GetRenameInfoAsync(code, caretOffset, CancellationToken.None);
+        if (!IsRenameCurrent()) return;
         if (info is null || info.Spans.Count == 0) return; // nothing renameable at the caret
 
         var dialog = new Windows.RenameSymbolDialog(info.CurrentName);
         var newName = await dialog.ShowDialog<string?>(owner);
         if (string.IsNullOrEmpty(newName) || newName == info.CurrentName) return;
+        if (!IsRenameCurrent()) return;
 
-        var conflict = await intelliSense.CheckRenameAsync(State.Editor.Text, caretOffset, newName, CancellationToken.None);
+        var conflict = await intelliSense.CheckRenameAsync(code, caretOffset, newName, CancellationToken.None);
+        if (!IsRenameCurrent()) return;
         if (conflict is not null)
         {
             SetStatus(conflict, "Invoklet.Status.ErrorBrush");
+            UpdateOutputUi();
             editor.Focus();
             return;
         }
 
-        ApplyRenameEdits(editor.Document, info.Spans, newName);
+        ApplyRenameEdits(document, info.Spans, newName);
         editor.Focus();
+
+        bool IsRenameCurrent()
+        {
+            if (_disposed) return false;
+            // Reload can edit the document in place or replace only the script header.
+            if (ReferenceEquals(editor.Document, document) && ReferenceEquals(document.Version, version)
+                && ReferenceEquals(State.MdRunDocument, script)) return true;
+
+            SetStatus("Rename cancelled because the script changed. Try again.", "Invoklet.Status.CancelledBrush");
+            UpdateOutputUi();
+            return false;
+        }
     }
 
     // Split out from ShowRenameSymbolAsync so the actual edit-application logic (order-of-operations
@@ -1816,7 +1836,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         };
 
         editor.AsyncCompletionProvider = new EditorCompletionProvider(
-            intelliSense, () => State.Editor.Text, new CompletionRowFactory(this, editor)).ProvideAsync;
+            intelliSense, () => State.Editor.Text, new CompletionRowFactory(this, editor),
+            () => ContextRefreshTask).ProvideAsync;
 
         editor.AsyncOverloadProvider = new EditorParameterInfo(
             intelliSense, editor, () => _themeService.CurrentTheme.Editor.IsDark).ProvideAsync;
