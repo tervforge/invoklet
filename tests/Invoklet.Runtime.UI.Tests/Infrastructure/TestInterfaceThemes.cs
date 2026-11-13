@@ -8,6 +8,7 @@ namespace Invoklet.Runtime.UI.Tests.Infrastructure;
 
 internal static class TestInterfaceThemes
 {
+    public static string PackageDirectory => Path.Combine(AppContext.BaseDirectory, "theme-fixtures", "plugins");
     private static readonly Lazy<IReadOnlyList<InterfaceTheme>> Bundled = new(Load);
 
     public static IReadOnlyList<InterfaceTheme> All => [.. BuiltInInterfaceThemes.All, .. Bundled.Value];
@@ -24,7 +25,7 @@ internal static class TestInterfaceThemes
 
     private static IReadOnlyList<InterfaceTheme> Load()
     {
-        var root = Path.Combine(AppContext.BaseDirectory, "plugins");
+        var root = PackageDirectory;
         var catalog = new ThemeCatalog();
         var session = new PluginLoader(new PluginLoaderOptions
         {

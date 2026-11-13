@@ -1,0 +1,15 @@
+{
+  "id": "invoklet.connector.sqlserver",
+  "version": "1.0.0",
+  "displayName": "SQL Server",
+  "roles": {
+    "connection": 1
+  },
+  "entry": {
+    "assembly": "Invoklet.Connectors.SqlServer.dll",
+    "type": "Invoklet.Connectors.SqlServer.Plugin"
+  },
+  "dependsOn": [
+    "invoklet.connector.efcore"
+  ]
+}

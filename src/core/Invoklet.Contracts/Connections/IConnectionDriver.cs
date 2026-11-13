@@ -72,9 +72,7 @@ public sealed record ConnectionTestResult(bool Succeeded, string Message);
 
 /// <summary>
 /// One kind of connection (a database engine, HTTP, gRPC): what its parameters are, how they are
-/// checked and how Invoklet tests a connection. Registered in <see cref="ConnectionDriverRegistry"/>;
-/// drivers are part of Invoklet for now and meant to become plugins, so this contract has no user
-/// interface or Invoklet internals in it.
+/// checked and how Invoklet tests a connection. Registered in <see cref="ConnectionDriverRegistry"/>.
 /// </summary>
 public interface IConnectionDriver
 {
@@ -113,7 +111,11 @@ public interface IConnectionDriver
     /// unreachable or refusing endpoint: that is a failed result with the reason.
     /// </summary>
     Task<ConnectionTestResult> TestAsync(IReadOnlyDictionary<string, MdRunValue> resolvedParams, CancellationToken cancellationToken);
+}
 
+/// <summary>A driver capability for generating the client class of a C# script.</summary>
+public interface ICSharpClientSource
+{
     /// <summary>
     /// The script's client class for a valid connection: C# for a public sealed class named
     /// <see cref="ConnectionCodeContext.ClassName"/> with a parameterless internal constructor that

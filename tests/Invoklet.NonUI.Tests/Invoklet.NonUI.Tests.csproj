@@ -32,6 +32,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\main\Invoklet\Invoklet.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Http/Invoklet.Connectors.Http.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Grpc/Invoklet.Connectors.Grpc.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Sqlite/Invoklet.Connectors.Sqlite.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Postgres/Invoklet.Connectors.Postgres.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.SqlServer/Invoklet.Connectors.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\runtime\Invoklet.Runtime\Invoklet.Runtime.csproj" />
     <!-- Pure managed code, so their tests build on every OS although each OS's Invoklet ships only its own. -->
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.Linux\Invoklet.Desktop.Linux.csproj" />

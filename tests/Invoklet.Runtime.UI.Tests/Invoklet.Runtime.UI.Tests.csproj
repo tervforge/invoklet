@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <InvokletBundledPluginsSource>$(MSBuildProjectDirectory)/../fixtures/plugins/theme-palettes</InvokletBundledPluginsSource>
+    <InvokletBundledPluginsBuildSubdirectory>theme-fixtures</InvokletBundledPluginsBuildSubdirectory>
   </PropertyGroup>
   <ItemGroup>
     <!-- Avalonia.Headless.XUnit depends on xunit v3 (xunit.v3.extensibility.core), not the
@@ -26,6 +28,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\main\Invoklet\Invoklet.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Http/Invoklet.Connectors.Http.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Grpc/Invoklet.Connectors.Grpc.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Sqlite/Invoklet.Connectors.Sqlite.csproj" />
+    <ProjectReference Include="../../src/connectors/Invoklet.Connectors.Postgres/Invoklet.Connectors.Postgres.csproj" />
     <!-- ControlClick lives in the macOS integration; its tests run on every OS. -->
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.MacOS\Invoklet.Desktop.MacOS.csproj" />
   </ItemGroup>

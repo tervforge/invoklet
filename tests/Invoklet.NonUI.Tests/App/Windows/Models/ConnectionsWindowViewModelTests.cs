@@ -66,7 +66,7 @@ public sealed class FileConnectionStoreTests : IDisposable
 // saved only by Save (the window's OK), and Test uses the Secret Store's values.
 public class ConnectionsWindowViewModelTests
 {
-    private sealed class FakeDriver : IConnectionDriver
+    private sealed class FakeDriver : IConnectionDriver, ICSharpClientSource
     {
         public IReadOnlyDictionary<string, MdRunValue>? Tested { get; private set; }
         public Exception? Failure { get; set; }
@@ -152,6 +152,7 @@ public class ConnectionsWindowViewModelTests
 
         var future = vm.Connections[1];
         Assert.Equal("snowflake (not available in this Invoklet)", future.DriverName);
+        Assert.Equal("Driver 'snowflake' is not installed or is disabled.", future.Problems);
         Assert.Empty(future.Fields);
         Assert.False(((ICommand)vm.TestCommand).CanExecute(null) && vm.SelectedConnection == future);
     }
@@ -447,7 +448,7 @@ public class ConnectionsWindowViewModelTests
     }
 
     // Connects, then fails to describe itself.
-    private sealed class DescriptionFailsDriver : IConnectionSchemaDriver
+    private sealed class DescriptionFailsDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public string Id => "described";
         public string DisplayName => "Described";

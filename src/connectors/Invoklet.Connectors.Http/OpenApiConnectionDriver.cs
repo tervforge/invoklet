@@ -9,7 +9,7 @@ namespace Invoklet.Connectors.Http;
 /// timeout, and a typed method for each operation and a class for each schema, as the gRPC connection gives a client for each service:
 /// <c>await Connections.Pets.GetPetAsync(7)</c>. The operations are also browsed in Tools → Connections.
 /// </summary>
-public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver
+public sealed class OpenApiConnectionDriver : IConnectionSchemaDriver, ICSharpClientSource
 {
     public const string DriverId = "openapi";
 

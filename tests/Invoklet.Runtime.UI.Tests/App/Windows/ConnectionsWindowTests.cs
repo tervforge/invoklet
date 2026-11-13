@@ -25,7 +25,7 @@ namespace Invoklet.Runtime.UI.Tests.App.Windows;
 
 public class ConnectionsWindowTests
 {
-    private sealed class SchemaDriver(bool relative = false, string id = "sqlite") : IConnectionSchemaDriver
+    private sealed class SchemaDriver(bool relative = false, string id = "sqlite") : IConnectionSchemaDriver, ICSharpClientSource
     {
         public bool UsesScriptDirectory(MdRunConnection connection) => relative;
         public string Id => id;

@@ -1,0 +1,12 @@
+{
+  "id": "invoklet.connector.http",
+  "version": "1.0.0",
+  "displayName": "HTTP and OpenAPI",
+  "roles": {
+    "connection": 1
+  },
+  "entry": {
+    "assembly": "Invoklet.Connectors.Http.dll",
+    "type": "Invoklet.Connectors.Http.Plugin"
+  }
+}

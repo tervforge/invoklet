@@ -91,11 +91,6 @@
     <ProjectReference Include="..\..\core\Invoklet.Format.MdRun\Invoklet.Format.MdRun.csproj" />
     <ProjectReference Include="..\..\core\Invoklet.Build.Core\Invoklet.Build.Core.csproj" />
     <ProjectReference Include="..\Invoklet.BuiltIns\Invoklet.BuiltIns.csproj" />
-    <ProjectReference Include="..\..\connectors\Invoklet.Connectors.Http\Invoklet.Connectors.Http.csproj" />
-    <ProjectReference Include="..\..\connectors\Invoklet.Connectors.Grpc\Invoklet.Connectors.Grpc.csproj" />
-    <ProjectReference Include="..\..\connectors\Invoklet.Connectors.Sqlite\Invoklet.Connectors.Sqlite.csproj" />
-    <ProjectReference Include="..\..\connectors\Invoklet.Connectors.Postgres\Invoklet.Connectors.Postgres.csproj" />
-    <ProjectReference Include="..\..\connectors\Invoklet.Connectors.SqlServer\Invoklet.Connectors.SqlServer.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.CSharp\Invoklet.Languages.CSharp.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.VB\Invoklet.Languages.VB.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.DotnetCommon\Invoklet.Languages.DotnetCommon.csproj" />
@@ -159,6 +154,9 @@
   <ItemGroup>
     <AvaloniaResource Include="TemplatedControls\IconButton.axaml"/>
   </ItemGroup>
-  <Import Project="..\..\..\build\EfCoreDesign.props" />
+  <Import Project="../../../build/ConnectorPlugins.targets" />
+  <PropertyGroup>
+    <InvokletShipConnectors>true</InvokletShipConnectors>
+  </PropertyGroup>
   <Import Project="..\..\..\build\BundledPlugins.targets" />
 </Project>

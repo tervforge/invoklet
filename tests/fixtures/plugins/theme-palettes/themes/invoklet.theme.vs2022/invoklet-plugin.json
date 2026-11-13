@@ -1,12 +1,13 @@
 {
-  "id": "invoklet.theme.vs2022-light",
+  "id": "invoklet.theme.vs2022",
   "version": "1.0.0",
-  "displayName": "VS 2022 Light",
+  "displayName": "VS 2022",
   "roles": {
     "theme": 1
   },
   "assets": {
     "themes": [
+      "vs2022-dark.json",
       "vs2022-light.json"
     ]
   }

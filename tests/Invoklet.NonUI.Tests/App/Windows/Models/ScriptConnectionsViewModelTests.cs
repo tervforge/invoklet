@@ -29,7 +29,7 @@ public class ScriptConnectionsViewModelTests
             },
     };
 
-    private sealed class SqlLikeDriver : IConnectionDriver
+    private sealed class SqlLikeDriver : IConnectionDriver, ICSharpClientSource
     {
         public string Id => "sqlish";
         public string DisplayName => "SQL-ish";
@@ -152,7 +152,7 @@ public class ScriptConnectionsViewModelTests
             ],
         });
         Assert.Equal(
-            ["The Secret Store has no secret named 'missing-token'.", "This Invoklet has no 'snowflake' driver.", "The base address is missing."],
+            ["The Secret Store has no secret named 'missing-token'.", "Driver 'snowflake' is not installed or is disabled.", "The base address is missing."],
             vm.Connections.Items.Select(i => i.Problem));
 
         vm.SetFrontMatter(new MdRunFrontMatter { Language = MdRunLanguage.Vb, Connections = [Http("a", "https://a/")] });
@@ -528,7 +528,7 @@ public class ScriptConnectionsViewModelTests
         secrets.Verify(s => s.LoadSnapshot(), Times.Once);
     }
 
-    private sealed class CountingSchemaDriver : IConnectionSchemaDriver
+    private sealed class CountingSchemaDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public int Fetches;
         public string? Failure;

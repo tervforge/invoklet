@@ -472,6 +472,7 @@ public sealed class ConnectionItemViewModel : ReactiveObject
         var placeholders = connection.Params.SelectMany(p => p.Value.Texts().Select(t => (p.Key, MdRunPlaceholders.Parse(t).Error)))
             .Where(p => p.Error is not null).Select(p => $"{p.Key}: {p.Error}");
         var problems = Fields.Select(f => f.MapError).OfType<string>().Concat(placeholders).Concat(Driver?.Validate(connection) ?? []).ToList();
+        if (Driver is null) problems.Add(ConnectionDriverRegistry.MissingDriverMessage(DriverId));
         Problems = problems.Count == 0 ? null : string.Join("\n", problems);
     }
 
@@ -824,7 +825,7 @@ public sealed class ConnectionsWindowViewModel : ViewModelBase, IDisposable
         if (item.Driver is not IConnectionSchemaDriver driver)
         {
             BrowserStatus = item.Driver is null
-                ? "This connection's driver is unavailable."
+                ? ConnectionDriverRegistry.MissingDriverMessage(item.DriverId)
                 : "This connection type does not publish a browsable contract yet.";
             return;
         }

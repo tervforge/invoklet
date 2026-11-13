@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <None Update="invoklet-plugin.json" CopyToPublishDirectory="PreserveNewest" Condition="'$(InvokletConnectorPackage)' == '$(MSBuildProjectName)'" />
+  </ItemGroup>
   <!-- Reads a database with Entity Framework Core's reverse engineering and writes the context a script uses. The providers (PostgreSQL, SQL Server) are
        libraries of their own that bring only their own packages. -->
   <PropertyGroup>

@@ -1,0 +1,15 @@
+{
+  "id": "invoklet.connector.sqlite",
+  "version": "1.0.0",
+  "displayName": "SQLite",
+  "roles": {
+    "connection": 1
+  },
+  "entry": {
+    "assembly": "Invoklet.Connectors.Sqlite.dll",
+    "type": "Invoklet.Connectors.Sqlite.Plugin"
+  },
+  "dependsOn": [
+    "invoklet.connector.efcore"
+  ]
+}

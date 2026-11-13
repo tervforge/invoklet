@@ -2,6 +2,8 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <RootNamespace>Invoklet.Cli.Tests</RootNamespace>
+    <InvokletShipConnectors>true</InvokletShipConnectors>
+    <InvokletConnectorBuildReferences>false</InvokletConnectorBuildReferences>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Spectre.Console.Testing" />
@@ -19,4 +21,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\main\Invoklet.Cli\Invoklet.Cli.csproj" />
   </ItemGroup>
+  <Import Project="../../build/ConnectorPlugins.targets" />
+  <Import Project="../../build/BundledPlugins.targets" />
 </Project>

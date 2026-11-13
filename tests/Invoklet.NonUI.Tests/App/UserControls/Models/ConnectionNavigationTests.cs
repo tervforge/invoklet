@@ -141,7 +141,7 @@ public sealed class ConnectionNavigationViewModelTests : IDisposable
         Params = driver == "http" ? new(StringComparer.Ordinal) { ["baseAddress"] = MdRunValue.Of($"https://{name}.test/") } : new(StringComparer.Ordinal),
     };
 
-    private sealed class PackagedDriver : IConnectionDriver
+    private sealed class PackagedDriver : IConnectionDriver, ICSharpClientSource
     {
         public string Id => "packaged";
         public string DisplayName => "Packaged";
@@ -187,7 +187,7 @@ public sealed class ConnectionNavigationViewModelTests : IDisposable
         Assert.Contains("has connections with problems", group.AccessibleName);
 
         Assert.False(vm.Find("fine", isConnection: true)!.HasProblem);
-        Assert.Equal("This Invoklet has no 'snowflake' driver.", vm.Find("warehouse", isConnection: true)!.Problem);
+        Assert.Equal("Driver 'snowflake' is not installed or is disabled.", vm.Find("warehouse", isConnection: true)!.Problem);
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public sealed class ConnectionNavigationViewModelTests : IDisposable
         vm.SetAttached([]);
         Assert.False(vm.CanAddToScript(warehouse)); // no driver to build its client with
         Assert.Equal("Icon.DriverDatabase", warehouse.IconKey);
-        Assert.Contains("problem: This Invoklet has no 'snowflake' driver.", warehouse.AccessibleName);
+        Assert.Contains("problem: Driver 'snowflake' is not installed or is disabled.", warehouse.AccessibleName);
         Assert.Equal("APIs group, 1 connection", vm.Nodes[0].AccessibleName);
         Assert.False(vm.IsEmpty);
     }
@@ -453,7 +453,7 @@ public sealed class ConnectionStatusTests : IDisposable
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     // Reads its contract only when the test lets it, failing or succeeding as told.
-    private sealed class ContractDriver : IConnectionSchemaDriver
+    private sealed class ContractDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public TaskCompletionSource<ConnectionSchema> Next { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<bool> FetchStarted { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

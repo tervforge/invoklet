@@ -1,12 +1,13 @@
 {
-  "id": "invoklet.theme.rider-light",
+  "id": "invoklet.theme.rider",
   "version": "1.0.0",
-  "displayName": "Rider Light",
+  "displayName": "Rider",
   "roles": {
     "theme": 1
   },
   "assets": {
     "themes": [
+      "rider-dark.json",
       "rider-light.json"
     ]
   }

@@ -14,7 +14,7 @@ public sealed record GeneratedSourceFile(string Name, string Text);
 /// </summary>
 /// <param name="Summary">A line for the user, such as "2 services: inventory.v1.Stock, …".</param>
 /// <param name="Files">C# files compiled with the script.</param>
-/// <param name="Data">The driver's own data for <see cref="IConnectionDriver.CreateClient"/>.</param>
+/// <param name="Data">The driver's own data for <see cref="ICSharpClientSource.CreateClient"/>.</param>
 public sealed record ConnectionSchema(string Summary, IReadOnlyList<GeneratedSourceFile> Files, string Data);
 
 /// <summary>What a driver may use while reading a schema: NuGet packages with build tools, for instance.</summary>

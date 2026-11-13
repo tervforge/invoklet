@@ -70,7 +70,7 @@ public sealed class ConnectionClientTests : IDisposable
         var unknown = new MdRunConnection { Name = "warehouse", Driver = "snowflake" };
         var generated = GeneratedConnections.For([Billing(), missingAddress, unknown], MdRunLanguage.CSharp, [], Drivers())!;
         Assert.Equal(
-            ["Connection 'broken': The base address is missing.", "Connection 'warehouse': this Invoklet has no 'snowflake' driver."],
+            ["Connection 'broken': The base address is missing.", "Connection 'warehouse': Driver 'snowflake' is not installed or is disabled."],
             generated.Errors);
         Assert.Contains("BillingApi", generated.Source);
         Assert.DoesNotContain("Broken", generated.Source);
@@ -80,7 +80,7 @@ public sealed class ConnectionClientTests : IDisposable
             GeneratedConnections.For([Billing()], MdRunLanguage.Vb, [], Drivers())!.Errors);
     }
 
-    private sealed class SqlLikeDriver : IConnectionDriver
+    private sealed class SqlLikeDriver : IConnectionDriver, ICSharpClientSource
     {
         public string Id => "sqlish";
         public string DisplayName => "SQL-ish";

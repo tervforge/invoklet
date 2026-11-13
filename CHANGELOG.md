@@ -11,6 +11,12 @@ Notable changes in each Invoklet release. Downloads are on the
 - Added `--plugins-dev <directory>` for plugin development, with a visible warning when enabled.
 - Added a Plugins page in Preferences for startup diagnostics and changes that require a restart.
 - Added interface theme packages and VS Code TextMate themes to Preferences → Appearance.
+- Added theme package installation, removal, enable/disable controls, and content verification status to Preferences → Plugins.
+- Grouped the light and dark palettes of VS Code, Rider, and VS 2022 into one plugin per theme family.
+- Added standard .NET packing for theme NuGet packages and local installation of theme `.nupkg` files.
+- Moved VS Code, Rider, and VS 2022 themes to the separate Invoklet custom themes repository.
+- Load bundled connection drivers through the plugin host in both the desktop app and CLI.
+- Install and remove third-party connector packages in Preferences → Plugins with explicit approval before code runs.
 
 ### Fixed
 

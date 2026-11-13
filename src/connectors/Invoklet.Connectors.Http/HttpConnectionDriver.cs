@@ -10,7 +10,7 @@ namespace Invoklet.Connectors.Http;
 /// An HTTP API: a base address the script's requests are relative to, headers sent with every
 /// request (an <c>Authorization</c> header with <c>${secret:…}</c>, for instance) and a timeout.
 /// </summary>
-public sealed class HttpConnectionDriver : IConnectionDriver
+public sealed class HttpConnectionDriver : IConnectionDriver, ICSharpClientSource
 {
     public const string DriverId = "http";
 

@@ -4,6 +4,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Invoklet.UserControls;
 using Invoklet.Windows.Models;
@@ -25,6 +26,67 @@ public partial class PreferencesWindow : Window
     private void RefreshPlugins_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is PreferencesWindowViewModel viewModel) viewModel.PluginsPage.Refresh();
+    }
+
+    private void TogglePlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel viewModel && sender is Button { DataContext: PluginStatusRow row })
+            viewModel.PluginsPage.Toggle(row);
+    }
+
+    private async void InstallPluginFolder_Click(object? sender, RoutedEventArgs e)
+    {
+        await InstallPluginAsync(async () => (await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select a plugin package folder",
+        })).FirstOrDefault()?.TryGetLocalPath(), archive: false);
+    }
+
+    private async void InstallPluginArchive_Click(object? sender, RoutedEventArgs e)
+    {
+        await InstallPluginAsync(async () => (await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select a plugin package archive",
+            FileTypeFilter = [new FilePickerFileType("Plugin packages") { Patterns = ["*.nupkg", "*.invplugin", "*.zip"] }],
+        })).FirstOrDefault()?.TryGetLocalPath(), archive: true);
+    }
+
+    private async Task InstallPluginAsync(Func<Task<string?>> pickPath, bool archive)
+    {
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model) return;
+        var page = model.PluginsPage;
+        try
+        {
+            if (await pickPath() is not { } path) return;
+            var installer = page.CreateInstaller();
+            using var package = await Task.Run(() => archive ? installer.PrepareArchive(path) : installer.Prepare(path));
+            if (!await PluginPackageConfirmationDialog.ForInstall(package.Manifest, path).ShowDialog<bool>(this)) return;
+            await Task.Run(() => installer.Install(package));
+            page.PackageChanged();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or ArgumentException)
+        {
+            page.ReportPackageError();
+        }
+    }
+
+    private async void RemovePlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model
+            || sender is not Button { DataContext: PluginStatusRow { CanRemove: true } row }) return;
+        var page = model.PluginsPage;
+        try
+        {
+            if (!await new PluginPackageConfirmationDialog("Remove plugin?",
+                $"Remove {row.Name}? The change will take effect after restarting Invoklet.", "Remove").ShowDialog<bool>(this)) return;
+            var installer = page.CreateInstaller();
+            await Task.Run(() => installer.Remove(row.Id));
+            page.PackageChanged();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            page.ReportPackageError();
+        }
     }
 
     private async void RestartForPlugins_Click(object? sender, RoutedEventArgs e)

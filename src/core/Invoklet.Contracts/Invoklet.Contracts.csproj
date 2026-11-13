@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\Invoklet.Format.MdRun\Invoklet.Format.MdRun.csproj" />
+    <ProjectReference Include="..\Invoklet.Plugins\Invoklet.Plugins.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Invoklet.Plugins.Hosting" />
   </ItemGroup>
 </Project>

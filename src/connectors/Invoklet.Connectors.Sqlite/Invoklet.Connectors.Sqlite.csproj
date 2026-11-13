@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <None Update="invoklet-plugin.json" CopyToPublishDirectory="PreserveNewest" Condition="'$(InvokletConnectorPackage)' == '$(MSBuildProjectName)'" />
+  </ItemGroup>
   <!-- SQLite connections: the provider's package brings Microsoft.Data.Sqlite and its design-time services, and nothing of any other database. -->
   <PropertyGroup>
     <RootNamespace>Invoklet.Connectors.Sqlite</RootNamespace>

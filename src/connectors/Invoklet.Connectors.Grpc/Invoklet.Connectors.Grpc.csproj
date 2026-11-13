@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <None Update="invoklet-plugin.json" CopyToPublishDirectory="PreserveNewest" Condition="'$(InvokletConnectorPackage)' == '$(MSBuildProjectName)'" />
+  </ItemGroup>
   <PropertyGroup>
     <RootNamespace>Invoklet.Connectors.Grpc</RootNamespace>
   </PropertyGroup>

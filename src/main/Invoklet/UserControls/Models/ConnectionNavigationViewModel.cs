@@ -369,7 +369,7 @@ public sealed class ConnectionNavigationViewModel : ReactiveObject, IDisposable
     {
         if (_drivers is null) return ConnectionStatus.Ready;
         if (_drivers.Find(connection.Driver) is not { } driver)
-            return new(ConnectionRowState.Problem, $"This Invoklet has no '{connection.Driver}' driver.");
+            return new(ConnectionRowState.Problem, ConnectionDriverRegistry.MissingDriverMessage(connection.Driver));
         if (driver.Validate(connection).FirstOrDefault() is { } invalid) return new(ConnectionRowState.Problem, invalid);
         if (secretNames is not null)
         {

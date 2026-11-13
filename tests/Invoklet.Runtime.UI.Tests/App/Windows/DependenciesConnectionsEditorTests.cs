@@ -20,7 +20,7 @@ namespace Invoklet.Runtime.UI.Tests.App.Windows;
 // Connections window as Tools → Connections over the Dependencies window, whose draft is left alone.
 public class DependenciesConnectionsEditorTests
 {
-    private sealed class PackageDriver : IConnectionDriver
+    private sealed class PackageDriver : IConnectionDriver, ICSharpClientSource
     {
         public string Id => "package";
         public string DisplayName => "Package";

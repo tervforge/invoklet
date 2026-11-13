@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <None Update="invoklet-plugin.json" CopyToPublishDirectory="PreserveNewest" Condition="'$(InvokletConnectorPackage)' == '$(MSBuildProjectName)'" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Invoklet.NonUI.Tests" />
     <InternalsVisibleTo Include="Invoklet.Connectors.Tests" />
   </ItemGroup>

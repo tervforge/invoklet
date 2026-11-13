@@ -19,7 +19,7 @@ namespace Invoklet.Connectors.Grpc;
 /// with a property per service: <c>Connections.Inventory.Stock.GetItemAsync(…)</c>. Metadata
 /// (an <c>authorization</c> entry with <c>${secret:…}</c>, for instance) is sent with every call.
 /// </summary>
-public sealed class GrpcConnectionDriver : IConnectionSchemaDriver
+public sealed class GrpcConnectionDriver : IConnectionSchemaDriver, ICSharpClientSource
 {
     public const string DriverId = "grpc";
 

@@ -45,6 +45,9 @@ internal sealed class PluginAdmission(PluginLoaderOptions options)
                 return PluginDiagnostic.Error(id, PluginDiagnosticCode.PluginNotApproved, $"'{id}' needs approval before it can load.");
         }
 
+        if (source.Trust == PluginTrust.Bundled && user is { Source: PluginInventoryStore.BundledSource, Enabled: false })
+            return PluginDiagnostic.Error(id, PluginDiagnosticCode.PluginDisabled, $"'{id}' is disabled.");
+
         try
         {
             PluginFiles.RejectLinksBetween(Path.GetFullPath(configured.Directory), plugin.Directory);

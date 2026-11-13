@@ -616,7 +616,7 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
             if (driver is null)
             {
                 // Without a driver id, Validate has already said so.
-                if (!string.IsNullOrWhiteSpace(connection.Driver)) problems.Add($"This Invoklet has no '{connection.Driver}' driver.");
+                if (!string.IsNullOrWhiteSpace(connection.Driver)) problems.Add(ConnectionDriverRegistry.MissingDriverMessage(connection.Driver));
             }
             else
             {

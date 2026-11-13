@@ -1,0 +1,15 @@
+{
+  "id": "invoklet.connector.postgres",
+  "version": "1.0.0",
+  "displayName": "PostgreSQL",
+  "roles": {
+    "connection": 1
+  },
+  "entry": {
+    "assembly": "Invoklet.Connectors.Postgres.dll",
+    "type": "Invoklet.Connectors.Postgres.Plugin"
+  },
+  "dependsOn": [
+    "invoklet.connector.efcore"
+  ]
+}

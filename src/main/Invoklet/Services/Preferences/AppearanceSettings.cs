@@ -7,8 +7,8 @@ public sealed class AppearanceSettings
 {
     public bool RestoreUnsavedTabs { get; set; } = true;
     public ThemeMode Mode { get; set; } = ThemeMode.System;
-    public string DarkInterfaceTheme { get; set; } = "invoklet.theme.vscode-dark";
-    public string LightInterfaceTheme { get; set; } = "invoklet.theme.vscode-light";
+    public string DarkInterfaceTheme { get; set; } = "invoklet.theme.midnight";
+    public string LightInterfaceTheme { get; set; } = "invoklet.theme.warm-light";
     public string? DarkEditorTheme { get; set; }
     public string? LightEditorTheme { get; set; }
 

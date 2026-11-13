@@ -274,7 +274,7 @@ public class App : Application
         services.AddSingleton<ThemeCatalog>();
         services.AddSingleton<IThemeCatalog>(sp => sp.GetRequiredService<ThemeCatalog>());
         services.AddSingleton(sp => PluginStartup.Load(plugins.Directory, sp.GetRequiredService<ILoggerFactory>(),
-            [sp.GetRequiredService<ThemeCatalog>()]));
+            [new ConnectionPluginRoleHandler(sp.GetRequiredService<ConnectionDriverRegistry>()), sp.GetRequiredService<ThemeCatalog>()]));
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             services.AddSingleton(desktop);
@@ -363,7 +363,8 @@ public class App : Application
         services.AddTransient(sp => new PluginsPageViewModel(sp.GetRequiredService<PluginSession>(), PluginStartup.ReadUserInventory,
             () => sp.GetService<ApplicationRestart>()?.RequestAsync() ?? Task.CompletedTask,
             pluginArgumentError is null ? null : "Plugin development mode could not be enabled. Check --plugins-dev or INVOKLET_PLUGINS_DEV.",
-            Directory.Exists));
+            Directory.Exists, (id, enabled) => PluginStartup.SetPluginEnabled(id, enabled, sp.GetRequiredService<PluginSession>()),
+            PluginStartup.CreatePluginInstaller));
         services.AddTransient<PreferencesWindowViewModel>();
         services.AddTransient<DependenciesWindowViewModel>();
         services.AddTransient<Windows_PreferencesWindow>();

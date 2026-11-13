@@ -23,6 +23,66 @@ public sealed class PreferencesPluginsTests
     private readonly PreferencesPluginsFixture _fixture = new();
 
     [AvaloniaFact]
+    public void InstallConfirmation_ConnectorShowsPublisherAndExecutionPermissions()
+    {
+        var manifest = PluginManifestReader.Read("""
+            {"id":"test.connector","version":"1.2.3","displayName":"Example Connector","publisher":"Example Studio",
+             "roles":{"connection":1},"entry":{"assembly":"Example.dll","type":"Example.Plugin"}}
+            """).Manifest!;
+
+        var window = PluginPackageConfirmationDialog.ForInstall(manifest, "example.nupkg");
+        var layout = Assert.IsType<DialogLayout>(window.Content);
+
+        Assert.Equal(DialogKind.Warning, layout.Kind);
+        Assert.Contains("Example Connector", layout.Message);
+        Assert.Contains("1.2.3", layout.Message);
+        Assert.Contains("Example Studio", layout.Message);
+        Assert.Contains("example.nupkg", layout.Message);
+        Assert.Contains("same permissions as Invoklet", layout.Message);
+        var buttons = Assert.IsType<StackPanel>(layout.Actions).Children.OfType<Button>();
+        Assert.Equal("Cancel", Assert.Single(buttons, button => button.IsDefault).Content);
+    }
+
+    [AvaloniaFact]
+    public void PluginsPage_BundledThemeToggle_ShowsDesiredStateAndKeepsTheCurrentSession()
+    {
+        var manifest = PluginManifestReader.Read("""
+            {"id":"test.theme","version":"1.0.0","displayName":"Example theme","roles":{"theme":1}}
+            """).Manifest!;
+        var session = new PluginSession([new LoadedPlugin(manifest, "/plugins/theme", PluginTrust.Bundled, [])], []);
+        var inventory = PluginInventory.Empty;
+        var page = new PluginsPageViewModel(session, () => inventory, () => Task.CompletedTask,
+            setEnabled: (id, enabled) => inventory = enabled ? PluginInventory.Empty : new PluginInventory(
+                [new PluginInventoryEntry(id, manifest.Version, ["theme"], PluginInventoryStore.BundledSource, null,
+                    new string('a', 64), "none", Enabled: false, Approved: false)]));
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            Assert.Contains("Content verified", PreferencesPluginsFixture.PageText(window));
+
+            ClickToggle("Disable");
+            Assert.Single(session.Loaded);
+            Assert.True(page.HasPendingRestart);
+            Assert.Contains("Will be disabled.", PreferencesPluginsFixture.PageText(window));
+
+            ClickToggle("Enable");
+            Assert.False(page.HasPendingRestart);
+            Assert.Empty(inventory.Entries);
+        }
+        finally { window.Close(); }
+
+        void ClickToggle(string label)
+        {
+            var button = Assert.Single(window.GetVisualDescendants().OfType<Button>(),
+                item => item.IsEffectivelyVisible && Equals(item.Content, label));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    [AvaloniaFact]
     public void PluginsPage_RejectedPlugin_ShowsSafeReasonAndMetadata()
     {
         var manifest = PluginManifestReader.Read("""

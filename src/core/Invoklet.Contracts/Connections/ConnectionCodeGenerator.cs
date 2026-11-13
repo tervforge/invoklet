@@ -5,7 +5,7 @@ using Invoklet.Format.MdRun;
 
 namespace Invoklet.Contracts.Connections;
 
-/// <summary>What a driver's <see cref="IConnectionDriver.CreateClient"/> writes code with.</summary>
+/// <summary>What a driver's <see cref="ICSharpClientSource.CreateClient"/> writes code with.</summary>
 public sealed class ConnectionCodeContext
 {
     private readonly List<string> _startupValues;
@@ -146,9 +146,15 @@ public sealed record GeneratedConnections(string Source, IReadOnlyList<string> E
             if (drivers.Find(connection.Driver) is not { } driver)
             {
                 if (!string.IsNullOrWhiteSpace(connection.Driver))
-                    errors.Add($"Connection '{connection.Name}': this Invoklet has no '{connection.Driver}' driver.");
+                    errors.Add($"Connection '{connection.Name}': {ConnectionDriverRegistry.MissingDriverMessage(connection.Driver)}");
                 continue;
             }
+            if (driver is not ICSharpClientSource clientSource)
+            {
+                errors.Add($"Connection '{connection.Name}': the '{driver.Id}' driver cannot generate a C# client.");
+                continue;
+            }
+
             var problems = driver.Validate(connection);
             if (problems.Count > 0 || connection.Params.Values.SelectMany(v => v.Texts()).Any(t => MdRunPlaceholders.Parse(t).Error is not null))
             {
@@ -194,7 +200,7 @@ public sealed record GeneratedConnections(string Source, IReadOnlyList<string> E
             var className = codeName + "Client";
             for (var suffix = 2; !symbols.Add(className); suffix++) className = codeName + "Client" + suffix;
             var context = new ConnectionCodeContext(connection, className, schema, startupValues);
-            var client = driver.CreateClient(connection, context);
+            var client = clientSource.CreateClient(connection, context);
             namespaces.UnionWith(client.Namespaces ?? []);
             classes.Append(Indent(client.ClassSource.Replace("\r\n", "\n").TrimEnd(), "    ")).Append("\n\n");
             var field = "__" + char.ToLowerInvariant(codeName[0]) + codeName[1..];

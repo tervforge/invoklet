@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <InvokletPluginSourceTargets Condition="'$(InvokletBundledPluginsSource)' == '' and '$(InvokletPluginSourceTargets)' == '' and '$(InvokletShipConnectors)' == 'true'">StageConnectorPluginSources</InvokletPluginSourceTargets>
     <InvokletBundledPluginsSource Condition="'$(InvokletBundledPluginsSource)' == ''">$(MSBuildThisFileDirectory)plugins</InvokletBundledPluginsSource>
     <_InvokletPluginPackager>$(MSBuildThisFileDirectory)Invoklet.PluginPackager/Invoklet.PluginPackager.csproj</_InvokletPluginPackager>
     <_InvokletPackagerHost>$(DOTNET_HOST_PATH)</_InvokletPackagerHost>
@@ -19,13 +20,16 @@
     </MSBuild>
   </Target>
 
-  <Target Name="StageInvokletBuildPlugins" AfterTargets="Build" DependsOnTargets="FindInvokletPluginPackager"
+  <Target Name="StageInvokletBuildPlugins" AfterTargets="Build" DependsOnTargets="FindInvokletPluginPackager;$(InvokletPluginSourceTargets)"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
+    <PropertyGroup>
+      <_InvokletPluginStageDirectory>$([System.IO.Path]::Combine('$(TargetDir)', '$(InvokletBundledPluginsBuildSubdirectory)'))</_InvokletPluginStageDirectory>
+    </PropertyGroup>
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
-          Command="&quot;$(_InvokletPackagerHost)&quot; &quot;$(_InvokletPluginPackagerPath)&quot; stage &quot;$([System.IO.Path]::Combine('$(InvokletBundledPluginsSource)', '.'))&quot; &quot;$([System.IO.Path]::Combine('$(TargetDir)', '.'))&quot;" />
+          Command="&quot;$(_InvokletPackagerHost)&quot; &quot;$(_InvokletPluginPackagerPath)&quot; stage &quot;$([System.IO.Path]::Combine('$(InvokletBundledPluginsSource)', '.'))&quot; &quot;$([System.IO.Path]::Combine('$(_InvokletPluginStageDirectory)', '.'))&quot;" />
   </Target>
 
-  <Target Name="StageInvokletPublishedPlugins" AfterTargets="Publish" DependsOnTargets="FindInvokletPluginPackager"
+  <Target Name="StageInvokletPublishedPlugins" AfterTargets="Publish" DependsOnTargets="FindInvokletPluginPackager;$(InvokletPluginSourceTargets)"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
           Command="&quot;$(_InvokletPackagerHost)&quot; &quot;$(_InvokletPluginPackagerPath)&quot; stage &quot;$([System.IO.Path]::Combine('$(InvokletBundledPluginsSource)', '.'))&quot; &quot;$([System.IO.Path]::Combine('$(PublishDir)', '.'))&quot;" />

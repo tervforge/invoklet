@@ -1,0 +1,12 @@
+{
+  "id": "invoklet.connector.efcore",
+  "version": "1.0.0",
+  "displayName": "Entity Framework Core",
+  "roles": {
+    "library": 1
+  },
+  "entry": {
+    "assembly": "Invoklet.Connectors.EfCore.dll",
+    "type": "Invoklet.Connectors.EfCore.Plugin"
+  }
+}

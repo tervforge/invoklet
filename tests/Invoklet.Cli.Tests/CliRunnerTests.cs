@@ -228,11 +228,13 @@ public class CliRunnerTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public void CreateDefault_Should_RegisterBuiltInsInTheExistingOrder()
+    public void CreateDefault_Should_LoadConnectorPluginsInTheExistingDriverOrder()
     {
         var services = CliServices.CreateDefault();
 
         Assert.Equal(["csharp", "vb"], services.Registry.SupportedLanguages);
+        Assert.True(services.Plugins.IsLoaded("invoklet.connector.efcore"));
+        Assert.True(services.Plugins.IsLoaded("invoklet.connector.http"));
         Assert.Equal(["http", "openapi", "grpc", "sqlite", "postgres", "sqlserver"],
             services.ConnectionDrivers!.Drivers.Select(driver => driver.Id));
     }
@@ -316,7 +318,7 @@ public class CliRunnerTests
         finally { Directory.Delete(folder, true); }
     }
 
-    private sealed class CountingSchemaDriver : IConnectionSchemaDriver
+    private sealed class CountingSchemaDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public int Fetches;
         public string Id => "counting";

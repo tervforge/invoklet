@@ -14,7 +14,7 @@ namespace Invoklet.Connectors.EfCore;
 /// the password; an optional schema limits what is read to it. A provider (PostgreSQL, SQL Server) is a library of its own that derives from this class
 /// and brings its own packages.
 /// </summary>
-public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver
+public abstract class EfCoreConnectionDriver : IConnectionSchemaDriver, ICSharpClientSource
 {
     private const string ConnectionStringKey = "connectionString";
     private const string SchemaKey = "schema";

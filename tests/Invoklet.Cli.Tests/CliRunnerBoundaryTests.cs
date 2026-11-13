@@ -118,7 +118,7 @@ public sealed class CliRunnerBoundaryTests : IDisposable
     }
 
     // A description that is read until the run is cancelled.
-    private sealed class BlockingSchemaDriver : IConnectionSchemaDriver
+    private sealed class BlockingSchemaDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string Id => "blocking";

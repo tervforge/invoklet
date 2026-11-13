@@ -1,0 +1,30 @@
+<Project>
+  <ItemGroup>
+    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.EfCore/Invoklet.Connectors.EfCore.csproj"
+                              PluginPath="library/invoklet.connector.efcore" />
+    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Http/Invoklet.Connectors.Http.csproj"
+                              PluginPath="connection/invoklet.connector.http" />
+    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Grpc/Invoklet.Connectors.Grpc.csproj"
+                              PluginPath="connection/invoklet.connector.grpc" />
+    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Sqlite/Invoklet.Connectors.Sqlite.csproj"
+                              PluginPath="connection/invoklet.connector.sqlite" />
+    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Postgres/Invoklet.Connectors.Postgres.csproj"
+                              PluginPath="connection/invoklet.connector.postgres" />
+    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.SqlServer/Invoklet.Connectors.SqlServer.csproj"
+                              PluginPath="connection/invoklet.connector.sqlserver" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="@(InvokletConnectorProject)" ReferenceOutputAssembly="false"
+                      Private="false" GlobalPropertiesToRemove="OutDir;OutputPath;PublishDir"
+                      Condition="'$(InvokletConnectorBuildReferences)' != 'false'" />
+  </ItemGroup>
+  <Target Name="StageConnectorPluginSources">
+    <PropertyGroup>
+      <_ConnectorSourceDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)connector-packages'))</_ConnectorSourceDirectory>
+      <InvokletBundledPluginsSource>$(_ConnectorSourceDirectory)</InvokletBundledPluginsSource>
+    </PropertyGroup>
+    <MSBuild Projects="@(InvokletConnectorProject)" Targets="Publish"
+             RemoveProperties="OutDir;OutputPath;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun"
+             Properties="PublishDir=$(_ConnectorSourceDirectory)/%(InvokletConnectorProject.PluginPath)/;SelfContained=false;InvokletConnectorPackage=%(InvokletConnectorProject.Filename)" />
+  </Target>
+</Project>

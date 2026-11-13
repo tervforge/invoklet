@@ -14,7 +14,7 @@ namespace Invoklet.Cli;
 /// Invoklet.Runtime library) from a run's request, the installed .NET SDKs, and the connection drivers a
 /// script's <c>connections:</c> are built with, and what some of them read from their endpoint first
 /// (a gRPC server's services), shared with the Invoklet window. <see cref="CreateDefault"/> is the only place that knows
-/// the concrete language modules, connectors and .NET backend; <see cref="CliRunner"/> uses just these contracts.
+/// the concrete language modules, plugin loader and .NET backend; <see cref="CliRunner"/> uses just these contracts.
 /// </summary>
 /// <param name="BuildsFolder">Where scripts are built, a folder kept for each; null builds each run in a temporary folder.</param>
 public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sdks, ConnectionDriverRegistry? ConnectionDrivers = null,
@@ -24,13 +24,7 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
     public static string DefaultBuildsFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Invoklet", "cli-builds");
 
-    private Lazy<PluginSession>? _plugins;
-
-    public PluginSession Plugins
-    {
-        get => _plugins?.Value ?? PluginSession.Empty;
-        init => _plugins = new Lazy<PluginSession>(() => value);
-    }
+    public PluginSession Plugins { get; init; } = PluginSession.Empty;
 
     internal bool PluginDevelopmentEnabled { get; init; }
 
@@ -46,7 +40,7 @@ public sealed record CliServices(ILanguageHostRegistry Registry, ISdkProvider Sd
             DotnetConnectionTools.Default, Secret);
         return new CliServices(registry, new DotnetSdkProvider(), connectionDrivers, schemas)
         {
-            _plugins = new Lazy<PluginSession>(() => PluginStartup.Load(developmentDirectory, NullLoggerFactory.Instance)),
+            Plugins = PluginStartup.Load(developmentDirectory, NullLoggerFactory.Instance, [new ConnectionPluginRoleHandler(connectionDrivers)]),
             PluginDevelopmentEnabled = developmentDirectory is not null,
         };
     }

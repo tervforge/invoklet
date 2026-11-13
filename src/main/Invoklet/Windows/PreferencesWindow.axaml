@@ -245,9 +245,11 @@
                 </ItemsControl>
 
                 <StackPanel x:Name="PluginsSettingsPage" Tag="plugins" IsVisible="{Binding IsPluginsSelected}" Spacing="10">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                         <TextBlock Classes="settings-heading" Text="Plugins" VerticalAlignment="Center"/>
-                        <Button x:Name="RefreshPluginsButton" Grid.Column="1" Content="Refresh" Click="RefreshPlugins_Click"/>
+                        <Button Grid.Column="1" Content="Install folder…" IsVisible="{Binding PluginsPage.CanInstall}" Click="InstallPluginFolder_Click"/>
+                        <Button Grid.Column="2" Content="Install archive…" IsVisible="{Binding PluginsPage.CanInstall}" Click="InstallPluginArchive_Click"/>
+                        <Button x:Name="RefreshPluginsButton" Grid.Column="3" Content="Refresh" Click="RefreshPlugins_Click"/>
                     </Grid>
                     <StackPanel IsVisible="{Binding PluginsPage.HasPendingRestart}" Spacing="6">
                         <TextBlock Text="Plugin changes will take effect after restarting Invoklet." TextWrapping="Wrap"/>
@@ -268,10 +270,19 @@
                                 <Border BorderBrush="{DynamicResource Invoklet.Separator.BackgroundBrush}" BorderThickness="0,0,0,1"
                                         Padding="0,0,0,8" Margin="0,0,0,8">
                                     <StackPanel Spacing="3">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Status}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Status}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Content="{Binding ToggleLabel}" IsVisible="{Binding CanToggle}"
+                                                    AutomationProperties.Name="{Binding ToggleAutomationName}" Click="TogglePlugin_Click"/>
+                                            <Button Grid.Column="3" Content="Remove" IsVisible="{Binding CanRemove}" Click="RemovePlugin_Click"/>
                                         </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding IsContentVerified}"
+                                                    ToolTip.Tip="Package contents matched the recorded hash at startup.">
+                                            <PathIcon Width="12" Height="12" Data="{DynamicResource Icon.CheckCircle}"
+                                                      Foreground="{DynamicResource Invoklet.Status.SuccessBrush}"/>
+                                            <TextBlock Text="Content verified" Foreground="{DynamicResource Invoklet.Status.SuccessBrush}"/>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding Id}" TextWrapping="Wrap"
                                                    Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
                                         <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap"

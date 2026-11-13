@@ -584,7 +584,7 @@ public class EditorTabRunResultTests
 
 
 
-    private sealed class BlockingSchemaDriver : IConnectionSchemaDriver
+    private sealed class BlockingSchemaDriver : IConnectionSchemaDriver, ICSharpClientSource
 
     {
 

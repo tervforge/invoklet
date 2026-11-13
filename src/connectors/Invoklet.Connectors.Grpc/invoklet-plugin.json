@@ -1,0 +1,12 @@
+{
+  "id": "invoklet.connector.grpc",
+  "version": "1.0.0",
+  "displayName": "gRPC",
+  "roles": {
+    "connection": 1
+  },
+  "entry": {
+    "assembly": "Invoklet.Connectors.Grpc.dll",
+    "type": "Invoklet.Connectors.Grpc.Plugin"
+  }
+}

@@ -114,7 +114,7 @@ internal static class PluginCatalogJson
     {
         try
         {
-            using var file = File.OpenRead(path);
+            using var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
             return create(JsonSerializer.Deserialize<TEntry[]>(file, Options) ?? throw new JsonException("Missing plugin entries."));
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return empty; }
