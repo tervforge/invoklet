@@ -6,11 +6,12 @@ namespace Invoklet.Plugins.Hosting;
 public sealed class PluginPackageInstaller(string userDirectory, PluginInventoryStore inventory, BundledPluginCatalog bundled)
 {
     public const string InstalledSource = "preferences";
+    private const long MaxArchiveBytes = 64L * 1024 * 1024;
 
     public PreparedPluginPackage PrepareArchive(string path)
     {
         using var archive = ZipFile.OpenRead(path);
-        if (archive.Entries.Count > 2048 || archive.Entries.Sum(entry => (decimal)entry.Length) > 64 * 1024 * 1024
+        if (archive.Entries.Count > 2048 || archive.Entries.Sum(entry => (decimal)entry.Length) > MaxArchiveBytes
             || archive.Entries.Any(entry => ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000))
             throw new InvalidDataException("The archive exceeds the plugin package limits or contains a link.");
         var staging = CreateStaging();
@@ -18,7 +19,7 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
         var keepStaging = false;
         try
         {
-            archive.ExtractToDirectory(staging);
+            ExtractArchive(archive, staging);
             if (isNuGetPackage)
             {
                 var payload = Path.Combine(staging, "plugin");
@@ -33,6 +34,44 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
         finally
         {
             if (!keepStaging) Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    private static void ExtractArchive(ZipArchive archive, string staging)
+    {
+        var remaining = MaxArchiveBytes;
+        var buffer = new byte[81920];
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName.Replace('\\', '/');
+            var directory = name.EndsWith('/');
+            var relative = directory ? name[..^1] : name;
+            if (relative.Split('/').Any(part => part.Length == 0 || part.Contains(':') || part.EndsWith('.') || part.EndsWith(' ')))
+                throw new IOException("The archive contains an invalid plugin path.");
+            var destination = Path.GetFullPath(Path.Combine(staging, relative));
+            if (!PluginFiles.IsInside(staging, destination))
+                throw new IOException("The archive entry is outside the plugin package.");
+            if (directory)
+            {
+                if (entry.Length != 0) throw new InvalidDataException("An archive directory contains data.");
+                Directory.CreateDirectory(destination);
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            using var input = entry.Open();
+            using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            long written = 0;
+            int count;
+            while ((count = input.Read(buffer)) != 0)
+            {
+                remaining -= count;
+                written += count;
+                if (remaining < 0 || written > entry.Length)
+                    throw new InvalidDataException("The archive exceeds its declared size or the plugin package limit.");
+                output.Write(buffer, 0, count);
+            }
+            if (written != entry.Length) throw new InvalidDataException("An archive entry has an incorrect size.");
         }
     }
 
@@ -151,7 +190,14 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
         finally
         {
             // Keep the staged copy if restoring the package failed.
-            if (committed || !Directory.Exists(removed)) Directory.Delete(staging, recursive: true);
+            if (committed || !Directory.Exists(removed))
+            {
+                try { Directory.Delete(staging, recursive: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Trace.TraceWarning("Could not clean up removed plugin staging directory: {0}", ex.Message);
+                }
+            }
         }
     }
 

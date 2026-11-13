@@ -17,16 +17,20 @@ public static class CliRunner
 {
     public static Task<int> RunAsync(
         string[] args, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
-        => RunAsync(args, CliServices.CreateDefault(), stdout, stderr, cancellationToken);
+        => RunAsync(args, () => CliServices.CreateDefault(), stdout, stderr, cancellationToken);
 
     // One boundary for the whole command: a cancellation in any phase (reading the script, reading a connection's description,
     // compiling, running) is the same 130, and a file that cannot be read or written is a message, not a stack trace.
-    public static async Task<int> RunAsync(
+    public static Task<int> RunAsync(
         string[] args, CliServices services, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
+        => RunAsync(args, () => services, stdout, stderr, cancellationToken);
+
+    internal static async Task<int> RunAsync(
+        string[] args, Func<CliServices> createServices, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
     {
         try
         {
-            return await RunCoreAsync(args, services, stdout, stderr, cancellationToken);
+            return await RunCoreAsync(args, createServices, stdout, stderr, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -41,7 +45,7 @@ public static class CliRunner
     }
 
     private static async Task<int> RunCoreAsync(
-        string[] args, CliServices services, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
+        string[] args, Func<CliServices> createServices, IAnsiConsole stdout, IAnsiConsole stderr, CancellationToken cancellationToken)
     {
         if (args.Length == 0)
         {
@@ -102,6 +106,7 @@ public static class CliRunner
         if (cli.Kind is { } kind) document.FrontMatter.Kind = kind;
         if (cli.TargetSdk is { } targetSdk) document.FrontMatter.TargetSdk = targetSdk;
 
+        var services = createServices();
         if (services.PluginDevelopmentEnabled && !cli.Quiet) stderr.WriteLine("Warning: plugin development mode is enabled.");
         foreach (var diagnostic in services.Plugins.Diagnostics)
         {

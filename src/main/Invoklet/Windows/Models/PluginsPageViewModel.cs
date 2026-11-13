@@ -55,6 +55,10 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
             setEnabled(row.Id, !row.DesiredEnabled);
             _writeError = null;
         }
+        catch (PluginRegistrationException ex)
+        {
+            _writeError = ex.Message;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             _writeError = "Could not change the plugin state. Refresh and try again.";

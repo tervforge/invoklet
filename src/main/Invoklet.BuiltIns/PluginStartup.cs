@@ -33,7 +33,7 @@ public static class PluginStartup
         var roles = session.Find(id)?.Manifest.Roles
             ?? session.Rejected.FirstOrDefault(plugin => plugin.Id == id && plugin.Trust == PluginTrust.Bundled)?.Manifest?.Roles;
         InventoryStore.SetEnabled(id, enabled, ReadBundledCatalog(BundledDirectory()), ReplacedThemeIds,
-            roles?.Keys.Select(PluginRoles.Name).ToArray());
+            roles?.Keys.Select(PluginRoles.Name).ToArray(), session, Path.Combine(UserDataDirectory, "plugins"));
     }
 
     public static PluginPackageInstaller CreatePluginInstaller() =>

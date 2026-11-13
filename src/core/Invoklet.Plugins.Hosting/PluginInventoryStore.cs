@@ -11,25 +11,92 @@ public sealed class PluginInventoryStore(string path)
         WithReplacedThemes(Read(), bundled, replacedThemeIds);
 
     public void SetEnabled(string id, bool enabled, BundledPluginCatalog bundled,
-        IReadOnlyDictionary<string, string>? replacedThemeIds = null, IReadOnlyList<string>? bundledRoles = null)
+        IReadOnlyDictionary<string, string>? replacedThemeIds = null, IReadOnlyList<string>? bundledRoles = null,
+        PluginSession? session = null, string? userDirectory = null)
     {
         if (bundled.ReadError is not null) throw new InvalidOperationException("The bundled plugin catalogue could not be read.");
         Update(current =>
         {
             if (replacedThemeIds is not null)
                 current = WithReplacedThemes(current, bundled, replacedThemeIds);
-            var entry = current.Find(id);
-            var entries = current.Entries.Where(item => item.Id != id);
-            if (bundled.Find(id) is { } package)
+            var sessionManifests = session is null ? [] : session.Loaded.Select(plugin => (plugin.Manifest, plugin.Trust))
+                .Concat(session.Rejected.Where(plugin => plugin.Manifest is not null)
+                    .Select(plugin => (Manifest: plugin.Manifest!, plugin.Trust)))
+                .Where(plugin => plugin.Trust == PluginTrust.Bundled && bundled.Find(plugin.Manifest.Id) is not null
+                    || plugin.Trust == PluginTrust.Trusted && bundled.Find(plugin.Manifest.Id) is null
+                        && current.Find(plugin.Manifest.Id) is { Approved: true, Source: not BundledSource } entry
+                        && entry.Version == plugin.Manifest.Version)
+                .Select(plugin => plugin.Manifest).ToArray();
+            var manifests = sessionManifests.Concat(ReadPendingPackages(current, sessionManifests, userDirectory))
+                .DistinctBy(manifest => manifest.Id, StringComparer.Ordinal).ToArray();
+            var entries = current.Entries.ToDictionary(entry => entry.Id, StringComparer.Ordinal);
+            if (enabled)
             {
-                // The shipped catalogue remains the authority for version, contents and roles.
-                return enabled ? entries : entries.Append(DisabledPackage(package, bundledRoles ?? ["theme"]));
+                var manifest = manifests.FirstOrDefault(manifest => manifest.Id == id);
+                var disabled = manifest?.DependsOn.FirstOrDefault(dependency =>
+                    entries.GetValueOrDefault(dependency) is { Enabled: false });
+                if (disabled is not null)
+                    throw new PluginRegistrationException($"Enable the dependency '{disabled}' before enabling this plugin.");
             }
 
-            if (entry is not { Approved: true } || entry.Source == BundledSource)
-                throw new InvalidOperationException("The plugin has no approved inventory entry.");
-            return entries.Append(entry with { Enabled = enabled });
+            SetState(id, enabled, bundledRoles);
+            if (!enabled)
+            {
+                var dependants = manifests.SelectMany(manifest => manifest.DependsOn.Select(dependency => (dependency, manifest)))
+                    .ToLookup(item => item.dependency, item => item.manifest, StringComparer.Ordinal);
+                var visited = new HashSet<string>(StringComparer.Ordinal) { id };
+                var queue = new Queue<string>();
+                queue.Enqueue(id);
+                while (queue.TryDequeue(out var dependency))
+                {
+                    foreach (var manifest in dependants[dependency])
+                    {
+                        if (!visited.Add(manifest.Id)) continue;
+                        SetState(manifest.Id, false, manifest.Roles.Keys.Select(PluginRoles.Name).ToArray());
+                        queue.Enqueue(manifest.Id);
+                    }
+                }
+            }
+            return entries.Values;
+
+            void SetState(string pluginId, bool value, IReadOnlyList<string>? roles)
+            {
+                if (bundled.Find(pluginId) is { } package)
+                {
+                    if (value) entries.Remove(pluginId);
+                    else entries[pluginId] = DisabledPackage(package, roles ?? ["theme"]);
+                }
+                else if (entries.GetValueOrDefault(pluginId) is { Approved: true, Source: not BundledSource } entry)
+                    entries[pluginId] = entry with { Enabled = value };
+                else
+                    throw new InvalidOperationException("The plugin has no approved inventory entry.");
+            }
         });
+    }
+
+    private static IEnumerable<PluginManifest> ReadPendingPackages(PluginInventory inventory,
+        IReadOnlyList<PluginManifest> known, string? userDirectory)
+    {
+        if (userDirectory is null) yield break;
+        var knownIds = known.Select(manifest => manifest.Id).ToHashSet(StringComparer.Ordinal);
+        var source = new PluginSource(userDirectory, PluginTrust.Trusted);
+        foreach (var entry in inventory.Entries.Where(entry => PluginPackageInstaller.IsManaged(entry) && !knownIds.Contains(entry.Id)))
+        {
+            var directory = Path.Combine(userDirectory, entry.Id, entry.Version);
+            PluginManifest? manifest;
+            try
+            {
+                PluginFiles.RejectLinksBetween(userDirectory, directory);
+                if (!string.Equals(PluginContent.ComputeHash(directory), entry.ContentHash, StringComparison.OrdinalIgnoreCase)) continue;
+                manifest = PluginDiscovery.ReadFolder(directory, source).Manifest;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+            if (manifest is not null && manifest.Id == entry.Id && manifest.Version == entry.Version)
+                yield return manifest;
+        }
     }
 
     private static PluginInventory WithReplacedThemes(PluginInventory current, BundledPluginCatalog bundled,

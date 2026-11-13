@@ -17,6 +17,8 @@ Notable changes in each Invoklet release. Downloads are on the
 - Moved VS Code, Rider, and VS 2022 themes to the separate Invoklet custom themes repository.
 - Load bundled connection drivers through the plugin host in both the desktop app and CLI.
 - Install and remove third-party connector packages in Preferences → Plugins with explicit approval before code runs.
+- Disable dependent plugins when their dependency is disabled in Preferences.
+- Avoid loading plugins for CLI help and version commands, enforce archive size limits during extraction, and preserve successful removal if staging cleanup fails.
 
 ### Fixed
 

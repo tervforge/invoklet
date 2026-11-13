@@ -21,6 +21,23 @@ public class CliRunnerTests
     private static readonly DotnetSdk Platform = new("net10.0", "10.0.100", ".NET 10.0.100", ".NET 10");
     private const string RuntimeLib = "/Invoklet/Invoklet.Runtime.dll";
 
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("--version")]
+    public async Task InformationalCommand_DoesNotCreateScriptServices(string option)
+    {
+        var stdout = new TestConsole();
+        var stderr = new TestConsole();
+
+        var exitCode = await CliRunner.RunAsync([option],
+            () => throw new InvalidOperationException("The command should not load plugins."),
+            stdout, stderr, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotEmpty(stdout.Output);
+        Assert.Empty(stderr.Output);
+    }
+
     // The options the runner's request gets from the .NET backend: what its run is built with.
     private static ILanguageHostOptions BuildOptions(
         MdRunFrontMatter frontMatter, DotnetSdk platform, string outputDirectory, string runtimeLibPath,

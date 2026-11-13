@@ -24,5 +24,6 @@ catch (ArgumentException ex)
 }
 
 // Scripts are built in a folder kept for each, so an unchanged one isn't built again.
-var services = CliServices.CreateDefault(plugins.Directory) with { BuildsFolder = CliServices.DefaultBuildsFolder };
-return await CliRunner.RunAsync(plugins.RemainingArguments.ToArray(), services, stdout, stderr, cts.Token);
+return await CliRunner.RunAsync(plugins.RemainingArguments.ToArray(),
+    () => CliServices.CreateDefault(plugins.Directory) with { BuildsFolder = CliServices.DefaultBuildsFolder },
+    stdout, stderr, cts.Token);

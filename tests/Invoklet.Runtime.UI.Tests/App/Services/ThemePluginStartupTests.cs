@@ -49,6 +49,33 @@ public sealed class ThemePluginStartupTests
         finally { Directory.Delete(temp, recursive: true); }
     }
 
+    [AvaloniaFact]
+    public void PrepareArchive_RejectsAnEntryThatEndsBeforeItsDeclaredSize()
+    {
+        var temp = Directory.CreateTempSubdirectory("Invoklet-archive-size");
+        try
+        {
+            var path = Path.Combine(temp.FullName, "invalid.invplugin");
+            using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+            using (var entry = archive.CreateEntry("payload.txt").Open())
+                entry.Write(new byte[4096]);
+
+            // A one-entry archive ends with a central-directory record followed by the end record.
+            var bytes = File.ReadAllBytes(path);
+            var end = bytes.AsSpan(bytes.Length - 22);
+            var directoryOffset = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(end[16..]);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(directoryOffset + 24), 8192);
+            File.WriteAllBytes(path, bytes);
+            var inventory = new PluginInventoryStore(Path.Combine(temp.FullName, PluginInventory.FileName));
+            var installer = new PluginPackageInstaller(Path.Combine(temp.FullName, "plugins"), inventory, BundledPluginCatalog.Empty);
+
+            Assert.Throws<InvalidDataException>(() => installer.PrepareArchive(path));
+            Assert.Empty(temp.EnumerateDirectories());
+            Assert.Empty(inventory.Read().Entries);
+        }
+        finally { temp.Delete(recursive: true); }
+    }
+
     [AvaloniaTheory]
     [InlineData(null)]
     [InlineData(".invplugin")]

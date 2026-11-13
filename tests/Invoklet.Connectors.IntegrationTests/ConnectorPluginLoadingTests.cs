@@ -131,6 +131,46 @@ public sealed class ConnectorPluginLoadingTests
         finally { folder.Delete(recursive: true); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisablingEfCore_DisablesDirectAndTransitiveDependants(bool installedDuringSession)
+    {
+        const string library = "invoklet.connector.efcore";
+        const string sqlite = "invoklet.connector.sqlite";
+        const string sample = "example.connector.http";
+        string[] affected = [sample, library, "invoklet.connector.postgres", sqlite, "invoklet.connector.sqlserver"];
+        using var package = new SampleConnectorPackage();
+        var store = package.Inventory;
+        var bundled = BundledCatalog();
+        var installer = new PluginPackageInstaller(package.UserDirectory, store, bundled);
+        using var prepared = installer.Prepare(package.CreateSource(extension: null, dependency: sqlite));
+        var registry = new ConnectionDriverRegistry();
+        if (!installedDuringSession) installer.Install(prepared);
+        var current = Load(registry, store.Read(), package.UserDirectory);
+        if (installedDuringSession) installer.Install(prepared);
+        Assert.Equal(!installedDuringSession, registry.Find("sample-http") is not null);
+        store.SetEnabled(library, false, bundled, bundledRoles: ["library"], session: current,
+            userDirectory: package.UserDirectory);
+
+        Assert.Equal(affected, current.GetPendingRestart(store.Read()));
+        Assert.NotNull(registry.Find("sqlite"));
+        var restartedRegistry = new ConnectionDriverRegistry();
+        var restarted = Load(restartedRegistry, store.Read(), package.UserDirectory);
+        Assert.Equal(affected, restarted.Rejected.Select(plugin => plugin.Id).Order(StringComparer.Ordinal));
+        Assert.All(restarted.Rejected, plugin =>
+            Assert.Contains(plugin.Diagnostics, diagnostic => diagnostic.Code == PluginDiagnosticCode.PluginDisabled));
+        Assert.NotNull(restartedRegistry.Find("http"));
+        Assert.Null(restartedRegistry.Find("sqlite"));
+
+        Assert.Throws<PluginRegistrationException>(() => store.SetEnabled(sqlite, true, bundled, session: restarted));
+        store.SetEnabled(library, true, bundled, session: restarted);
+        Assert.True(Load(new ConnectionDriverRegistry(), store.Read()).IsLoaded(library));
+        Assert.False(Load(new ConnectionDriverRegistry(), store.Read()).IsLoaded(sqlite));
+        store.SetEnabled(sqlite, true, bundled, session: restarted);
+        Assert.True(Load(new ConnectionDriverRegistry(), store.Read()).IsLoaded(sqlite));
+    }
+
     [Fact]
     public void DisabledBundledConnector_IsOmittedOnNextStart()
     {
@@ -193,11 +233,18 @@ internal sealed class SampleConnectorPackage : IDisposable
     public string UserDirectory => Path.Combine(_root.FullName, "plugins");
     public PluginInventoryStore Inventory => new(Path.Combine(_root.FullName, PluginInventory.FileName));
 
-    public string CreateSource(string? extension)
+    public string CreateSource(string? extension, string? dependency = null)
     {
         var source = _root.CreateSubdirectory("source").FullName;
         File.Copy(Path.Combine(AppContext.BaseDirectory, "SampleHttpConnector.dll"), Path.Combine(source, "SampleHttpConnector.dll"));
         File.Copy(Path.Combine(AppContext.BaseDirectory, "sample-http-connector.json"), Path.Combine(source, PluginContracts.ManifestFileName));
+        if (dependency is not null)
+        {
+            var manifestPath = Path.Combine(source, PluginContracts.ManifestFileName);
+            var manifest = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!;
+            manifest["dependsOn"] = new System.Text.Json.Nodes.JsonArray(System.Text.Json.Nodes.JsonValue.Create(dependency));
+            File.WriteAllText(manifestPath, manifest.ToJsonString());
+        }
         if (extension is null) return source;
 
         var archive = Path.Combine(_root.FullName, "sample" + extension);
