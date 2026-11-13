@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform;
 using Avalonia.Threading;
+using Invoklet.Avalonia.Themes;
 using Invoklet.BuiltIns;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
@@ -107,16 +109,14 @@ public class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // ThemeService is a singleton, so it's only ever constructed (and applies
-            // RequestedThemeVariant) once something actually depends on IThemeService — which
-            // MainWindow does via MainWindowViewModel, but SetupWizardWindow doesn't. Left implicit,
-            // a first run with a missing SDK/debugger showed the wizard BEFORE the theme was ever
-            // applied: every "Invoklet.*" DynamicResource lookup came back empty (Invoklet's palettes are
-            // keyed by custom ThemeVariants like "VsCodeDark", not just "Dark"/"Light", so nothing
-            // matches the still-default variant), so the window fell back to a plain black/white
-            // background instead of the intended panel color. Resolving it here — before either
-            // branch below shows a window — guarantees the theme is always applied first.
-            serviceProvider.GetRequiredService<IThemeService>();
+            RequestedThemeVariant = PreferencesService.ReadForStartup().Appearance.Mode switch
+            {
+                ThemeMode.Light => BuiltInInterfaceThemes.GetVariant("invoklet.theme.warm-light"),
+                ThemeMode.Dark => BuiltInInterfaceThemes.GetVariant("invoklet.theme.midnight"),
+                _ => PlatformSettings?.GetColorValues().ThemeVariant == PlatformThemeVariant.Light
+                    ? BuiltInInterfaceThemes.GetVariant("invoklet.theme.warm-light")
+                    : BuiltInInterfaceThemes.GetVariant("invoklet.theme.midnight"),
+            };
 
             // Before any window exists, so each one is first laid out at the interface scale.
             var viewScale = ViewScale.For(serviceProvider.GetRequiredService<IPreferencesService>());
@@ -184,6 +184,8 @@ public class App : Application
     private static Window CreateStartupWindow(bool complete,
         IClassicDesktopStyleApplicationLifetime desktop, ServiceProvider services, ILogger logger)
     {
+        // The startup plugin snapshot is ready before the workspace or setup wizard needs its palette.
+        services.GetRequiredService<IThemeService>();
         if (complete) return CreateMainWindow();
 
         var wizard = services.GetRequiredService<Windows_SetupWizardWindow>();
@@ -269,7 +271,10 @@ public class App : Application
     {
         var services = new ServiceCollection();
         services.AddSingleton(plugins);
-        services.AddSingleton(sp => PluginStartup.Load(plugins.Directory, sp.GetRequiredService<ILoggerFactory>()));
+        services.AddSingleton<ThemeCatalog>();
+        services.AddSingleton<IThemeCatalog>(sp => sp.GetRequiredService<ThemeCatalog>());
+        services.AddSingleton(sp => PluginStartup.Load(plugins.Directory, sp.GetRequiredService<ILoggerFactory>(),
+            [sp.GetRequiredService<ThemeCatalog>()]));
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             services.AddSingleton(desktop);
@@ -279,7 +284,12 @@ public class App : Application
         services.AddSingleton<Application>(this);
         services.AddSingleton<IPreferencesService, PreferencesService>();
         services.AddSingleton(DesktopIntegration.Current);
-        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IThemeService>(sp =>
+        {
+            _ = sp.GetRequiredService<PluginSession>();
+            var catalog = sp.GetRequiredService<IThemeCatalog>();
+            return new ThemeService(this, sp.GetRequiredService<IPreferencesService>(), catalog.Interfaces, catalog.Editors);
+        });
         services.AddSingleton<IFileSystemService, FileSystemService>();
         services.AddSingleton<ISdkProvider, DotnetSdkProvider>();
         services.AddSingleton<IRuntimeReferenceLocator, DotnetRuntimeReferenceLocator>();

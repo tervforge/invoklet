@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Services.Preferences;
@@ -28,19 +30,13 @@ public interface IThemeService
 
 public sealed class ThemeService : IThemeService, IDisposable
 {
-    // ── Catalog ───────────────────────────────────────────────────────────────
-
-    private static readonly IReadOnlyList<InterfaceTheme> AllInterfaceThemes =
+    private static readonly string[] BundledOrder =
     [
-        new("VS Code Dark",  InvokletThemeVariants.VsCodeDark,  true),
-        new("Rider Dark",    InvokletThemeVariants.RiderDark,   true),
-        new("VS 2022 Dark",  InvokletThemeVariants.Vs2022Dark,  true),
-        new("Invoklet Midnight",   InvokletThemeVariants.InvokletMidnight,   true),
-        new("VS Code Light",     InvokletThemeVariants.VsCodeLight,      false),
-        new("Rider Light",       InvokletThemeVariants.RiderLight,       false),
-        new("VS 2022 Light",     InvokletThemeVariants.Vs2022Light,      false),
-        new("Invoklet Warm Light", InvokletThemeVariants.InvokletWarmLight,  false),
+        "invoklet.theme.vscode-dark", "invoklet.theme.rider-dark", "invoklet.theme.vs2022-dark", "invoklet.theme.midnight",
+        "invoklet.theme.vscode-light", "invoklet.theme.rider-light", "invoklet.theme.vs2022-light", "invoklet.theme.warm-light",
     ];
+
+    // ── Catalog ───────────────────────────────────────────────────────────────
 
     private static readonly IReadOnlyList<EditorTheme> AllEditorThemes =
     [
@@ -67,27 +63,51 @@ public sealed class ThemeService : IThemeService, IDisposable
 
     private readonly Application _app;
     private readonly IPreferencesService _prefs;
+    private readonly List<ThemeVariant> _installedVariants = [];
+    private ResourceDictionary _activeResources;
+    private bool _disposed;
     private ActiveTheme _currentTheme;
 
-    public ThemeService(Application app, IPreferencesService prefs)
+    public ThemeService(Application app, IPreferencesService prefs, IReadOnlyList<InterfaceTheme>? additionalThemes = null,
+        IReadOnlyList<EditorTheme>? additionalEditors = null)
     {
         _app = app;
         _prefs = prefs;
+        InterfaceThemes = additionalThemes is { Count: > 0 }
+            ? Array.AsReadOnly(BuiltInInterfaceThemes.All.Concat(additionalThemes).OrderBy(theme =>
+            {
+                var index = Array.IndexOf(BundledOrder, theme.Id);
+                return index < 0 ? int.MaxValue : index;
+            }).ToArray())
+            : BuiltInInterfaceThemes.All;
+        EditorThemes = additionalEditors is { Count: > 0 }
+            ? Array.AsReadOnly(AllEditorThemes.Concat(additionalEditors).ToArray())
+            : AllEditorThemes;
 
-        if (app.PlatformSettings is { } ps)
-            ps.ColorValuesChanged += OnColorValuesChanged;
+        foreach (var theme in additionalThemes ?? [])
+        {
+            if (theme.Definition is not { } definition || _app.Resources.ThemeDictionaries.ContainsKey(theme.Variant)) continue;
+            _app.Resources.ThemeDictionaries.Add(theme.Variant, ThemeBuilder.BuildPalette(definition));
+            _installedVariants.Add(theme.Variant);
+        }
+
+        MigrateThemeNames();
 
         // Synchronous on startup — no UI input events in flight yet, and no ThemeChanged
         // subscribers exist before the constructor returns, so ApplyCore's own notification isn't
         // needed here — just resolve the initial theme directly.
         _currentTheme = ResolveCurrentTheme();
+        _activeResources = ThemeBuilder.BuildActiveResources(_currentTheme.Interface.Definition);
+        _app.Resources.MergedDictionaries.Add(_activeResources);
         _app.RequestedThemeVariant = _currentTheme.Interface.Variant;
+        if (app.PlatformSettings is { } ps)
+            ps.ColorValuesChanged += OnColorValuesChanged;
     }
 
     // ── IThemeService ─────────────────────────────────────────────────────────
 
-    public IReadOnlyList<InterfaceTheme> InterfaceThemes => AllInterfaceThemes;
-    public IReadOnlyList<EditorTheme> EditorThemes => AllEditorThemes;
+    public IReadOnlyList<InterfaceTheme> InterfaceThemes { get; }
+    public IReadOnlyList<EditorTheme> EditorThemes { get; }
     public ActiveTheme CurrentTheme => _currentTheme;
 
     public event ThemeChangedDelegate? ThemeChanged;
@@ -101,16 +121,16 @@ public sealed class ThemeService : IThemeService, IDisposable
 
     public void SetInterfaceTheme(InterfaceTheme theme)
     {
-        if (ResolveIsDark()) _prefs.Appearance.DarkInterfaceTheme = theme.Name;
-        else _prefs.Appearance.LightInterfaceTheme = theme.Name;
+        if (ResolveIsDark()) _prefs.Appearance.DarkInterfaceTheme = theme.Id;
+        else _prefs.Appearance.LightInterfaceTheme = theme.Id;
         _prefs.Save();
         ScheduleApply();
     }
 
     public void SetEditorTheme(EditorTheme theme)
     {
-        if (ResolveIsDark()) _prefs.Appearance.DarkEditorTheme = theme.Name;
-        else _prefs.Appearance.LightEditorTheme = theme.Name;
+        if (ResolveIsDark()) _prefs.Appearance.DarkEditorTheme = theme.Id;
+        else _prefs.Appearance.LightEditorTheme = theme.Id;
         _prefs.Save();
         ScheduleApply();
     }
@@ -124,8 +144,12 @@ public sealed class ThemeService : IThemeService, IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         if (_app.PlatformSettings is { } ps)
             ps.ColorValuesChanged -= OnColorValuesChanged;
+        _app.Resources.MergedDictionaries.Remove(_activeResources);
+        foreach (var variant in _installedVariants) _app.Resources.ThemeDictionaries.Remove(variant);
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
@@ -147,7 +171,19 @@ public sealed class ThemeService : IThemeService, IDisposable
 
     private void ApplyCore()
     {
-        _currentTheme = ResolveCurrentTheme();
+        if (_disposed) return;
+        var theme = ResolveCurrentTheme();
+        if (theme.Interface != _currentTheme.Interface)
+        {
+            var dictionaries = _app.Resources.MergedDictionaries;
+            var resources = ThemeBuilder.BuildActiveResources(theme.Interface.Definition);
+            var index = dictionaries.IndexOf(_activeResources);
+            if (index >= 0) dictionaries[index] = resources;
+            else dictionaries.Add(resources);
+            _activeResources = resources;
+        }
+
+        _currentTheme = theme;
         _app.RequestedThemeVariant = _currentTheme.Interface.Variant;
         ThemeChanged?.Invoke(_currentTheme);
     }
@@ -158,7 +194,7 @@ public sealed class ThemeService : IThemeService, IDisposable
         var a = _prefs.Appearance;
 
         var interfaceTheme = ResolveInterface(isDark ? a.DarkInterfaceTheme : a.LightInterfaceTheme, isDark);
-        var editorTheme = ResolveEditor(isDark ? a.DarkEditorTheme : a.LightEditorTheme, isDark);
+        var editorTheme = ResolveEditor(isDark ? a.DarkEditorTheme : a.LightEditorTheme, interfaceTheme);
         return new ActiveTheme(interfaceTheme, editorTheme);
     }
 
@@ -169,11 +205,51 @@ public sealed class ThemeService : IThemeService, IDisposable
         _ => _app.PlatformSettings?.GetColorValues().ThemeVariant != PlatformThemeVariant.Light,
     };
 
-    private static InterfaceTheme ResolveInterface(string name, bool isDark)
-        => AllInterfaceThemes.FirstOrDefault(t => t.IsDark == isDark && t.Name == name)
-           ?? AllInterfaceThemes.First(t => t.IsDark == isDark);
+    private InterfaceTheme ResolveInterface(string id, bool isDark)
+        => InterfaceThemes.FirstOrDefault(t => t.IsDark == isDark && t.Id == id)
+           ?? InterfaceThemes.First(t => t.IsDark == isDark);
 
-    private static EditorTheme ResolveEditor(string name, bool isDark)
-        => AllEditorThemes.FirstOrDefault(t => t.IsDark == isDark && t.Name == name)
-           ?? AllEditorThemes.First(t => t.IsDark == isDark);
+    private EditorTheme ResolveEditor(string? id, InterfaceTheme theme)
+    {
+        var editorId = id;
+        if (string.IsNullOrEmpty(editorId) && theme.Definition is { EditorDefault: { } requested } definition)
+            editorId = definition.EditorThemes.TryGetValue(requested, out var asset)
+                ? ThemeCatalog.EditorId(asset.ThemeId, requested)
+                : requested;
+
+        return EditorThemes.FirstOrDefault(t => t.IsDark == theme.IsDark && t.Id == editorId)
+            ?? AllEditorThemes.First(t => t.IsDark == theme.IsDark);
+    }
+
+    private void MigrateThemeNames()
+    {
+        var settings = _prefs.Appearance;
+        var darkInterface = InterfaceId(settings.DarkInterfaceTheme, true);
+        var lightInterface = InterfaceId(settings.LightInterfaceTheme, false);
+        var darkEditor = EditorId(settings.DarkEditorTheme, true);
+        var lightEditor = EditorId(settings.LightEditorTheme, false);
+        if (darkInterface == settings.DarkInterfaceTheme && lightInterface == settings.LightInterfaceTheme
+            && darkEditor == settings.DarkEditorTheme && lightEditor == settings.LightEditorTheme) return;
+
+        settings.DarkInterfaceTheme = darkInterface;
+        settings.LightInterfaceTheme = lightInterface;
+        settings.DarkEditorTheme = darkEditor;
+        settings.LightEditorTheme = lightEditor;
+        _prefs.Save();
+
+        string InterfaceId(string value, bool dark) =>
+            InterfaceThemes.FirstOrDefault(t => t.IsDark == dark && t.Name == value)?.Id ?? value switch
+            {
+                "VS Code Dark" => "invoklet.theme.vscode-dark",
+                "Rider Dark" => "invoklet.theme.rider-dark",
+                "VS 2022 Dark" => "invoklet.theme.vs2022-dark",
+                "VS Code Light" => "invoklet.theme.vscode-light",
+                "Rider Light" => "invoklet.theme.rider-light",
+                "VS 2022 Light" => "invoklet.theme.vs2022-light",
+                _ => value,
+            };
+
+        string? EditorId(string? value, bool dark) =>
+            EditorThemes.FirstOrDefault(t => t.IsDark == dark && t.Name == value)?.Id ?? value;
+    }
 }

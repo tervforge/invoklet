@@ -1,0 +1,13 @@
+{
+  "id": "invoklet.theme.vscode-light",
+  "version": "1.0.0",
+  "displayName": "VS Code Light",
+  "roles": {
+    "theme": 1
+  },
+  "assets": {
+    "themes": [
+      "vscode-light.json"
+    ]
+  }
+}

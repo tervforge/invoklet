@@ -29,7 +29,7 @@ public sealed class SampleTreeNode : ReactiveObject
 
     public bool IsFolder => Example is null;
 
-    /// <summary>The sample's language icon (Resources/Icons.axaml); null for a folder.</summary>
+    /// <summary>The sample's language icon (the shared theme icon dictionary); null for a folder.</summary>
     public string? IconKey => Example?.Language switch
     {
         null => null,

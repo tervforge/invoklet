@@ -47,11 +47,11 @@
                                         </StackPanel>
                                         <!-- The outcome of the last test; the tooltip has the whole answer. -->
                                         <PathIcon Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" ToolTip.Tip="{Binding TestMessage}"
-                                                  Data="{StaticResource Icon.CheckCircle}" Foreground="{DynamicResource Invoklet.Status.SuccessBrush}" IsVisible="{Binding TestPassed}"/>
+                                                  Data="{DynamicResource Icon.CheckCircle}" Foreground="{DynamicResource Invoklet.Status.SuccessBrush}" IsVisible="{Binding TestPassed}"/>
                                         <PathIcon Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" ToolTip.Tip="{Binding TestMessage}"
-                                                  Data="{StaticResource Icon.Warning}" Foreground="{DynamicResource Invoklet.Status.ErrorBrush}" IsVisible="{Binding TestFailed}"/>
+                                                  Data="{DynamicResource Icon.Warning}" Foreground="{DynamicResource Invoklet.Status.ErrorBrush}" IsVisible="{Binding TestFailed}"/>
                                         <PathIcon Grid.Column="2" Width="14" Height="14" VerticalAlignment="Center" ToolTip.Tip="Testing…"
-                                                  Data="{StaticResource Icon.Sync}" Foreground="{DynamicResource Invoklet.Status.RunningBrush}" IsVisible="{Binding IsTestRunning}"/>
+                                                  Data="{DynamicResource Icon.Sync}" Foreground="{DynamicResource Invoklet.Status.RunningBrush}" IsVisible="{Binding IsTestRunning}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -66,7 +66,7 @@
                         <DropDownButton.Content>
                             <!-- The dropdown's own chevron follows the label. -->
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <PathIcon Data="{StaticResource Icon.Plus}" Width="14" Height="14"/>
+                                <PathIcon Data="{DynamicResource Icon.Plus}" Width="14" Height="14"/>
                                 <TextBlock Text="Add" VerticalAlignment="Center"/>
                             </StackPanel>
                         </DropDownButton.Content>
@@ -75,7 +75,7 @@
                     <Button Classes="secondary" x:Name="RemoveButton" Grid.Column="1" Command="{Binding RemoveCommand}"
                             AutomationProperties.Name="Remove connection" ToolTip.Tip="Remove the selected connection">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Data="{StaticResource Icon.Delete}" Width="14" Height="14"/>
+                            <PathIcon Data="{DynamicResource Icon.Delete}" Width="14" Height="14"/>
                             <TextBlock Text="Remove" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -172,7 +172,7 @@
                                                         <Button Classes="secondary" Grid.Column="1" HorizontalAlignment="Right" Width="32" ToolTip.Tip="{Binding RemoveRowLabel}"
                                                                 AutomationProperties.Name="{Binding RemoveRowLabel}"
                                                                 Command="{Binding $parent[ItemsControl].((viewModels:ConnectionFieldViewModel)DataContext).RemoveRowCommand}" CommandParameter="{Binding}">
-                                                            <PathIcon Data="{StaticResource Icon.Close}" Width="12" Height="12"/>
+                                                            <PathIcon Data="{DynamicResource Icon.Close}" Width="12" Height="12"/>
                                                         </Button>
                                                         <TextBlock Classes="error" Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding NameError}" IsVisible="{Binding HasNameError}"/>
                                                         <TextBox Classes="form-field" Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Value}" PlaceholderText="Value"
@@ -188,7 +188,7 @@
                                         <Button Classes="secondary" Command="{Binding AddRowCommand}" HorizontalAlignment="Left"
                                                 ToolTip.Tip="{Binding AddRowLabel}" AutomationProperties.Name="{Binding AddRowLabel}">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <PathIcon Data="{StaticResource Icon.Plus}" Width="14" Height="14"/>
+                                                <PathIcon Data="{DynamicResource Icon.Plus}" Width="14" Height="14"/>
                                                 <TextBlock Text="{Binding AddRowLabel}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
@@ -204,11 +204,11 @@
                         <Button Classes="secondary" x:Name="TestButton" Content="Test Connection" HorizontalAlignment="Left"
                                 Command="{Binding $parent[Window].((viewModels:ConnectionsWindowViewModel)DataContext).TestCommand}"/>
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding TestResult, Converter={x:Static ObjectConverters.IsNotNull}}">
-                            <PathIcon Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{StaticResource Icon.CheckCircle}"
+                            <PathIcon Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{DynamicResource Icon.CheckCircle}"
                                       Foreground="{DynamicResource Invoklet.Status.SuccessBrush}" IsVisible="{Binding TestPassed}"/>
-                            <PathIcon Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{StaticResource Icon.Warning}"
+                            <PathIcon Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{DynamicResource Icon.Warning}"
                                       Foreground="{DynamicResource Invoklet.Status.ErrorBrush}" IsVisible="{Binding TestFailed}"/>
-                            <PathIcon Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{StaticResource Icon.Sync}"
+                            <PathIcon Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{DynamicResource Icon.Sync}"
                                       Foreground="{DynamicResource Invoklet.Status.RunningBrush}" IsVisible="{Binding IsTestRunning}"/>
                             <SelectableTextBlock x:Name="TestResultText" Grid.Column="1" TextWrapping="Wrap" Text="{Binding TestMessage}"/>
                         </Grid>
@@ -221,7 +221,7 @@
                 <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,120" RowSpacing="8">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                         <TextBlock Text="Browse resources" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <controls:IconButton Grid.Column="1" IconData="{StaticResource Icon.Sync}" Width="26" Height="26" Padding="6"
+                        <controls:IconButton Grid.Column="1" IconData="{DynamicResource Icon.Sync}" Width="26" Height="26" Padding="6"
                                 ToolTip.Tip="Reload the contract of this connection" AutomationProperties.Name="Reload connection resources"
                                 Command="{Binding BrowseCommand}" IsEnabled="{Binding CanBrowse}"/>
                     </Grid>

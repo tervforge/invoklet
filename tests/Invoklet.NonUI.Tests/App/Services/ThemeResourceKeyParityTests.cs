@@ -1,65 +1,146 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Invoklet.Avalonia.Themes;
 using Xunit;
 
 namespace Invoklet.NonUI.Tests.App.Services;
 
-// Audit finding: the 8 theme files (src/controls/Invoklet.Avalonia.Themes/Themes/*.axaml)
-// duplicate the same set of x:Key="Invoklet.*" SolidColorBrush entries, differing only in Color values.
-// That key list isn't recorded anywhere as an actual "schema" — a key added to one theme and
-// forgotten in another doesn't fail to compile, it just leaves that theme's element unstyled at
-// runtime. Direction from the TODO itself: don't eliminate the duplication (inherent to a theming
-// system built this way) — add a test that catches the sets drifting apart.
-//
-// Reads the raw source files off disk rather than via Avalonia's AssetLoader (avares://) — compiled
-// AXAML Styles files aren't retrievable as a raw byte stream that way (confirmed empirically:
-// AssetLoader.Open threw FileNotFoundException for avares://Invoklet.Avalonia.Themes/Themes/....axaml
-// even though the exact same URI works fine as a StyleInclude Source, a completely different loading
-// path) — so this walks up from the test assembly's own output directory to find the repo root
-// (marked by Invoklet.sln) instead, then reads the actual shipped source directly.
-public class ThemeResourceKeyParityTests
+[Trait("Category", "Integration")]
+[Trait("Platform", "Independent")]
+public partial class ThemeResourceKeyParityTests
 {
-    private static readonly string[] ThemeFiles =
-    [
-        "VsCodeDark", "VsCodeLight",
-        "RiderDark", "RiderLight",
-        "Vs2022Dark", "Vs2022Light",
-        "InvokletMidnight", "InvokletWarmLight",
-    ];
+    private const string ThemeDirectory = "src/controls/Invoklet.Avalonia.Themes";
+    private const string AppDirectory = "src/main/Invoklet";
+    private static readonly XNamespace Xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+    private static readonly XNamespace Avalonia = "https://github.com/avaloniaui";
 
-    private static readonly XNamespace XNs = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-    private static string RepoRoot()
+    // These references resolve through Avalonia, Fluent or the platform, outside Invoklet's dictionaries.
+    private static readonly HashSet<string> ExternalKeys = new(StringComparer.Ordinal)
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Invoklet.sln")))
-            dir = dir.Parent;
-        return dir?.FullName
-            ?? throw new InvalidOperationException("Could not locate repo root (Invoklet.sln) from " + AppContext.BaseDirectory);
-    }
+        "ContentControlThemeFontFamily",
+        "ControlContentThemeFontSize",
+        "SystemAccentColor",
+        "SystemControlBackgroundAltHighBrush",
+        "SystemControlForegroundBaseHighBrush",
+        "SystemRegionBrush",
+    };
 
-    private static HashSet<string> LoadInvokletKeys(string themeName)
+    private readonly string _root = FindRepoRoot();
+
+    [Fact]
+    public void BuiltInPalettes_LoadedFromJson_DefineEveryCataloguedPaletteKey()
     {
-        var path = Path.Combine(RepoRoot(), "src", "controls", "Invoklet.Avalonia.Themes", "Themes", themeName + ".axaml");
-        var doc = XDocument.Load(path);
-        return doc.Descendants()
-            .Select(e => (string?)e.Attribute(XNs + "Key"))
-            .Where(k => k is not null && k.StartsWith("Invoklet.", StringComparison.Ordinal))
-            .Select(k => k!)
-            .ToHashSet();
+        var builtIn = Directory.GetFiles(Path.Combine(_root, ThemeDirectory, "Themes"), "*.json");
+        var bundled = Directory.GetFiles(Path.Combine(_root, "build", "plugins", "themes"), "*.json", SearchOption.AllDirectories)
+            .Where(path => Path.GetFileName(path) != "invoklet-plugin.json").ToArray();
+        var files = builtIn.Concat(bundled);
+        var reader = new ThemeDefinitionReader();
+        var expected = ThemeKeyCatalog.Palette.Select(key => key.Name).Order(StringComparer.Ordinal).ToArray();
+        var ids = new List<string>();
+        foreach (var file in files)
+        {
+            var result = reader.Read(File.ReadAllText(file));
+            Assert.Empty(result.Diagnostics);
+            var definition = Assert.IsType<ThemeDefinition>(result.Definition);
+            Assert.Equal(expected, definition.Resources.Keys.Order(StringComparer.Ordinal));
+            ids.Add(definition.Id);
+        }
+
+        Assert.Equal(8, ids.Count);
+        Assert.Equal(8, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(6, bundled.Length);
+        Assert.Equal(2, BuiltInInterfaceThemes.All.Count);
+        Assert.All(BuiltInInterfaceThemes.All, theme => Assert.Contains(theme.Id, ids));
     }
 
     [Fact]
-    public void AllThemeFiles_Should_DefineTheExactSameSetOfInvokletResourceKeys()
+    public void SharedMetrics_LoadedFromJson_DefineEveryCataloguedMetricAndAlias()
     {
-        var keysByTheme = ThemeFiles.ToDictionary(t => t, LoadInvokletKeys);
-        var reference = keysByTheme[ThemeFiles[0]];
+        var reader = new ThemeDefinitionReader();
+        var defaults = reader.Read(File.ReadAllText(Path.Combine(_root, ThemeDirectory, "Metrics.json")));
+        var keys = ThemeKeyCatalog.Metrics;
 
-        foreach (var (theme, keys) in keysByTheme)
-        {
-            var missing = reference.Except(keys).ToList();
-            var extra = keys.Except(reference).ToList();
-            Assert.True(missing.Count == 0 && extra.Count == 0,
-                $"{theme} differs from {ThemeFiles[0]}: missing [{string.Join(", ", missing)}], extra [{string.Join(", ", extra)}]");
-        }
+        var resources = ThemeBuilder.BuildMetrics();
+
+        Assert.Empty(defaults.Diagnostics);
+        Assert.Equal(keys.Where(key => key.AliasFor is null).Select(key => key.Name).Order(StringComparer.Ordinal),
+            defaults.Definition!.Resources.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(keys.Select(key => key.Name).Order(StringComparer.Ordinal),
+            resources.Keys.Cast<string>().Order(StringComparer.Ordinal));
+        foreach (var key in keys)
+            Assert.Equal(defaults.Definition.Resources[key.AliasFor ?? key.Name], resources[key.Name]);
+    }
+
+    [Fact]
+    public void SharedAndExplorerIcons_DeclaredInAxaml_MatchTheCatalog()
+    {
+        var shared = Load(ThemeDirectory + "/Icons.axaml").Root!.Elements();
+        var keys = shared.Where(element => element.Name == Avalonia + "StreamGeometry")
+            .Select(element => element.Attribute(Xaml + "Key")!.Value).Order(StringComparer.Ordinal);
+        Assert.Equal(ThemeKeyCatalog.Icons.Select(key => key.Name).Order(StringComparer.Ordinal), keys);
+    }
+
+    [Fact]
+    public void IconReferences_InApplicationAxaml_UseDynamicResources()
+    {
+        var staticIcons = Directory.EnumerateFiles(Path.Combine(_root, AppDirectory), "*.axaml", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Any(part => part is "bin" or "obj"))
+            .Where(path => StaticIconReference().IsMatch(File.ReadAllText(path)))
+            .Select(path => Path.GetRelativePath(_root, path)).ToArray();
+
+        Assert.Empty(staticIcons);
+    }
+
+    [GeneratedRegex("""\{StaticResource\s+(?:ResourceKey\s*=\s*)?(?:Icon|AsmIcon|AsmOverlay)\.""")]
+    private static partial Regex StaticIconReference();
+
+    [Fact]
+    public void ThemeResourceReferences_InAppAndControlAxaml_ResolveToKnownKeys()
+    {
+        string[] roots = [AppDirectory, ThemeDirectory, "src/controls/MarkView.Avalonia"];
+        var documents = roots.SelectMany(root => Directory.EnumerateFiles(Path.Combine(_root, root), "*.axaml", SearchOption.AllDirectories))
+            .Select(path => Path.GetRelativePath(_root, path))
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Any(part => part is "bin" or "obj"))
+            .Select(path => (Path: path, Document: Load(path)))
+            .ToArray();
+        var localKeys = documents.SelectMany(item => item.Document.Descendants().Attributes(Xaml + "Key"))
+            .Where(attribute => !IsThemeKey(attribute.Value)
+                || attribute.Parent?.Name.LocalName is "ControlTheme" or "FocusAdornerTemplate")
+            .Select(attribute => attribute.Value).ToHashSet(StringComparer.Ordinal);
+
+        var unknown = documents.SelectMany(item => item.Document.Descendants().Attributes()
+            .SelectMany(attribute => ReferencedKeys(attribute).Select(key => (item.Path, Key: key))))
+            .Where(item => !ThemeKeyCatalog.All.ContainsKey(item.Key) && !ExternalKeys.Contains(item.Key)
+                && !localKeys.Contains(item.Key))
+            .Distinct().OrderBy(item => item.Path, StringComparer.Ordinal).ThenBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Path}: {item.Key}")
+            .ToArray();
+
+        Assert.True(unknown.Length == 0, string.Join(Environment.NewLine, unknown));
+    }
+
+    private static bool IsThemeKey(string key) =>
+        key.StartsWith("Invoklet.", StringComparison.Ordinal) || key.StartsWith("Icon.", StringComparison.Ordinal)
+        || key.StartsWith("AsmIcon.", StringComparison.Ordinal) || key.StartsWith("AsmOverlay.", StringComparison.Ordinal);
+
+    private static IEnumerable<string> ReferencedKeys(XAttribute attribute)
+    {
+        foreach (Match match in ResourceReference().Matches(attribute.Value))
+            yield return match.Groups["key"].Value;
+        if (attribute.Name.LocalName == "ResourceKey" && attribute.Parent?.Name.LocalName is "StaticResource" or "DynamicResource")
+            yield return attribute.Value;
+    }
+
+    [GeneratedRegex("""\{(?:StaticResource|DynamicResource)\s+(?:ResourceKey\s*=\s*)?(?<key>[^\s{},]+)""")]
+    private static partial Regex ResourceReference();
+
+    private XDocument Load(string path) => XDocument.Load(Path.Combine(_root, path));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Invoklet.sln")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new InvalidOperationException("Could not locate Invoklet.sln from " + AppContext.BaseDirectory);
     }
 }

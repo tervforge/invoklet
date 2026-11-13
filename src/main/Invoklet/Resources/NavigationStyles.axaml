@@ -4,7 +4,7 @@
         xmlns:uc="clr-namespace:Invoklet.UserControls">
 
     <!-- Self-contained: the window includes this file (MainWindow.axaml), so nothing here may rely on
-         the app's resources (Resources/Icons.axaml), which a window shown elsewhere, such as in the
+         the app's resources (the shared theme icon dictionary), which a window shown elsewhere, such as in the
          UI tests, doesn't have. The chevron's geometry is written out (Material Design chevron-right)
          rather than taken from there. Brushes stay dynamic, so they follow the theme where there is one. -->
 

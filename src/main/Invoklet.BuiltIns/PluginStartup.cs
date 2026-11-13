@@ -14,7 +14,8 @@ public static class PluginStartup
 
     public static PluginInventory ReadUserInventory() => PluginInventory.Read(Path.Combine(UserDataDirectory, PluginInventory.FileName));
 
-    public static PluginSession Load(string? developmentDirectory, ILoggerFactory loggerFactory)
+    public static PluginSession Load(string? developmentDirectory, ILoggerFactory loggerFactory,
+        IReadOnlyList<IPluginRoleHandler>? roleHandlers = null)
     {
         var bundledDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
         if (OperatingSystem.IsMacOS())
@@ -31,8 +32,9 @@ public static class PluginStartup
             UserDirectory = Path.Combine(UserDataDirectory, "plugins"),
             Inventory = ReadUserInventory(),
             DevelopmentDirectory = developmentDirectory,
+            LoadThemePackages = roleHandlers is not null,
             // Machine-local: copies of native libraries are neither roamed nor kept in a temporary folder.
             NativeLibraryCacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Invoklet", "plugin-native"),
-        }, [], loggerFactory).Load();
+        }, roleHandlers ?? [], loggerFactory).Load();
     }
 }

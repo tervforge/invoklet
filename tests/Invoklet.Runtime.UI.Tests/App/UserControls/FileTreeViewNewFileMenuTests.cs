@@ -38,7 +38,7 @@ public class FileTreeViewNewFileMenuTests
     [AvaloniaFact]
     public void TheNewFileMenu_Should_OfferTheRegisteredLanguages_AsBefore()
     {
-        var icons = new ResourceInclude(new Uri("avares://Invoklet/")) { Source = new Uri("avares://Invoklet/Resources/Icons.axaml") };
+        var icons = new ResourceInclude(new Uri("avares://Invoklet/")) { Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml") };
         Application.Current!.Resources.MergedDictionaries.Add(icons);
         var (window, view) = Create(new CSharpLanguageHostFactory(NullLoggerFactory.Instance), new VbLanguageHostFactory(NullLoggerFactory.Instance));
         try

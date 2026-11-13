@@ -144,7 +144,7 @@ public class AssemblyExplorerWindowTests : IClassFixture<AssemblyExplorerWindowT
         var barNode = namespaceNodes.Single(n => Text(n) == "Foo.Bar");
         Assert.Equal(["Alpha", "Gamma"], barNode.Items.OfType<TreeViewItem>().Select(Text));
         Assert.Equal(AssemblyNodeKind.Namespace, Node(barNode).Kind);
-        Assert.NotNull(Node(barNode).Icon);
+        Assert.NotNull(Node(barNode).IconKey);
     }
 
     private static AssemblyTreeNode Node(TreeViewItem item) => Assert.IsType<AssemblyTreeNode>(item.Header);
@@ -390,7 +390,7 @@ public class AssemblyExplorerWindowTests : IClassFixture<AssemblyExplorerWindowT
         var hit = Assert.Single(Results(window));
         Assert.Equal("Run() : void", hit.Text);
         Assert.Equal("Foo.Bar.Alpha", hit.Location);
-        Assert.NotNull(hit.Icon);
+        Assert.NotNull(hit.IconKey);
         Assert.True(panel.IsVisible);
         Assert.Equal("1 result", window.FindControl<TextBlock>("SearchStatus")!.Text);
     }
@@ -428,7 +428,7 @@ public class AssemblyExplorerWindowTests : IClassFixture<AssemblyExplorerWindowT
         var hit = Assert.Single(AnalysisHits(window));
         Assert.Equal("Call() : void", hit.Text);
         Assert.Equal("Foo.Bar.Gamma", hit.Location);
-        Assert.NotNull(hit.Icon);
+        Assert.NotNull(hit.IconKey);
     }
 
     // ── Tabs ──
@@ -469,7 +469,7 @@ public class AssemblyExplorerWindowTests : IClassFixture<AssemblyExplorerWindowT
             var resourcesRow = AssemblyRow(window).Items.OfType<TreeViewItem>().Single(i => Node(i).Kind == AssemblyNodeKind.Resources);
             var readme = Assert.Single(resourcesRow.Items.OfType<TreeViewItem>());
             Assert.Equal("readme.txt", Text(readme));
-            Assert.NotNull(Node(readme).Icon);
+            Assert.NotNull(Node(readme).IconKey);
 
             await window.SelectNodeAsync(Node(readme), readme);
 

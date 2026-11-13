@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml.Styling;
 
 namespace Invoklet.TemplatedControls;
 
@@ -15,10 +14,5 @@ public class InvokletDialogWindow : Window
         CanResize = false;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        // Keep OS-owned decorations, movement and closing behavior on every platform.
-        Resources.MergedDictionaries.Add(new ResourceInclude(new Uri("avares://Invoklet/"))
-        {
-            Source = new Uri("avares://Invoklet.Avalonia.Themes/Metrics.axaml"),
-        });
     }
 }

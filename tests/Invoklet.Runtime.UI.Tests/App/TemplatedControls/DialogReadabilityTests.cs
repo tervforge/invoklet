@@ -2,10 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Windows;
 using Xunit;
 
@@ -106,15 +106,15 @@ public class DialogReadabilityTests
     }
 
     public static TheoryData<string> AllThemes() =>
-        new(typeof(InvokletThemeVariants).GetFields().Where(f => f.FieldType == typeof(ThemeVariant)).Select(f => f.Name));
+        new(TestInterfaceThemes.All.Select(theme => (string)theme.Variant.Key));
 
     // Full precision, no rounding: 4.48 is a failure even though it rounds to 4.5.
     [AvaloniaTheory]
     [MemberData(nameof(AllThemes))]
     public void SecondaryText_Should_Have4Point5To1Contrast_OnPanelAndSidebar(string themeName)
     {
-        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
-        var theme = new InvokletTheme();
+        var variant = TestInterfaceThemes.GetVariant(themeName);
+        var theme = TestInterfaceThemes.CreateStyle();
         Color Get(string key)
         {
             Assert.True(theme.TryGetResource(key, variant, out var value), $"{key} missing in {themeName}");
@@ -138,8 +138,8 @@ public class DialogReadabilityTests
     [MemberData(nameof(AllThemes))]
     public void TheHighlightOfDump_Should_BeReadable_AndVisibleOnTheOutputBackground(string themeName)
     {
-        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
-        var theme = new InvokletTheme();
+        var variant = TestInterfaceThemes.GetVariant(themeName);
+        var theme = TestInterfaceThemes.CreateStyle();
         Color Get(string key)
         {
             Assert.True(theme.TryGetResource(key, variant, out var value), $"{key} missing in {themeName}");

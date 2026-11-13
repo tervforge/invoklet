@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.UserControls;
 using Invoklet.Windows;
 using Xunit;
@@ -21,7 +22,7 @@ public class BorderlessWindowChromeTests
     [InlineData("goto", true)]
     public void WindowTransparency_ShouldSelectThemedSurface_AndTrackPalette(string kind, bool transparent)
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         global::Avalonia.Application.Current!.Styles.Add(theme);
         var owner = new Window();
         Window window = kind switch
@@ -36,10 +37,7 @@ public class BorderlessWindowChromeTests
             window.TransparencyLevelHint = [transparent ? WindowTransparencyLevel.Transparent : WindowTransparencyLevel.None];
             window.Show();
             Assert.Equal(transparent ? WindowTransparencyLevel.Transparent : WindowTransparencyLevel.None, window.ActualTransparencyLevel);
-            foreach (var variant in new[] { InvokletThemeVariants.RiderDark, InvokletThemeVariants.RiderLight,
-                InvokletThemeVariants.InvokletMidnight, InvokletThemeVariants.InvokletWarmLight,
-                InvokletThemeVariants.VsCodeDark, InvokletThemeVariants.VsCodeLight,
-                InvokletThemeVariants.Vs2022Dark, InvokletThemeVariants.Vs2022Light })
+            foreach (var variant in TestInterfaceThemes.All.Select(theme => theme.Variant))
             {
                 window.RequestedThemeVariant = variant;
                 Dispatcher.UIThread.RunJobs();

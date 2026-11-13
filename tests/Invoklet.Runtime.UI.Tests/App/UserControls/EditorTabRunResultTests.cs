@@ -77,21 +77,18 @@ public class EditorTabRunResultTests
     [AvaloniaFact]
     public void BreakpointConditionDialog_Should_InheritTemplatesAndTrackTheOwnersPalette()
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         global::Avalonia.Application.Current!.Styles.Add(theme);
         var ctrl = CreateControl(RunResult.Exited(0));
         var window = (Window)TopLevel.GetTopLevel(ctrl)!;
         try
         {
-            window.RequestedThemeVariant = InvokletThemeVariants.RiderDark;
+            window.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark");
             ctrl.State.Editor.RaiseBreakpointRightClicked(1, null);
             var dialog = Assert.IsType<global::Invoklet.Windows.BreakpointConditionDialog>(ctrl.BreakpointDialog);
             Assert.True(dialog.IsVisible);
             var panel = dialog.ConditionEditor;
-            foreach (var variant in new[] { InvokletThemeVariants.RiderDark, InvokletThemeVariants.RiderLight,
-                InvokletThemeVariants.InvokletMidnight, InvokletThemeVariants.InvokletWarmLight,
-                InvokletThemeVariants.VsCodeDark, InvokletThemeVariants.VsCodeLight,
-                InvokletThemeVariants.Vs2022Dark, InvokletThemeVariants.Vs2022Light })
+            foreach (var variant in TestInterfaceThemes.All.Select(theme => theme.Variant))
             {
                 window.RequestedThemeVariant = variant;
                 Dispatcher.UIThread.RunJobs();

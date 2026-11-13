@@ -25,17 +25,17 @@ namespace Invoklet.Runtime.UI.Tests.App.Windows;
 // Compact tool selectors, simultaneous stack/variables and theme-aware status presentation.
 public class PanelTabsTests
 {
-    private static Window Host(Control content, string theme = "VsCodeDark")
+    private static Window Host(Control content, string theme = "invoklet.theme.vscode-dark")
     {
         var window = new Window { Width = 900, Height = 600, Content = content };
-        window.Styles.Add(new InvokletTheme());
-        window.RequestedThemeVariant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(theme)!.GetValue(null)!;
+        window.Styles.Add(TestInterfaceThemes.CreateStyle());
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant(theme);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         return window;
     }
 
-    private static TabControl OutputTabs(out Window host, string theme = "VsCodeDark", IDispatcher? dispatcher = null)
+    private static TabControl OutputTabs(out Window host, string theme = "invoklet.theme.vscode-dark", IDispatcher? dispatcher = null)
     {
         var prefs = new Mock<IPreferencesService>();
         prefs.Setup(p => p.Editor).Returns(new EditorSettings());
@@ -56,7 +56,7 @@ public class PanelTabsTests
         return tab.GetVisualDescendants().OfType<TabControl>().Single(t => t.Name == "OutputTabsControl");
     }
 
-    private static TabControl DebuggerTabs(out Window host, string theme = "VsCodeDark")
+    private static TabControl DebuggerTabs(out Window host, string theme = "invoklet.theme.vscode-dark")
     {
         var panel = new DebugPanel { DataContext = new DebugPanelViewModel() };
         host = Host(panel, theme);
@@ -126,10 +126,10 @@ public class PanelTabsTests
     }
 
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
-    [InlineData("RiderDark")]
-    [InlineData("InvokletWarmLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
+    [InlineData("invoklet.theme.rider-dark")]
+    [InlineData("invoklet.theme.warm-light")]
     public void ToolSelectors_Should_UseSoftSelectionAndThemeColours(string theme)
     {
         var outputTabs = OutputTabs(out var outputHost, theme);
@@ -279,14 +279,14 @@ public class PanelTabsTests
         host.Close();
     }
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
-    [InlineData("RiderDark")]
-    [InlineData("RiderLight")]
-    [InlineData("Vs2022Dark")]
-    [InlineData("Vs2022Light")]
-    [InlineData("InvokletMidnight")]
-    [InlineData("InvokletWarmLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
+    [InlineData("invoklet.theme.rider-dark")]
+    [InlineData("invoklet.theme.rider-light")]
+    [InlineData("invoklet.theme.vs2022-dark")]
+    [InlineData("invoklet.theme.vs2022-light")]
+    [InlineData("invoklet.theme.midnight")]
+    [InlineData("invoklet.theme.warm-light")]
     public void StatusStrip_Should_KeepTextReadable_AndIndicateStateWithoutColouringText(string theme)
     {
         var tabs = OutputTabs(out var host, theme);
@@ -305,7 +305,7 @@ public class PanelTabsTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Process", text.Text);
         Assert.Equal(Resource(text, "Invoklet.Status.RunningBrush"), ColorOf(indicator.Fill));
-        host.RequestedThemeVariant = InvokletThemeVariants.RiderLight;
+        host.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.rider-light");
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(Resource(text, "Invoklet.Status.RunningBrush"), ColorOf(indicator.Fill));
         Assert.Equal(Resource(text, "Invoklet.StatusBar.ForegroundBrush"), ColorOf(text.Foreground));

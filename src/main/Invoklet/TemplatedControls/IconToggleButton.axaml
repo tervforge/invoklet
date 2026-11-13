@@ -3,11 +3,6 @@
         xmlns:templatedControls="clr-namespace:Invoklet.TemplatedControls">
     <Styles.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Metrics.axaml"/>
-            </ResourceDictionary.MergedDictionaries>
-
-
             <ControlTheme x:Key="{x:Type templatedControls:IconToggleButton}" TargetType="templatedControls:IconToggleButton">
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />

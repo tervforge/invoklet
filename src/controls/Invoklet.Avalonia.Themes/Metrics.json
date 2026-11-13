@@ -1,0 +1,28 @@
+{
+  "id": "invoklet.theme.default-metrics",
+  "name": "Default metrics",
+  "metrics": {
+    "Invoklet.Type.Body": 13,
+    "Invoklet.Type.Caption": 12,
+    "Invoklet.Space.Tight": 4,
+    "Invoklet.Space.Control": 8,
+    "Invoklet.Space.Section": 16,
+    "Invoklet.Size.PanelTab": 28,
+    "Invoklet.Size.NestedTab": 24,
+    "Invoklet.Size.IconButton": 26,
+    "Invoklet.Size.Control": 32,
+    "Invoklet.Size.DialogButton": 88,
+    "Invoklet.Size.ToolbarIcon": 16,
+    "Invoklet.Padding.IconButton": 4,
+    "Invoklet.Radius.Control": 4,
+    "Invoklet.Radius.Selection": 5,
+    "Invoklet.Radius.Overlay": 8,
+    "Invoklet.Radius.OverlayInner": 7,
+    "Invoklet.Radius.OverlayInnerTop": [7, 7, 0, 0],
+    "MenuFlyoutPresenterThemePadding": 4,
+    "ComboBoxDropdownBorderPadding": 4,
+    "Invoklet.Type.DialogTitle": 15,
+    "Invoklet.Dialog.Padding": 24,
+    "Invoklet.Dialog.ActionsMargin": [0, 24, 0, 0]
+  }
+}

@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts.IntelliSense;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.UserControls;
 using Invoklet.Windows;
 using Invoklet.Windows.Healpers;
@@ -20,17 +21,12 @@ namespace Invoklet.Runtime.UI.Tests.App.Resources;
 // the borderless chrome is attached once per window.
 public class PopupStylesAndDialogLifecycleTests
 {
-    private static readonly ThemeVariant[] Variants =
-    [
-        InvokletThemeVariants.RiderDark, InvokletThemeVariants.RiderLight,
-        InvokletThemeVariants.InvokletMidnight, InvokletThemeVariants.InvokletWarmLight,
-        InvokletThemeVariants.VsCodeDark, InvokletThemeVariants.VsCodeLight,
-        InvokletThemeVariants.Vs2022Dark, InvokletThemeVariants.Vs2022Light,
-    ];
+    private static readonly ThemeVariant[] Variants = TestInterfaceThemes.All
+        .Select(theme => theme.Variant).ToArray();
 
     private static (InvokletTheme Theme, Invoklet.Resources.PopupStyles Styles) Install()
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         var styles = new Invoklet.Resources.PopupStyles();
         Application.Current!.Styles.Add(theme);
         Application.Current.Styles.Add(styles);
@@ -68,7 +64,7 @@ public class PopupStylesAndDialogLifecycleTests
         {
             Width = 600,
             Height = 300,
-            RequestedThemeVariant = InvokletThemeVariants.RiderDark,
+            RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark"),
             Content = new StackPanel { Children = { menu, inline, target } },
         };
         host.Resources["Invoklet.Text.PrimaryBrush"] = marker;
@@ -255,7 +251,7 @@ public class PopupStylesAndDialogLifecycleTests
     {
         var installed = Install();
         var layout = new DialogLayout();
-        var host = new Window { Content = layout, RequestedThemeVariant = InvokletThemeVariants.InvokletMidnight };
+        var host = new Window { Content = layout, RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.midnight") };
         try
         {
             host.Show();
@@ -265,7 +261,7 @@ public class PopupStylesAndDialogLifecycleTests
             layout.Kind = DialogKind.Error;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("×", text.Text);
-            installed.Theme.TryGetResource("Invoklet.Status.ErrorBrush", InvokletThemeVariants.InvokletMidnight, out var error);
+            installed.Theme.TryGetResource("Invoklet.Status.ErrorBrush", TestInterfaceThemes.GetVariant("invoklet.theme.midnight"), out var error);
             Assert.Equal(ColorOf((IBrush)error!), ColorOf(badge.Background));
         }
         finally
@@ -281,7 +277,7 @@ public class PopupStylesAndDialogLifecycleTests
     public void BreakpointConditionDialog_Should_FollowTheOwnersTheme_UntilClosed_ThenReleaseEverything()
     {
         var installed = Install();
-        var owner = new Window { RequestedThemeVariant = InvokletThemeVariants.RiderDark };
+        var owner = new Window { RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark") };
         var editor = NewEditor();
         try
         {
@@ -290,9 +286,9 @@ public class PopupStylesAndDialogLifecycleTests
             Assert.Equal(owner.ActualThemeVariant, dialog.RequestedThemeVariant);
             dialog.Show(owner);
 
-            owner.RequestedThemeVariant = InvokletThemeVariants.VsCodeLight;
+            owner.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.vscode-light");
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(InvokletThemeVariants.VsCodeLight, dialog.RequestedThemeVariant);
+            Assert.Equal(TestInterfaceThemes.GetVariant("invoklet.theme.vscode-light"), dialog.RequestedThemeVariant);
             Assert.True(editor.HasFinishedHandlers);
             Assert.False(editor.IsDisposed);
 
@@ -301,9 +297,9 @@ public class PopupStylesAndDialogLifecycleTests
             Assert.True(editor.IsDisposed);
             Assert.False(editor.HasFinishedHandlers);
 
-            owner.RequestedThemeVariant = InvokletThemeVariants.InvokletWarmLight;
+            owner.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.warm-light");
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(InvokletThemeVariants.VsCodeLight, dialog.RequestedThemeVariant); // no longer listening
+            Assert.Equal(TestInterfaceThemes.GetVariant("invoklet.theme.vscode-light"), dialog.RequestedThemeVariant); // no longer listening
         }
         finally
         {
@@ -328,7 +324,7 @@ public class PopupStylesAndDialogLifecycleTests
             Assert.True(editor.IsDisposed);
             Assert.False(editor.HasFinishedHandlers);
             var before = dialog.RequestedThemeVariant;
-            owner.RequestedThemeVariant = InvokletThemeVariants.VsCodeLight;
+            owner.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.vscode-light");
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(before, dialog.RequestedThemeVariant);
         }

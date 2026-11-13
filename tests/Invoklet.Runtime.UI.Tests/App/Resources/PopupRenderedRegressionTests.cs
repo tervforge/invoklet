@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.App.Resources;
@@ -17,7 +18,7 @@ public class PopupRenderedRegressionTests
 {
     private static (InvokletTheme Theme, Invoklet.Resources.PopupStyles Styles) Install()
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         var styles = new Invoklet.Resources.PopupStyles();
         Application.Current!.Styles.Add(theme);
         Application.Current.Styles.Add(styles);
@@ -63,12 +64,12 @@ public class PopupRenderedRegressionTests
 
     // The code-fix menu: a MenuFlyout opened from the editor, whose monospace font must not leak in.
     [AvaloniaTheory]
-    [InlineData("InvokletMidnight")]
-    [InlineData("InvokletWarmLight")]
-    [InlineData("RiderLight")]
+    [InlineData("invoklet.theme.midnight")]
+    [InlineData("invoklet.theme.warm-light")]
+    [InlineData("invoklet.theme.rider-light")]
     public void ARealMenuFlyout_FromAMonospaceTarget_Should_UseThePalette_TheInterfaceFont_AndItsStates(string variantName)
     {
-        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(variantName)!.GetValue(null)!;
+        var variant = TestInterfaceThemes.GetVariant(variantName);
         var installed = Install();
         var target = new ContentControl { Width = 200, Height = 40, FontFamily = new FontFamily("Courier New"), FontSize = 22 };
         var host = new Window { Width = 600, Height = 400, Content = target, RequestedThemeVariant = variant };
@@ -118,7 +119,7 @@ public class PopupRenderedRegressionTests
     {
         var installed = Install();
         var target = new ContentControl { Width = 200, Height = 40 };
-        var host = new Window { Width = 600, Height = 400, Content = target, RequestedThemeVariant = InvokletThemeVariants.InvokletWarmLight };
+        var host = new Window { Width = 600, Height = 400, Content = target, RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.warm-light") };
         var flyout = new ProbeMenuFlyout { Items = { new MenuItem { Header = "Add braces" } } };
         try
         {
@@ -126,22 +127,22 @@ public class PopupRenderedRegressionTests
             flyout.ShowAt(target);
             Dispatcher.UIThread.RunJobs();
             var presenter = Shown(flyout.Presenter).GetVisualDescendants().OfType<MenuFlyoutPresenter>().Single();
-            Assert.Equal(Brush(installed.Theme, "Invoklet.Panel.BackgroundBrush", InvokletThemeVariants.InvokletWarmLight), ColorOf(presenter.Background));
+            Assert.Equal(Brush(installed.Theme, "Invoklet.Panel.BackgroundBrush", TestInterfaceThemes.GetVariant("invoklet.theme.warm-light")), ColorOf(presenter.Background));
 
-            host.RequestedThemeVariant = InvokletThemeVariants.InvokletMidnight;
+            host.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.midnight");
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal(Brush(installed.Theme, "Invoklet.Panel.BackgroundBrush", InvokletThemeVariants.InvokletMidnight), ColorOf(presenter.Background));
+            Assert.Equal(Brush(installed.Theme, "Invoklet.Panel.BackgroundBrush", TestInterfaceThemes.GetVariant("invoklet.theme.midnight")), ColorOf(presenter.Background));
         }
         finally { flyout.Hide(); host.Close(); Uninstall(installed); }
     }
 
     [AvaloniaTheory]
-    [InlineData("InvokletMidnight")]
-    [InlineData("InvokletWarmLight")]
+    [InlineData("invoklet.theme.midnight")]
+    [InlineData("invoklet.theme.warm-light")]
     public void HelpMenu_Should_UseTheActivePaletteForPopupBorderAndSeparator(string variantName)
     {
-        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(variantName)!.GetValue(null)!;
+        var variant = TestInterfaceThemes.GetVariant(variantName);
         var installed = Install();
         var target = new ContentControl { Width = 200, Height = 40 };
         var host = new Window { Width = 600, Height = 400, Content = target, RequestedThemeVariant = variant };
@@ -179,7 +180,7 @@ public class PopupRenderedRegressionTests
     public void ARealFlyout_WithCheckBoxes_Should_UseThePalette_AndTheInterfaceFont()
     {
         var installed = Install();
-        var variant = InvokletThemeVariants.InvokletMidnight;
+        var variant = TestInterfaceThemes.GetVariant("invoklet.theme.midnight");
         var target = new ContentControl { Width = 200, Height = 40, FontFamily = new FontFamily("Courier New") };
         var host = new Window { Width = 600, Height = 400, Content = target, RequestedThemeVariant = variant };
         var flyout = new ProbeFlyout { Content = new StackPanel { Children = { new CheckBox { Content = "Break on uncaught exceptions" } } } };

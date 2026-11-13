@@ -36,14 +36,14 @@ public sealed class AssemblyTreeNode(
     public AssemblyTypeEntry? Type { get; } = type;
     public AssemblyMemberEntry? Member { get; } = member;
 
-    public Geometry? Icon { get; } = icons.Icon;
+    public string IconKey { get; } = icons.IconKey;
     public IBrush IconBrush { get; } = icons.IconBrush;
 
     /// <summary>ILSpy's bottom-right access overlay: none for public, a lock, a key or a house otherwise.</summary>
-    public Geometry? AccessOverlay { get; } = icons.AccessOverlay;
+    public string? AccessOverlayKey { get; } = icons.AccessOverlayKey;
 
     /// <summary>ILSpy's top-left "static" overlay.</summary>
-    public Geometry? StaticOverlay { get; } = icons.StaticOverlay;
+    public string? StaticOverlayKey { get; } = icons.StaticOverlayKey;
 
     public bool IsPublic => Access is AssemblyAccess.Public or AssemblyAccess.Protected or AssemblyAccess.ProtectedInternal;
 
@@ -56,6 +56,6 @@ public sealed class AssemblyTreeNode(
     public override string ToString() => Text;
 }
 
-/// <summary>The resolved glyphs of a node — looked up from the window's resources.</summary>
+/// <summary>The theme resource keys and foreground for a node's glyphs.</summary>
 public sealed record AssemblyTreeNodeIcons(
-    Geometry? Icon, IBrush IconBrush, Geometry? AccessOverlay, Geometry? StaticOverlay);
+    string IconKey, IBrush IconBrush, string? AccessOverlayKey, string? StaticOverlayKey);

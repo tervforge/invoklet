@@ -9,6 +9,7 @@ using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
 using Invoklet.Format.MdRun;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Windows;
 using Invoklet.Windows.Models;
 using Moq;
@@ -23,7 +24,7 @@ public class DependenciesArgumentsLayoutTests
     [AvaloniaFact]
     public void ArgumentRows_Should_AlignTheirValues_AndAnEnumShouldPickItsDefault()
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         Application.Current!.Styles.Add(theme);
         var vm = new DependenciesWindowViewModel(new Mock<IPackageSearchService>().Object,
             new Mock<ILocalPackageCacheService>().Object, new Mock<INuGetSourceStore>().Object);
@@ -36,7 +37,7 @@ public class DependenciesArgumentsLayoutTests
                 new() { Name = "environment", Type = MdRunArgumentType.Enum, Default = MdRunValue.Of("test"), Values = ["dev", "test", "prod"] },
             ],
         });
-        var window = new DependenciesWindow(vm) { Width = 1000, Height = 700, RequestedThemeVariant = InvokletThemeVariants.InvokletMidnight };
+        var window = new DependenciesWindow(vm) { Width = 1000, Height = 700, RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.midnight") };
         try
         {
             window.Show();
@@ -74,16 +75,16 @@ public class DependenciesArgumentsLayoutTests
     [InlineData(false)]
     public void PlainButtons_Should_UseTheThemesSurface(bool enabled)
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         Application.Current!.Styles.Add(theme);
         var button = new Button { Content = "Browse…", IsEnabled = enabled };
-        var window = new Window { Content = button, RequestedThemeVariant = InvokletThemeVariants.InvokletMidnight };
+        var window = new Window { Content = button, RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.midnight") };
         try
         {
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
-            theme.TryGetResource("Invoklet.Editor.BackgroundBrush", InvokletThemeVariants.InvokletMidnight, out var surface);
+            theme.TryGetResource("Invoklet.Editor.BackgroundBrush", TestInterfaceThemes.GetVariant("invoklet.theme.midnight"), out var surface);
             Assert.Equal(((ISolidColorBrush)surface!).Color, ((ISolidColorBrush)presenter.Background!).Color);
         }
         finally

@@ -6,6 +6,7 @@ using MarkView.Avalonia.Rendering;
 using MarkView.Avalonia.Rendering.Blocks;
 
 using TextMateSharp.Grammars;
+using TextMateSharp.Themes;
 
 namespace MarkView.Avalonia.SyntaxHighlighting;
 
@@ -18,15 +19,21 @@ namespace MarkView.Avalonia.SyntaxHighlighting;
 /// </summary>
 public sealed class TextMateExtension : IMarkViewExtension
 {
-    private readonly ThemeName _darkTheme;
-    private readonly ThemeName _lightTheme;
+    private readonly Func<TextMateHighlighter> _createDark;
+    private readonly Func<TextMateHighlighter> _createLight;
     private TextMateHighlighter? _darkHighlighter;
     private TextMateHighlighter? _lightHighlighter;
 
     public TextMateExtension(ThemeName darkTheme = ThemeName.DarkPlus, ThemeName lightTheme = ThemeName.LightPlus)
     {
-        _darkTheme = darkTheme;
-        _lightTheme = lightTheme;
+        _createDark = () => new TextMateHighlighter(darkTheme);
+        _createLight = () => new TextMateHighlighter(lightTheme);
+    }
+
+    public TextMateExtension(IRawTheme theme)
+    {
+        _createDark = () => new TextMateHighlighter(theme);
+        _createLight = GetDark;
     }
 
     public void Register(AvaloniaRenderer renderer)
@@ -36,7 +43,7 @@ public sealed class TextMateExtension : IMarkViewExtension
     }
 
     // Stryker disable once assignment : lazily caches the highlighter; without the cache every Register() builds its own instance whose highlighting output is identical, only instance reuse differs
-    private TextMateHighlighter GetDark() => _darkHighlighter ??= new TextMateHighlighter(_darkTheme);
+    private TextMateHighlighter GetDark() => _darkHighlighter ??= _createDark();
     // Stryker disable once assignment : lazily caches the highlighter; without the cache every Register() builds its own instance whose highlighting output is identical, only instance reuse differs
-    private TextMateHighlighter GetLight() => _lightHighlighter ??= new TextMateHighlighter(_lightTheme);
+    private TextMateHighlighter GetLight() => _lightHighlighter ??= _createLight();
 }

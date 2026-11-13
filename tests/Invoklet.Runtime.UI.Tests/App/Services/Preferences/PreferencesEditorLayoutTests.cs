@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Contracts;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.Preferences;
 using Invoklet.Windows;
@@ -19,8 +20,8 @@ namespace Invoklet.Runtime.UI.Tests.App.Services.Preferences;
 public class PreferencesEditorLayoutTests
 {
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
     public void GroupedEditorPage_Should_AlignFields_ScrollAndKeepBindings(string theme)
     {
         var settings = new AppSettings();
@@ -43,8 +44,8 @@ public class PreferencesEditorLayoutTests
         vm.FilterText = "Editor";
         vm.SelectedNode = vm.Nodes.Single(n => n.Id == "editor");
         var window = new PreferencesWindow(vm) { Width = 640, Height = 420 };
-        window.Styles.Add(new InvokletTheme());
-        window.RequestedThemeVariant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(theme)!.GetValue(null)!;
+        window.Styles.Add(TestInterfaceThemes.CreateStyle());
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant(theme);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         var page = window.FindControl<StackPanel>("EditorSettingsPage")!;

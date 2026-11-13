@@ -5,7 +5,7 @@ using Avalonia.Data.Converters;
 namespace Invoklet.Converters;
 
 // Resolves a resource key string (FileTreeViewNode.LanguageIconKey) to the actual Geometry it names
-// in Resources/Icons.axaml, at bind time — so a language with no icon (LanguageIconKey null) just
+// in the shared theme icon dictionary, at bind time — so a language with no icon (LanguageIconKey null) just
 // produces a null Geometry, no per-language XAML branch needed for it. Same TryGetResource(key,
 // null, ...) pattern CodeFixMargin already uses for its own (non-bound, code-behind) icon lookup.
 public sealed class ResourceKeyToGeometryConverter : IValueConverter

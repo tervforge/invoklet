@@ -16,7 +16,7 @@
             <Button x:Name="SaveButton" Command="{Binding SaveCommand}"
                     ToolTip.Tip="Save" AutomationProperties.Name="Save">
                 <StackPanel Orientation="Horizontal" Spacing="4">
-                    <PathIcon Data="{StaticResource Icon.Save}" Width="14" Height="14"/>
+                    <PathIcon Data="{DynamicResource Icon.Save}" Width="14" Height="14"/>
                     <TextBlock Text="Save" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>

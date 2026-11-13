@@ -18,7 +18,7 @@
                 <Button DockPanel.Dock="Right" x:Name="DismissNoticeButton" Padding="4,0" MinHeight="0"
                         Background="Transparent" BorderThickness="0" VerticalAlignment="Top"
                         AutomationProperties.Name="Dismiss" ToolTip.Tip="Dismiss" Click="DismissNotice_Click">
-                    <PathIcon Data="{StaticResource Icon.Close}" Width="10" Height="10"/>
+                    <PathIcon Data="{DynamicResource Icon.Close}" Width="10" Height="10"/>
                 </Button>
                 <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" FontSize="12"/>
             </DockPanel>
@@ -58,17 +58,17 @@
                         <DockPanel IsVisible="{Binding !IsRenaming}" VerticalAlignment="Center">
                             <!-- Badges: an icon plus the tooltip and the row's accessible name, never color alone. -->
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="6,0,0,0">
-                                <PathIcon x:Name="AttachedBadge" Data="{StaticResource Icon.ConnectionAttached}"
+                                <PathIcon x:Name="AttachedBadge" Data="{DynamicResource Icon.ConnectionAttached}"
                                           Width="12" Height="12" IsVisible="{Binding IsAttached}"
                                           ToolTip.Tip="Used by this script"
                                           Foreground="{DynamicResource Invoklet.Text.PrimaryBrush}"/>
-                                <PathIcon x:Name="LoadingBadge" Data="{StaticResource Icon.Sync}" Width="12" Height="12"
+                                <PathIcon x:Name="LoadingBadge" Data="{DynamicResource Icon.Sync}" Width="12" Height="12"
                                           IsVisible="{Binding IsLoading}"
                                           Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
-                                <PathIcon x:Name="StaleBadge" Data="{StaticResource Icon.Warning}" Width="12" Height="12"
+                                <PathIcon x:Name="StaleBadge" Data="{DynamicResource Icon.Warning}" Width="12" Height="12"
                                           IsVisible="{Binding IsStale}"
                                           Foreground="{DynamicResource Invoklet.Diagnostic.WarningBrush}"/>
-                                <PathIcon x:Name="ProblemBadge" Data="{StaticResource Icon.Warning}" Width="12" Height="12"
+                                <PathIcon x:Name="ProblemBadge" Data="{DynamicResource Icon.Warning}" Width="12" Height="12"
                                           IsVisible="{Binding ShowsProblem}"
                                           Foreground="{DynamicResource Invoklet.Status.ErrorBrush}"/>
                                 <TextBlock Classes="count" Text="{Binding ConnectionCount}" IsVisible="{Binding HasChildrenCount}"/>

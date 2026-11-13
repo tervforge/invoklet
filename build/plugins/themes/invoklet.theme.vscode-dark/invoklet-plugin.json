@@ -1,0 +1,13 @@
+{
+  "id": "invoklet.theme.vscode-dark",
+  "version": "1.0.0",
+  "displayName": "VS Code Dark",
+  "roles": {
+    "theme": 1
+  },
+  "assets": {
+    "themes": [
+      "vscode-dark.json"
+    ]
+  }
+}

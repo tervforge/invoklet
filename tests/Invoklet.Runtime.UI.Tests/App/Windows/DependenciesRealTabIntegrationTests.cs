@@ -53,7 +53,7 @@ public class DependenciesRealTabIntegrationTests
             fileSystem.Setup(f => f.Folder).Returns(tmpDir);
             fileSystem.Setup(f => f.GetFilesTreeAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
 
-            var theme = new ThemeService(Application.Current!, prefs.Object);
+            using var theme = new ThemeService(Application.Current!, prefs.Object);
             var registry = new Mock<ILanguageHostRegistry>();
             var buildCache = new Mock<IBuildCacheService>();
             buildCache.Setup(b => b.EnsureOutputDirectory(It.IsAny<string>(), It.IsAny<string>()))

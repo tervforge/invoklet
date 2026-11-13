@@ -38,7 +38,7 @@ public class CodeOutputHighlighterTests
         var light = CodeOutputHighlighter.Highlight(html, ThemeVariant.Light);
 
         Assert.NotEqual(CodeOutputHighlighter.Highlight(html, ThemeVariant.Dark), light);
-        Assert.Equal(light, CodeOutputHighlighter.Highlight(html, InvokletThemeVariants.VsCodeLight));
+        Assert.Equal(light, CodeOutputHighlighter.Highlight(html, BuiltInInterfaceThemes.GetVariant("invoklet.theme.warm-light")));
     }
 
     [Theory]

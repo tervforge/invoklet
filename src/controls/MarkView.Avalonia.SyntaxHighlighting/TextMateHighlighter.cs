@@ -27,9 +27,15 @@ public sealed class TextMateHighlighter : ICodeHighlighter
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
 
     public TextMateHighlighter(ThemeName theme = ThemeName.DarkPlus)
+        : this(new RegistryOptions(theme), null) { }
+
+    public TextMateHighlighter(IRawTheme theme)
+        : this(new RegistryOptions(ThemeName.DarkPlus), theme) { }
+
+    private TextMateHighlighter(RegistryOptions options, IRawTheme? theme)
     {
-        _options = new RegistryOptions(theme);
-        _registry = new Registry(_options);
+        _options = options;
+        _registry = new Registry(theme is null ? options : new TextMateThemeOptions(options, theme));
         _theme = _registry.GetTheme();
     }
 

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.Avalonia.Themes;
@@ -23,7 +24,7 @@ public sealed class ScrollBarThemeTests
             Content = new Border { Width = 2000, Height = contentHeight },
         };
         var window = new Window { Width = 400, Height = 300, Content = viewer };
-        window.Styles.Add(new InvokletTheme());
+        window.Styles.Add(TestInterfaceThemes.CreateStyle());
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();

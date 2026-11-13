@@ -6,7 +6,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Invoklet/Resources/Icons.axaml"/>
+                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Icons.axaml"/>
                 <ResourceInclude Source="avares://Invoklet/Resources/WindowDecorations.axaml"/>
                 <ResourceInclude Source="avares://Invoklet/Resources/WindowChrome.axaml"/>
             </ResourceDictionary.MergedDictionaries>

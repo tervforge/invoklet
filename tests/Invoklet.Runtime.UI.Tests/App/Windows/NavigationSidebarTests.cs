@@ -101,9 +101,9 @@ public sealed class NavigationSidebarTests : IDisposable
         {
             Width = 1000,
             Height = 600,
-            RequestedThemeVariant = installTheme ? InvokletThemeVariants.RiderDark : null,
+            RequestedThemeVariant = installTheme ? TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark") : null,
         };
-        if (installTheme) window.Styles.Insert(0, new InvokletTheme());
+        if (installTheme) window.Styles.Insert(0, TestInterfaceThemes.CreateStyle());
         window.Show();
         Settle();
         return (window, vm, windowService);

@@ -36,6 +36,7 @@ public enum PluginDiagnosticCode
     PluginContentChanged,
     PluginContentUnreadable,
     DevelopmentPlugin,
+    ThemeAssetInvalid,
 }
 
 /// <summary>

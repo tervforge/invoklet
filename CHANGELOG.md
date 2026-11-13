@@ -10,6 +10,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - `Util.Code(...).Dump()` displays C#, SQL, JSON, XML, and plain text as code blocks with a copy action.
 - Added `--plugins-dev <directory>` for plugin development, with a visible warning when enabled.
 - Added a Plugins page in Preferences for startup diagnostics and changes that require a restart.
+- Added interface theme packages and VS Code TextMate themes to Preferences → Appearance.
 
 ### Fixed
 

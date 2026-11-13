@@ -57,7 +57,7 @@ public class AssemblyExplorerWindowViewTests
         var barNode = namespaceNodes.Single(n => Text(n) == "Foo.Bar");
         Assert.Equal(["Alpha", "Gamma"], barNode.Items.OfType<TreeViewItem>().Select(Text));
         Assert.Equal(AssemblyNodeKind.Namespace, Node(barNode).Kind);
-        Assert.NotNull(Node(barNode).Icon);
+        Assert.Equal("AsmIcon.Namespace", Node(barNode).IconKey);
     }
 
     private static AssemblyTreeNode Node(TreeViewItem item) => Assert.IsType<AssemblyTreeNode>(item.Header);
@@ -94,16 +94,16 @@ public class AssemblyExplorerWindowViewTests
         Assert.Equal(
             ["Base Types", "Derived Types", "_count : int", "Alpha()", "Run() : void"],
             children.Select(Text));
-        Assert.All(children, c => Assert.NotNull(Node(c).Icon));
+        Assert.All(children, c => Assert.NotNull(Node(c).IconKey));
 
         var count = Node(children[2]);
         Assert.Equal(AssemblyNodeKind.Field, count.Kind);
         Assert.False(count.IsPublic);
         Assert.True(count.Opacity < 1);
         Assert.Equal(1.0, Node(children[4]).Opacity);
-        Assert.NotNull(count.AccessOverlay); // private → lock
-        Assert.Null(count.StaticOverlay);
-        Assert.Null(Node(children[4]).AccessOverlay); // public → no overlay
+        Assert.NotNull(count.AccessOverlayKey); // private → lock
+        Assert.Null(count.StaticOverlayKey);
+        Assert.Null(Node(children[4]).AccessOverlayKey); // public → no overlay
 
         Assert.Equal(["object"], children[0].Items.OfType<TreeViewItem>().Select(Text));
         Assert.Equal(["Gamma"], children[1].Items.OfType<TreeViewItem>().Select(Text));
@@ -548,7 +548,7 @@ public class AssemblyExplorerWindowViewTests
         var hit = Assert.Single(Results(window));
         Assert.Equal("Run() : void", hit.Text);
         Assert.Equal("Foo.Bar.Alpha", hit.Location);
-        Assert.NotNull(hit.Icon);
+        Assert.NotNull(hit.IconKey);
         Assert.True(panel.IsVisible);
         Assert.Equal("1 result", window.FindControl<TextBlock>("SearchStatus")!.Text);
     }
@@ -677,7 +677,7 @@ public class AssemblyExplorerWindowViewTests
         var row = AssemblyRow(window);
         Assert.Equal(AssemblyNodeKind.Assembly, Node(row).Kind);
         Assert.Matches(@"^\S+ \(\d+\.\d+\.\d+\.\d+\)$", Node(row).Text); // "Name (1.0.0.0)"
-        Assert.NotNull(Node(row).Icon);
+        Assert.NotNull(Node(row).IconKey);
         var children = row.Items.OfType<TreeViewItem>().ToList();
         Assert.Equal(AssemblyNodeKind.References, Node(children[0]).Kind);
         Assert.All(children.Skip(1), c => Assert.Equal(AssemblyNodeKind.Namespace, Node(c).Kind));
@@ -807,7 +807,7 @@ public class AssemblyExplorerWindowViewTests
         var hit = Assert.Single(AnalysisHits(window));
         Assert.Equal("Call() : void", hit.Text);
         Assert.Equal("Foo.Bar.Gamma", hit.Location);
-        Assert.NotNull(hit.Icon);
+        Assert.NotNull(hit.IconKey);
     }
 
     [AvaloniaFact]
@@ -1195,14 +1195,14 @@ public class AssemblyExplorerWindowViewTests
         Assert.Equal(FontStyle.Normal, Node(beta).FontStyle);
         var members = delta.Items.OfType<TreeViewItem>().Select(Node).ToList();
         var zero = members.Single(m => m.Text == "Zero : int");
-        Assert.NotNull(zero.StaticOverlay);
+        Assert.NotNull(zero.StaticOverlayKey);
         Assert.Equal(FontStyle.Normal, zero.FontStyle);
         var go = members.Single(m => m.Text == "Go() : void");
-        Assert.Null(go.StaticOverlay);
+        Assert.Null(go.StaticOverlayKey);
         Assert.Equal(FontStyle.Italic, go.FontStyle);
         // an abstract class's implicit constructor is protected → key overlay, still not greyed
         var ctor = members.Single(m => m.Kind == AssemblyNodeKind.Constructor);
-        Assert.NotNull(ctor.AccessOverlay);
+        Assert.NotNull(ctor.AccessOverlayKey);
         Assert.Equal(1.0, ctor.Opacity);
     }
 
@@ -1211,9 +1211,8 @@ public class AssemblyExplorerWindowViewTests
     [AvaloniaFact]
     public void KindIconColours_Should_Contrast_AtLeast3To1_WithEveryThemesPanelBackground()
     {
-        var theme = new InvokletTheme();
-        var variants = typeof(InvokletThemeVariants).GetFields()
-            .Select(f => (ThemeVariant)f.GetValue(null)!)
+        var theme = TestInterfaceThemes.CreateStyle();
+        var variants = TestInterfaceThemes.All.Select(theme => theme.Variant)
             .ToList();
         Assert.Equal(8, variants.Count);
 

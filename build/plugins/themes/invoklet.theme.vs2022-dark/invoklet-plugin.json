@@ -1,0 +1,13 @@
+{
+  "id": "invoklet.theme.vs2022-dark",
+  "version": "1.0.0",
+  "displayName": "VS 2022 Dark",
+  "roles": {
+    "theme": 1
+  },
+  "assets": {
+    "themes": [
+      "vs2022-dark.json"
+    ]
+  }
+}

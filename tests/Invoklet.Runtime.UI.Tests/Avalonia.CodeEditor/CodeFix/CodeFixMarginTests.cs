@@ -201,7 +201,7 @@ public class CodeFixMarginTests
         var (_, _, margin) = CreateEditor("x\n");
         var include = new ResourceInclude(new Uri("avares://Invoklet.Runtime.UI.Tests/"))
         {
-            Source = new Uri("avares://Invoklet/Resources/Icons.axaml"),
+            Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
         };
         Application.Current!.Resources.MergedDictionaries.Add(include);
         try
@@ -226,7 +226,7 @@ public class CodeFixMarginTests
         var (_, _, margin) = CreateEditor("x\n");
         var include = new ResourceInclude(new Uri("avares://Invoklet.Runtime.UI.Tests/"))
         {
-            Source = new Uri("avares://Invoklet/Resources/Icons.axaml"),
+            Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
         };
         Application.Current!.Resources.MergedDictionaries.Add(include);
         try
@@ -249,7 +249,7 @@ public class CodeFixMarginTests
         var (_, _, margin) = CreateEditor("x\n");
         var include = new ResourceInclude(new Uri("avares://Invoklet.Runtime.UI.Tests/"))
         {
-            Source = new Uri("avares://Invoklet/Resources/Icons.axaml"),
+            Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
         };
         Application.Current!.Resources.MergedDictionaries.Add(include);
         try
@@ -511,7 +511,7 @@ public class CodeFixMarginTests
     {
         var include = new ResourceInclude(new Uri("avares://Invoklet.Runtime.UI.Tests/"))
         {
-            Source = new Uri("avares://Invoklet/Resources/Icons.axaml"),
+            Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
         };
         Application.Current!.Resources.MergedDictionaries.Add(include);
         try
@@ -685,7 +685,7 @@ public class CodeFixMarginTests
         _ = typeof(Invoklet.App).Assembly;
         var icons = new global::Avalonia.Markup.Xaml.Styling.ResourceInclude(new Uri("avares://Invoklet/"))
         {
-            Source = new Uri("avares://Invoklet/Resources/Icons.axaml"),
+            Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
         };
         Application.Current!.Resources.MergedDictionaries.Add(icons);
         try
@@ -729,7 +729,7 @@ public class CodeFixMarginTests
         _ = typeof(Invoklet.App).Assembly; // avares://Invoklet/ resolves only once the Invoklet assembly is loaded
         var icons = new global::Avalonia.Markup.Xaml.Styling.ResourceInclude(new Uri("avares://Invoklet/"))
         {
-            Source = new Uri("avares://Invoklet/Resources/Icons.axaml"),
+            Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
         };
         Application.Current!.Resources.MergedDictionaries.Add(icons);
         try

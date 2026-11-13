@@ -13,6 +13,7 @@ using Invoklet.Avalonia.HtmlRenderer;
 using Invoklet.Avalonia.HtmlRenderer.External.Core.Entities;
 using Invoklet.Services;
 using Invoklet.UserControls.Models;
+using TextMateSharp.Themes;
 
 namespace Invoklet.UserControls;
 
@@ -26,6 +27,14 @@ public partial class OutputHtmlView : UserControl
     private OutputHtmlViewModel? _boundModel;
     private bool _applyScheduled;
     private bool _scrollToEndPending;
+    private IRawTheme? _editorTheme;
+
+    internal void SetEditorTheme(IRawTheme? theme)
+    {
+        if (ReferenceEquals(_editorTheme, theme)) return;
+        _editorTheme = theme;
+        ScheduleApply();
+    }
 
     public OutputHtmlView()
     {
@@ -144,7 +153,7 @@ public partial class OutputHtmlView : UserControl
         var content = vm.Content;
         var body = ResultsBoxes.Show(content, _toggledBoxes, ShowGeneratedLabels);
         if (!ResultsBoxes.AnyIn(content)) body = ResultsTables.WithMenus(body);
-        body = CodeOutputHighlighter.Highlight(body, ActualThemeVariant);
+        body = CodeOutputHighlighter.Highlight(body, ActualThemeVariant, _editorTheme);
         return $"""
                 <html>
                 <head><style>{vm.Css}</style></head>

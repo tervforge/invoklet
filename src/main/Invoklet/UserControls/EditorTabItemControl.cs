@@ -173,6 +173,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         State = new EditorTabState(editor);
         _watchEvaluator = new WatchEvaluator(() => State.CurrentDebugCtx, w => _vm.DebugPanel.WatchExpressions.Contains(w));
         ResultsOutput.DataContext = State.Output;
+        ResultsOutput.SetEditorTheme(themeService.CurrentTheme.Editor.RawTheme);
         // A change of the output makes a snapshot of it that is being written to disk out of date (see ContentRelease).
         State.Output.PropertyChanged += (_, e) =>
         {
@@ -273,7 +274,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             // plain text when its profile names no source extension the editor has a grammar for.
             // The palette current when the tab is first shown — not the one when it was created: a
             // tab restored at startup may only be opened after the theme changed.
-            editor.TrySetLanguage(_themeService!.CurrentTheme.Editor.TextMateName,
+            editor.TrySetLanguage(_themeService!.CurrentTheme.Editor.RawTheme,
                 _registry.GetEditorProfile(ResolveLanguageId())?.SourceFileExtension ?? "");
             EditorSettingsApplier.ApplySelectionColor(editor);
         };
@@ -355,8 +356,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void ApplyThemeNow(ActiveTheme theme)
     {
-        State.Editor.SetTheme(theme.Editor.TextMateName);
-        _ilHighlighting?.SetTheme(theme.Editor.TextMateName);
+        State.Editor.SetTheme(theme.Editor.RawTheme);
+        ResultsOutput.SetEditorTheme(theme.Editor.RawTheme);
+        _ilHighlighting?.SetTheme(theme.Editor.RawTheme);
         _analysis?.SetDark(theme.Editor.IsDark);
         var editorBg = _themeService!.GetBrush("Invoklet.Editor.BackgroundBrush");
 
@@ -1568,7 +1570,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         if (_disposed || _ilHighlighting is not null || !IlOutput.IsAttachedToVisualTree()) return;
         _ilHighlighting = IlHighlighting.Install(
-            IlOutput, _themeService?.CurrentTheme.Editor.TextMateName ?? ThemeName.DarkPlus);
+            IlOutput, _themeService?.CurrentTheme.Editor.RawTheme ?? EditorTheme.GetBuiltIn(ThemeName.DarkPlus));
     }
 
     internal string? IlGrammarScope => _ilHighlighting?.GrammarScope;

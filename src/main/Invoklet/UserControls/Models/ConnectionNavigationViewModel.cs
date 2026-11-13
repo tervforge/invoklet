@@ -102,7 +102,7 @@ public sealed class ConnectionNavigationNode : ReactiveObject
 
     public bool ShowsProblem => HasProblem || HasProblemInside;
 
-    /// <summary>Resource key of the row's icon in Resources/Icons.axaml.</summary>
+    /// <summary>Resource key of the row's icon in the shared theme icon dictionary.</summary>
     public string IconKey { get; private init; } = "Icon.DriverDatabase";
 
     /// <summary>Null for a connection row.</summary>

@@ -21,6 +21,7 @@ using Invoklet.Avalonia.CodeTextEditor.Highlighting;
 using Invoklet.Avalonia.CodeTextEditor.Margins;
 using Invoklet.Avalonia.Themes.Scrolling;
 using TextMateSharp.Grammars;
+using TextMateSharp.Themes;
 using static AvaloniaEdit.TextMate.TextMate;
 using FoldingMargin = Invoklet.Avalonia.CodeTextEditor.Margins.FoldingMargin;
 
@@ -1455,15 +1456,20 @@ public class CodeTextEditor : TextEditor, IDisposable
     }
 
     /// <summary>
-    /// <see cref="SetLanguage"/> for an arbitrary file extension: false (plain text, nothing installed)
-    /// when TextMate has no grammar for it — <see cref="SetLanguage"/> itself throws then.
+    /// Tries to install a grammar for an arbitrary file extension.
     /// </summary>
-    public bool TrySetLanguage(ThemeName theme, string fileExtension)
+    public bool TrySetLanguage(ThemeName theme, string fileExtension) =>
+        TrySetLanguage(new RegistryOptions(theme), null, fileExtension);
+
+    public bool TrySetLanguage(IRawTheme theme, string fileExtension) =>
+        TrySetLanguage(new RegistryOptions(ThemeName.DarkPlus), theme, fileExtension);
+
+    private bool TrySetLanguage(RegistryOptions options, IRawTheme? theme, string fileExtension)
     {
         if (string.IsNullOrEmpty(fileExtension)
-            || new RegistryOptions(theme).GetLanguageByExtension(fileExtension) is null)
+            || options.GetLanguageByExtension(fileExtension) is null)
             return false;
-        SetLanguage(theme, fileExtension);
+        SetLanguage(options, theme, fileExtension);
         return true;
     }
 
@@ -1481,18 +1487,24 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     public void ResumeHighlighting() => _textMateInstallation?.Resume();
 
-    public string SetLanguage(ThemeName theme, string languageExtension)
+    public string SetLanguage(ThemeName theme, string languageExtension) =>
+        SetLanguage(new RegistryOptions(theme), null, languageExtension);
+
+    public string SetLanguage(IRawTheme theme, string languageExtension) =>
+        SetLanguage(new RegistryOptions(ThemeName.DarkPlus), theme, languageExtension);
+
+    private string SetLanguage(RegistryOptions options, IRawTheme? theme, string languageExtension)
     {
-        _registryOptions = new RegistryOptions(theme);
+        _registryOptions = options;
         _textMateInstallation?.Dispose();
-        _textMateInstallation = this.InstallTextMate(new IlAwareRegistryOptions(_registryOptions));
+        _textMateInstallation = this.InstallTextMate(new IlAwareRegistryOptions(options, theme));
         GrammarScope = null; // the new installation has no grammar yet
         return SetGrammarByExtension(languageExtension);
     }
 
     /// <summary>
     /// Switches the installed highlighting to another language of the bundled grammars without
-    /// reinstalling TextMate (the theme stays); a no-op before <see cref="SetLanguage"/>.
+    /// reinstalling TextMate (the theme stays); a no-op before a language is installed.
     /// </summary>
     public string SetGrammarByExtension(string languageExtension)
     {
@@ -1518,11 +1530,9 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     internal Installation? TextMateInstallation => _textMateInstallation;
 
-    public void SetTheme(ThemeName theme)
-    {
-        if (_textMateInstallation is null || _registryOptions is null) return;
-        _textMateInstallation.SetTheme(_registryOptions.LoadTheme(theme));
-    }
+    public void SetTheme(ThemeName theme) => SetTheme(new RegistryOptions(theme).GetDefaultTheme());
+
+    public void SetTheme(IRawTheme theme) => _textMateInstallation?.SetTheme(theme);
 
     private sealed class OverloadProvider(IReadOnlyList<(object Header, object? Content)> items)
         : IOverloadProvider

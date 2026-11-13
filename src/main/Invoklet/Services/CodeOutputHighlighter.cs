@@ -1,10 +1,12 @@
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using Avalonia.Media;
 using Avalonia.Styling;
 using MarkView.Avalonia.SyntaxHighlighting;
 using TextMateSharp.Grammars;
+using TextMateSharp.Themes;
 
 namespace Invoklet.Services;
 
@@ -14,12 +16,15 @@ internal static partial class CodeOutputHighlighter
 
     private static readonly TextMateHighlighter Dark = new(ThemeName.DarkPlus);
     private static readonly TextMateHighlighter Light = new(ThemeName.LightPlus);
+    private static readonly ConditionalWeakTable<IRawTheme, TextMateHighlighter> Themes = new();
 
-    public static string Highlight(string html, ThemeVariant? theme = null)
+    public static string Highlight(string html, ThemeVariant? theme = null, IRawTheme? editorTheme = null)
     {
         if (!html.Contains("class=\"dp-code\"", StringComparison.Ordinal)) return html;
 
-        var highlighter = UsesLightPalette(theme) ? Light : Dark;
+        var highlighter = editorTheme is null
+            ? UsesLightPalette(theme) ? Light : Dark
+            : Themes.GetValue(editorTheme, static raw => new TextMateHighlighter(raw));
         lock (highlighter)
             return CodeBlock().Replace(html, match => RenderBlock(match, highlighter));
     }

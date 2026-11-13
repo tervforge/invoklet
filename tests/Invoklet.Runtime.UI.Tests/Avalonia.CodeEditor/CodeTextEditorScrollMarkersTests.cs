@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using Invoklet.Avalonia.CodeTextEditor;
 using Invoklet.Avalonia.Themes;
 using Invoklet.Avalonia.Themes.Scrolling;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.Avalonia.CodeEditor;
@@ -20,7 +21,7 @@ public sealed class CodeTextEditorScrollMarkersTests
     {
         var editor = new CodeTextEditor { Text = string.Join("\n", Enumerable.Range(1, lines).Select(i => $"line {i}")) };
         var window = new Window { Width = 600, Height = 400, Content = editor };
-        if (applicationTheme) window.Styles.Add(new InvokletTheme());
+        if (applicationTheme) window.Styles.Add(TestInterfaceThemes.CreateStyle());
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();

@@ -2,7 +2,17 @@ namespace Invoklet.Plugins.Hosting;
 
 /// <summary>One plugin's registration of one role: the accepted context and, for a role with code, the plugin's entry instance.</summary>
 /// <param name="Plugin">Null for a data role (a theme): the handler reads the plugin's folder instead.</param>
-public sealed record PluginRegistration(PluginContext Context, IInvokletPlugin? Plugin);
+public sealed record PluginRegistration(PluginContext Context, IInvokletPlugin? Plugin)
+{
+    private readonly Func<string, Stream>? _openAsset;
+
+    internal PluginRegistration(PluginContext context, IInvokletPlugin? plugin, Func<string, Stream> openAsset)
+        : this(context, plugin) => _openAsset = openAsset;
+
+    /// <summary>Opens a package asset using the same content verification as the plugin assembly.</summary>
+    public Stream OpenAsset(string relativePath) =>
+        (_openAsset ?? throw new InvalidOperationException("No asset source is available."))(relativePath);
+}
 
 /// <summary>
 /// How the application takes in one role: the connection handler puts drivers in the driver registry, the theme handler reads theme
@@ -20,4 +30,7 @@ public interface IPluginRoleHandler
 }
 
 /// <summary>An update to a role registry. Rollback must undo this update, including a partially failed Apply, without throwing.</summary>
-public sealed record PluginRoleRegistration(Action Apply, Action Rollback);
+public sealed record PluginRoleRegistration(Action Apply, Action Rollback)
+{
+    public IReadOnlyList<PluginDiagnostic> Warnings { get; init; } = [];
+}

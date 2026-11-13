@@ -38,7 +38,10 @@ public sealed class PluginLoader
     public PluginSession Load(IReadOnlyList<DiscoveredPlugin> discovered)
     {
         ArgumentNullException.ThrowIfNull(discovered);
-        var candidates = discovered.Select(d => new Candidate(d with { Directory = Path.GetFullPath(d.Directory) })).ToList();
+        var candidates = discovered
+            .Where(plugin => _options.LoadThemePackages || plugin.Manifest is not { Roles.Count: 1 } manifest
+                || !manifest.HasRole(PluginRole.Theme))
+            .Select(d => new Candidate(d with { Directory = Path.GetFullPath(d.Directory) })).ToList();
 
         RejectUnreadable(candidates);
         foreach (var candidate in candidates.Where(c => !c.Rejected)) CheckAdmission(candidate);
@@ -210,7 +213,8 @@ public sealed class PluginLoader
             try
             {
                 var rolePlugin = PluginRoles.RequiresCode(role) ? instance : null;
-                prepared.Add((role, _handlers[role].Prepare(new PluginRegistration(context, rolePlugin))));
+                prepared.Add((role, _handlers[role].Prepare(new PluginRegistration(context, rolePlugin,
+                    path => OpenAsset(candidate, path)))));
             }
             catch (Exception ex)
             {
@@ -242,6 +246,26 @@ public sealed class PluginLoader
                 return;
             }
         }
+
+        foreach (var warning in prepared.SelectMany(item => item.Registration.Warnings))
+        {
+            candidate.AddDiagnostic(warning with { Severity = PluginDiagnosticSeverity.Warning });
+            _logger.LogWarning("Plugin {PluginId}: {Message} {Detail}", candidate.Id, warning.Message, warning.Detail);
+        }
+    }
+
+    private static Stream OpenAsset(Candidate candidate, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || relativePath.Contains(':')
+            || relativePath.Split('/', '\\').Any(part => part.Length == 0 || part.EndsWith('.') || part.EndsWith(' ')))
+            throw new IOException("Expected a relative path inside the plugin package.");
+
+        var path = Path.Combine(candidate.Directory, relativePath.Replace('\\', Path.DirectorySeparatorChar));
+        if (!PluginFiles.IsInside(candidate.Directory, path))
+            throw new IOException("The asset is outside the plugin package.");
+        if (candidate.Files is { } files) return files.ReadVerified(path);
+        PluginFiles.RejectLinksBetween(candidate.Directory, path);
+        return File.OpenRead(path);
     }
 
     private IInvokletPlugin? Instantiate(Candidate candidate, PluginEntryPoint entry, IReadOnlySet<string> shared)
