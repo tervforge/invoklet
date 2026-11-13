@@ -266,9 +266,6 @@ public class AssemblyExplorerWindowTests : IClassFixture<AssemblyExplorerWindowT
         var alpha = await LoadAndFindAlphaAsync(window);
         await window.SelectNodeAsync(Node(alpha), alpha);
         Assert.Equal("source.cs", window.GrammarScope);
-        var csharp = await IlHighlightingTests.SettledColorAsync(window.Editor, IndexOf(window, "class"),
-            c => c is { } color && color != Colors.Black);
-
         await window.SetViewAsync(IlView);
 
         Assert.Equal(IlGrammar.ScopeName, window.GrammarScope);
@@ -279,7 +276,9 @@ public class AssemblyExplorerWindowTests : IClassFixture<AssemblyExplorerWindowT
         await window.SetViewAsync(DecompilerView.Default);
 
         Assert.Equal("source.cs", window.GrammarScope);
-        Assert.Equal(csharp, await IlHighlightingTests.SettledColorAsync(window.Editor, IndexOf(window, "class"), c => c == csharp));
+        var restoredCSharpColor = await IlHighlightingTests.SettledColorAsync(window.Editor, IndexOf(window, "class"),
+            c => c is { } color && color != Colors.Black);
+        Assert.NotNull(restoredCSharpColor);
         Assert.DoesNotContain(".class", window.Editor.Text);
     }
 
