@@ -1,7 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Invoklet.TemplatedControls"
-        xmlns:conv="clr-namespace:Invoklet.Converters"
         xmlns:connections="clr-namespace:Invoklet.Contracts.Connections;assembly=Invoklet.Contracts"
         xmlns:viewModels="clr-namespace:Invoklet.Windows.Models"
         x:Class="Invoklet.Windows.ConnectionsWindow" x:DataType="viewModels:ConnectionsWindowViewModel"
@@ -39,7 +38,7 @@
                                 <DataTemplate DataType="viewModels:ConnectionItemViewModel">
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                                         <Path Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Fill="{DynamicResource Invoklet.Text.SecondaryBrush}"
-                                              Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyToGeometryConverter.Instance}}" ToolTip.Tip="{Binding DriverName}"/>
+                                              controls:ThemeIcon.Key="{Binding IconKey}" ToolTip.Tip="{Binding DriverName}"/>
                                         <StackPanel Grid.Column="1" Spacing="2">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
                                             <TextBlock Text="{Binding DriverName}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DriverName}"

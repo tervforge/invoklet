@@ -250,6 +250,7 @@ public sealed class ThemeService : IThemeService, IDisposable
             };
 
         string? EditorId(string? value, bool dark) =>
-            EditorThemes.FirstOrDefault(t => t.IsDark == dark && t.Name == value)?.Id ?? value;
+            value == (dark ? "Dark+" : "Light+") ? null
+                : EditorThemes.FirstOrDefault(t => t.IsDark == dark && t.Name == value)?.Id ?? value;
     }
 }

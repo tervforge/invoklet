@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
+using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace Invoklet.TemplatedControls;
 
@@ -7,25 +9,26 @@ namespace Invoklet.TemplatedControls;
 public static class ThemeIcon
 {
     public static readonly AttachedProperty<string?> KeyProperty =
-        AvaloniaProperty.RegisterAttached<PathIcon, string?>("Key", typeof(ThemeIcon));
+        AvaloniaProperty.RegisterAttached<Control, string?>("Key", typeof(ThemeIcon));
 
     private static readonly AttachedProperty<IDisposable?> BindingProperty =
-        AvaloniaProperty.RegisterAttached<PathIcon, IDisposable?>("Binding", typeof(ThemeIcon));
+        AvaloniaProperty.RegisterAttached<Control, IDisposable?>("Binding", typeof(ThemeIcon));
 
     static ThemeIcon()
     {
-        KeyProperty.Changed.AddClassHandler<PathIcon>(OnKeyChanged);
+        KeyProperty.Changed.AddClassHandler<PathIcon>((icon, change) => Bind(icon, PathIcon.DataProperty, change.NewValue as string));
+        KeyProperty.Changed.AddClassHandler<ShapePath>((icon, change) => Bind(icon, ShapePath.DataProperty, change.NewValue as string));
     }
 
-    public static string? GetKey(PathIcon icon) => icon.GetValue(KeyProperty);
+    public static string? GetKey(Control icon) => icon.GetValue(KeyProperty);
 
-    public static void SetKey(PathIcon icon, string? value) => icon.SetValue(KeyProperty, value);
+    public static void SetKey(Control icon, string? value) => icon.SetValue(KeyProperty, value);
 
-    private static void OnKeyChanged(PathIcon icon, AvaloniaPropertyChangedEventArgs change)
+    private static void Bind(Control icon, StyledProperty<Geometry?> property, string? key)
     {
         icon.GetValue(BindingProperty)?.Dispose();
-        icon.SetValue(BindingProperty, change.NewValue is string key
-            ? icon.Bind(PathIcon.DataProperty, icon.GetResourceObservable(key))
+        icon.SetValue(BindingProperty, key is not null
+            ? icon.Bind(property, icon.GetResourceObservable(key))
             : null);
     }
 }

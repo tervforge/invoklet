@@ -32,4 +32,5 @@
   <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Import Project="..\..\build\BundledPlugins.targets" />
 </Project>

@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Invoklet.TemplatedControls"
              xmlns:models="clr-namespace:Invoklet.UserControls.Models"
-             xmlns:conv="clr-namespace:Invoklet.Converters"
              x:Class="Invoklet.UserControls.ConnectionNavigationView"
              x:DataType="models:ConnectionNavigationViewModel">
 
@@ -76,7 +76,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
                                 <Path Width="14" Height="14" Stretch="Uniform" Opacity="0.55"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                      Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyToGeometryConverter.Instance}}"
+                                      controls:ThemeIcon.Key="{Binding IconKey}"
                                       Fill="{DynamicResource Invoklet.Text.PrimaryBrush}"/>
                                 <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                             </StackPanel>

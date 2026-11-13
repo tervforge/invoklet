@@ -95,7 +95,7 @@ public sealed class ThemeDefinitionReader(IReadOnlyDictionary<string, ThemeKey>?
                 continue;
             }
 
-            if (ReadValue(key.Type, value.Value) is { } resource)
+            if (ReadValue(key, value.Value) is { } resource)
                 resources.Add(key.Name, resource);
             else
                 diagnostics.Add(new ThemeDiagnostic(ThemeDiagnosticCode.InvalidValue, id, field, $"Expected a {key.Type} value."));
@@ -109,10 +109,12 @@ public sealed class ThemeDefinitionReader(IReadOnlyDictionary<string, ThemeKey>?
         _ => "metrics",
     };
 
-    private static object? ReadValue(ThemeKeyType type, JsonElement value) => type switch
+    private static object? ReadValue(ThemeKey key, JsonElement value) => key.Type switch
     {
         ThemeKeyType.Color => ReadString(value) is { } color && Color.TryParse(color, out var parsed) ? parsed : null,
-        ThemeKeyType.Double => ReadNumber(value),
+        ThemeKeyType.Double => ReadNumber(value) is { } number
+            && (key.Name.StartsWith("Invoklet.Type.", StringComparison.Ordinal) || key.Name.StartsWith("Invoklet.Size.", StringComparison.Ordinal)
+                ? number >= 1 : number >= 0) ? number : null,
         ThemeKeyType.Thickness => ReadComponents(value) switch
         {
             [var uniform] => new Thickness(uniform),
@@ -132,7 +134,7 @@ public sealed class ThemeDefinitionReader(IReadOnlyDictionary<string, ThemeKey>?
     };
 
     private static double? ReadNumber(JsonElement value) =>
-        value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number) && double.IsFinite(number) ? number : null;
+        value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number) && number is >= 0 and <= 512 ? number : null;
 
     private static double[] ReadComponents(JsonElement value)
     {

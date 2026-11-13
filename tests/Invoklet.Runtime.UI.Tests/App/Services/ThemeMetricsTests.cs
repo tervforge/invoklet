@@ -109,9 +109,11 @@ public sealed class ThemeMetricsTests
         using var service = new ThemeService(app, prefs.Object, [custom, plain]);
         var play = new PathIcon();
         var node = new PathIcon();
+        var fileIcon = new global::Avalonia.Controls.Shapes.Path();
         play[!PathIcon.DataProperty] = new global::Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("Icon.Play");
         ThemeIcon.SetKey(node, "AsmIcon.Type");
-        var window = new Window { Content = new StackPanel { Children = { play, node } } };
+        ThemeIcon.SetKey(fileIcon, "Icon.Play");
+        var window = new Window { Content = new StackPanel { Children = { play, node, fileIcon } } };
         try
         {
             window.Show();
@@ -123,12 +125,14 @@ public sealed class ThemeMetricsTests
             Dispatcher.UIThread.RunJobs();
 
             Assert.Same(custom.Definition!.Resources["Icon.Play"], play.Data);
+            Assert.Same(play.Data, fileIcon.Data);
             Assert.Same(custom.Definition.Resources["AsmIcon.Type"], node.Data);
 
             service.SetInterfaceTheme(plain);
             Dispatcher.UIThread.RunJobs();
 
             Assert.Same(builtInPlay, play.Data);
+            Assert.Same(builtInPlay, fileIcon.Data);
             Assert.Same(builtInNode, node.Data);
             ThemeIcon.SetKey(node, "Icon.Play");
             Assert.Same(builtInPlay, node.Data);

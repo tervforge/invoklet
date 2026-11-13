@@ -51,12 +51,32 @@ public sealed class ThemePluginStartupTests
     }
 
     [AvaloniaFact]
+    public void Startup_InvalidThemeDefinition_ReportsItsFieldInPluginDiagnostics()
+    {
+        using var package = new ThemePackageFixture();
+        package.Write("""{"name":"Missing ID"}""");
+
+        var loaded = package.Load();
+
+        var rejected = Assert.Single(loaded.Session.Rejected);
+        var diagnostic = Assert.Single(rejected.Diagnostics);
+        Assert.Equal(PluginDiagnosticCode.RegistrationFailed, diagnostic.Code);
+        Assert.Equal("id: A theme id is required.", diagnostic.Message);
+    }
+
+    [AvaloniaFact]
     public void Startup_ThemeAddedAfterLoad_AppearsOnlyOnNextStartAndSuppliesAnEditorDefault()
     {
         var app = Application.Current!;
         var previous = app.RequestedThemeVariant;
         using var package = new ThemePackageFixture();
-        var settings = new AppearanceSettings { Mode = ThemeMode.Dark, DarkInterfaceTheme = ThemePackageFixture.Id };
+        var settings = new AppearanceSettings
+        {
+            Mode = ThemeMode.Dark,
+            DarkInterfaceTheme = ThemePackageFixture.Id,
+            DarkEditorTheme = "Dark+",
+            LightEditorTheme = "Light+",
+        };
         var preferences = Preferences(settings);
         try
         {
@@ -66,6 +86,8 @@ public sealed class ThemePluginStartupTests
                 package.Write();
                 Assert.Empty(before.Session.Loaded);
                 Assert.Equal(2, service.InterfaceThemes.Count);
+                Assert.Null(settings.DarkEditorTheme);
+                Assert.Null(settings.LightEditorTheme);
             }
 
             var after = package.Load();
@@ -98,14 +120,14 @@ internal sealed class ThemePackageFixture : IDisposable
     public const string Id = "example.theme.ocean";
     private readonly string _root = Directory.CreateTempSubdirectory("Invoklet-theme-package-").FullName;
 
-    public void Write()
+    public void Write(string? definition = null)
     {
         var package = Directory.CreateDirectory(Path.Combine(_root, Id)).FullName;
         File.WriteAllText(Path.Combine(package, "invoklet-plugin.json"), """
             {"id":"example.theme.ocean","version":"1.0.0","displayName":"Ocean","publisher":"Example",
              "roles":{"theme":1},"assets":{"themes":["ocean.json"]}}
             """);
-        File.WriteAllText(Path.Combine(package, "ocean.json"), """
+        File.WriteAllText(Path.Combine(package, "ocean.json"), definition ?? """
             {"id":"example.theme.ocean","name":"Ocean","extends":"invoklet.theme.midnight",
              "colors":{"Invoklet.Sidebar.BackgroundBrush":"#162B36"},
              "editor":{"default":"ocean-code","themes":{"ocean-code":"code.json","broken":"broken.json"}}}

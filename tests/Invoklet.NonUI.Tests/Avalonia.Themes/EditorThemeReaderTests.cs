@@ -27,6 +27,20 @@ public sealed class EditorThemeReaderTests
     }
 
     [Theory]
+    [InlineData("light")]
+    [InlineData("hcLight")]
+    public void Read_DeclaredLightType_OverridesTheInterfaceMode(string type)
+    {
+        var reader = _fixture.CreateSut();
+        using var asset = _fixture.Asset($$"""{"type":"{{type}}","tokenColors":[]}""");
+
+        var result = reader.Read(asset, "Light", _fixture.Fallback);
+
+        Assert.Null(result.Diagnostic);
+        Assert.False(result.Theme.IsDark);
+    }
+
+    [Theory]
     [InlineData("{")]
     [InlineData("""{"tokenColors":[42]}""")]
     [InlineData("""{"include":"other.json","tokenColors":[]}""")]

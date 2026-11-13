@@ -39,7 +39,7 @@ public class FileTreeViewNode : ReactiveObject
 
     // Resource key (the shared theme icon dictionary) of the Material Design icon for this file's language, if
     // one exists — null falls back to the tree's generic file icon (FileTreeView.axaml resolves the
-    // key to an actual Geometry via ResourceKeyToGeometryConverter). Used to be a
+    // key to an actual Geometry via a dynamic theme resource binding). Used to be a
     // `switch` on MdRunLanguage hardcoded right here in the main UI project — now supplied by
     // FileTreeViewModel.MapToNode, which reads it off the owning ILanguageHostFactory's
     // EditorLanguageProfile.IconResourceKey (same seam as FoldingRegionsProvider), so

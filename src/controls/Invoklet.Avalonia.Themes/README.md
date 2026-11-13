@@ -7,7 +7,8 @@ can supply. To generate the Markdown reference, run this from the repository roo
 dotnet run --file build/GenerateThemeKeyTable.cs
 ```
 
-`ThemeDefinitionReader` reads JSON with a required `id` and `name`. A theme may declare a
+`ThemeDefinitionReader` reads JSON with a required `id` and `name`. Use lowercase,
+dot-separated identifiers such as `example.theme.ocean` for theme package assets. A theme may declare a
 `base` of `dark` or `light` and extend another theme by id. The closest explicit base in the
 inheritance chain wins. The default is dark when the chain has no explicit base.
 

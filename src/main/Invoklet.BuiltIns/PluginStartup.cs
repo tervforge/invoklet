@@ -32,7 +32,7 @@ public static class PluginStartup
             UserDirectory = Path.Combine(UserDataDirectory, "plugins"),
             Inventory = ReadUserInventory(),
             DevelopmentDirectory = developmentDirectory,
-            LoadThemePackages = roleHandlers is not null,
+            LoadThemePackages = roleHandlers?.Any(handler => handler.Role == Invoklet.Plugins.PluginRole.Theme) == true,
             // Machine-local: copies of native libraries are neither roamed nor kept in a temporary folder.
             NativeLibraryCacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Invoklet", "plugin-native"),
         }, roleHandlers ?? [], loggerFactory).Load();

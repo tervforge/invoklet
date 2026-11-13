@@ -35,7 +35,15 @@ public sealed class EditorThemeReader
             var theme = ThemeReader.ReadThemeSync(themeReader);
             var registry = new Registry(new RegistryOptions(ThemeName.DarkPlus));
             registry.SetTheme(theme);
-            return new(new EditorTheme(name, theme, fallback.IsDark), null);
+            var isDark = root.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String
+                ? type.GetString() switch
+                {
+                    "dark" or "hcDark" => true,
+                    "light" or "hcLight" => false,
+                    _ => fallback.IsDark,
+                }
+                : fallback.IsDark;
+            return new(new EditorTheme(name, theme, isDark), null);
         }
         catch (Exception ex) when (ex is JsonException or IOException or FormatException or ArgumentException
             or InvalidOperationException or InvalidCastException or NullReferenceException)

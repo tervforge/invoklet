@@ -14,22 +14,23 @@ internal static class TestInterfaceThemes
 
     public static global::Avalonia.Styling.ThemeVariant GetVariant(string id) => All.Single(theme => theme.Id == id).Variant;
 
-    public static InvokletTheme CreateStyle() => new(Bundled.Value);
+    public static InvokletTheme CreateStyle()
+    {
+        var style = new InvokletTheme();
+        foreach (var theme in Bundled.Value)
+            style.Resources.ThemeDictionaries.Add(theme.Variant, ThemeBuilder.BuildPalette(theme.Definition!));
+        return style;
+    }
 
     private static IReadOnlyList<InterfaceTheme> Load()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Invoklet.sln")))
-            directory = directory.Parent;
-        var root = Path.Combine(directory!.FullName, "build", "plugins");
-        var packages = Directory.GetDirectories(Path.Combine(root, "themes"));
+        var root = Path.Combine(AppContext.BaseDirectory, "plugins");
         var catalog = new ThemeCatalog();
         var session = new PluginLoader(new PluginLoaderOptions
         {
             ApplicationVersion = PluginStartup.ApplicationVersion,
             BundledDirectory = root,
-            BundledCatalog = new BundledPluginCatalog(packages.Select(path =>
-                new BundledPluginEntry(Path.GetFileName(path), "1.0.0", PluginContent.ComputeHash(path)))),
+            BundledCatalog = BundledPluginCatalog.Read(Path.Combine(root, BundledPluginCatalog.FileName)),
             NativeLibraryCacheDirectory = Path.Combine(root, "unused-native-cache"),
         }, [catalog], NullLoggerFactory.Instance).Load();
         if (session.Rejected.Count != 0 || catalog.Interfaces.Count != 6)

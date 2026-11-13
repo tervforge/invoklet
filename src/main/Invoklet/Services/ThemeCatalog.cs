@@ -37,18 +37,18 @@ internal sealed class ThemeCatalog : IThemeCatalog, IPluginRoleHandler
         var definitions = new Dictionary<string, ThemeDefinition>(StringComparer.Ordinal);
         foreach (var asset in ThemePaths(context.Manifest))
         {
-            using var stream = registration.OpenAsset(asset);
+            using var stream = OpenThemeAsset(registration, asset);
             using var text = new StreamReader(stream);
             var result = _reader.Read(text.ReadToEnd());
             if (result.Definition is not { } definition)
-                throw new InvalidDataException(string.Join(" ", result.Diagnostics.Select(item => item.Message)));
+                throw new PluginRegistrationException(string.Join(" ", result.Diagnostics.Select(DescribeDiagnostic)));
             if (!PluginManifestReader.IsValidId(definition.Id) || _definitions.ContainsKey(definition.Id)
                 || BuiltInInterfaceThemes.All.Any(theme => theme.Id == definition.Id)
                 || !definitions.TryAdd(definition.Id, definition))
-                throw new InvalidDataException("The theme id is invalid or already registered.");
+                throw new PluginRegistrationException("The theme id is invalid or already registered.");
 
             foreach (var diagnostic in result.Diagnostics)
-                warnings.Add(Warning(id, diagnostic.IsError ? "An invalid theme value was skipped." : "An unknown theme key was skipped.",
+                warnings.Add(Warning(id, DescribeDiagnostic(diagnostic),
                     $"{definition.Id}: {diagnostic.Field}: {diagnostic.Message}"));
         }
 
@@ -56,7 +56,7 @@ internal sealed class ThemeCatalog : IThemeCatalog, IPluginRoleHandler
         foreach (var definition in definitions.Values)
             if (definition.Extends is { } parent && _owners.TryGetValue(parent, out var owner)
                 && !context.Manifest.DependsOn.Contains(owner, StringComparer.Ordinal))
-                throw new InvalidDataException("The parent theme package must be declared in dependsOn.");
+                throw new PluginRegistrationException("The parent theme package must be declared in dependsOn.");
 
         var interfaces = new List<InterfaceTheme>();
         var editors = new List<EditorTheme>();
@@ -64,7 +64,8 @@ internal sealed class ThemeCatalog : IThemeCatalog, IPluginRoleHandler
         {
             var result = _resolver.Resolve(definition, available);
             if (result.Theme is not { } resolved)
-                throw new InvalidDataException(string.Join(" ", result.Diagnostics.Select(item => item.Message)));
+                throw new PluginRegistrationException(result.Diagnostics[0].Code == ThemeDiagnosticCode.InheritanceCycle
+                    ? "Theme inheritance contains a cycle." : "The parent theme could not be found.");
             var theme = ThemeBuilder.Describe(resolved) with { Source = source };
             interfaces.Add(theme);
 
@@ -119,13 +120,30 @@ internal sealed class ThemeCatalog : IThemeCatalog, IPluginRoleHandler
     {
         if (!manifest.Extra.TryGetValue("assets", out var assets) || assets.ValueKind != JsonValueKind.Object
             || !assets.TryGetProperty("themes", out var themes) || themes.ValueKind != JsonValueKind.Array || themes.GetArrayLength() == 0)
-            throw new InvalidDataException("A theme plugin must list its assets in assets.themes.");
+            throw new PluginRegistrationException("A theme plugin must list its assets in assets.themes.");
 
         foreach (var theme in themes.EnumerateArray())
         {
             if (theme.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(theme.GetString()))
-                throw new InvalidDataException("Each theme asset must be a relative path.");
+                throw new PluginRegistrationException("Each theme asset must be a relative path.");
             yield return theme.GetString()!;
+        }
+    }
+
+    private static string DescribeDiagnostic(ThemeDiagnostic diagnostic) =>
+        diagnostic.Field.Length is > 0 and <= 128 && diagnostic.Field.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_')
+            ? $"{diagnostic.Field}: {diagnostic.Message}"
+            : diagnostic.Message;
+
+    private static Stream OpenThemeAsset(PluginRegistration registration, string asset)
+    {
+        try
+        {
+            return registration.OpenAsset(asset);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            throw new PluginRegistrationException("A theme asset listed in assets.themes could not be read or verified.", ex);
         }
     }
 }

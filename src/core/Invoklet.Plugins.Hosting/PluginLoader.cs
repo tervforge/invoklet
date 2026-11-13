@@ -39,8 +39,8 @@ public sealed class PluginLoader
     {
         ArgumentNullException.ThrowIfNull(discovered);
         var candidates = discovered
-            .Where(plugin => _options.LoadThemePackages || plugin.Manifest is not { Roles.Count: 1 } manifest
-                || !manifest.HasRole(PluginRole.Theme))
+            .Where(plugin => _options.LoadThemePackages || plugin.Manifest is not { } manifest
+                || !manifest.HasRole(PluginRole.Theme) || manifest.Roles.Keys.Any(role => role is not (PluginRole.Theme or PluginRole.Library)))
             .Select(d => new Candidate(d with { Directory = Path.GetFullPath(d.Directory) })).ToList();
 
         RejectUnreadable(candidates);
@@ -219,7 +219,8 @@ public sealed class PluginLoader
             catch (Exception ex)
             {
                 candidate.Reject(PluginDiagnosticCode.RegistrationFailed,
-                    $"'{candidate.Id}' failed to register as a {PluginRoles.Name(role)}.", ex.ToString());
+                    ex is PluginRegistrationException ? ex.Message : $"'{candidate.Id}' failed to register as a {PluginRoles.Name(role)}.",
+                    ex.ToString());
                 return;
             }
         }
