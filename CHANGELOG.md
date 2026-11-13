@@ -28,25 +28,25 @@ Notable changes in each Invoklet release. Downloads are on the
 - Asked for Secret Store access again after an externally changed script is reloaded and saved.
 - Rejected malformed Windows stream paths in Path Store while accepting valid NTFS streams.
 - Cancelled Rename Symbol if the script changes before the edit can be applied.
-- Prioritized C# import fixes over type generation and refreshed analysis after imports.
-- Kept member completion scoped to the receiver, including queries against generated connections.
-- Kept editor suggestions open while dragging their scrollbar.
-- Discarded pending completion results after moving the caret or editing their context.
 - Passed PostgreSQL and SQL Server connection strings to the script at startup without embedding their values in the generated assembly.
 - Passed HTTP and OpenAPI header values and gRPC metadata values through the same startup channel.
 - Kept connection schema refreshes visible and prevented an older read from replacing a newer result after a credential change.
-- Counted distinct diagnostics when deciding whether to show Fix All in the lightbulb menu.
-- Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
-- Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.
-- Rejected stale code actions after a context change and showed when a script change cancelled Fix All.
-- Refreshed lightbulb actions when references or other analysis context changed without an edit.
-- Applied script warning suppression from the start of the script and hid suppression for compiler errors.
 - Rejected new wildcard patterns in Windows Path Store entries while allowing older entries to be repaired.
 - Kept parallel `Util.GetPath` calls from receiving each other's responses and rejected duplicate names in `paths.json`.
 - Kept concurrent secret reads from restoring old values after an update or removal.
 - Scoped unsaved-script secret permissions to one run and required a new permission after external edits.
 - Preserved unrelated files when cleaning up interrupted store writes and rejected duplicate secret names in JSON.
 - Accepted extended Windows paths with forward slashes and rejected invalid Windows path characters.
+- Prioritized C# import fixes over type generation and refreshed analysis after imports.
+- Kept member completion scoped to the receiver, including queries against generated connections.
+- Kept editor suggestions open while dragging their scrollbar.
+- Discarded pending completion results after moving the caret or editing their context.
+- Counted distinct diagnostics when deciding whether to show Fix All in the lightbulb menu.
+- Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
+- Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.
+- Rejected stale code actions after a context change and showed when a script change cancelled Fix All.
+- Refreshed lightbulb actions when references or other analysis context changed without an edit.
+- Applied script warning suppression from the start of the script and hid suppression for compiler errors.
 
 ### Changed
 
