@@ -17,4 +17,5 @@
   <ItemGroup>
     <ProjectReference Include="..\Invoklet.Connectors.EfCore\Invoklet.Connectors.EfCore.csproj" />
   </ItemGroup>
+  <Import Project="../../../build/EfCoreDesign.props" />
 </Project>

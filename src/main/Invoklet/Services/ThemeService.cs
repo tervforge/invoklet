@@ -207,7 +207,7 @@ public sealed class ThemeService : IThemeService, IDisposable
 
     private InterfaceTheme ResolveInterface(string id, bool isDark)
         => InterfaceThemes.FirstOrDefault(t => t.IsDark == isDark && t.Id == id)
-           ?? InterfaceThemes.First(t => t.IsDark == isDark);
+           ?? BuiltInInterfaceThemes.All.First(t => t.IsDark == isDark);
 
     private EditorTheme ResolveEditor(string? id, InterfaceTheme theme)
     {

@@ -22,6 +22,9 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
+- Publish connector plugins for the release runtime and exclude unused EF Core design tools.
+- Show when a saved interface theme is unavailable while keeping it selected in settings.
+
 - Asked for Secret Store access again after an externally changed script is reloaded and saved.
 - Rejected malformed Windows stream paths in Path Store while accepting valid NTFS streams.
 - Cancelled Rename Symbol if the script changes before the edit can be applied.

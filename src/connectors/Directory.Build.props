@@ -1,0 +1,8 @@
+<Project>
+  <Import Project="../../Directory.Build.props" />
+  <PropertyGroup>
+    <!-- Build for the host's RID so publish can reuse the same assemblies and select matching native assets. -->
+    <IsRidAgnostic>false</IsRidAgnostic>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+</Project>

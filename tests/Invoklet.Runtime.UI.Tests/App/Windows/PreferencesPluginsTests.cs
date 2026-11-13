@@ -23,6 +23,30 @@ public sealed class PreferencesPluginsTests
     private readonly PreferencesPluginsFixture _fixture = new();
 
     [AvaloniaFact]
+    public void InterfacePage_ShowsTheMissingSavedThemeAndKeepsItsSelection()
+    {
+        var appearance = new AppearanceSettings { LightInterfaceTheme = "invoklet.theme.vscode-light" };
+        _fixture.Preferences.SetupGet(service => service.Appearance).Returns(appearance);
+        var fallback = BuiltInInterfaceThemes.All.Single(theme => !theme.IsDark);
+        _fixture.Theme.SetupGet(service => service.CurrentTheme).Returns(new ActiveTheme(
+            fallback, new EditorTheme("Light+", ThemeName.Light, false)));
+        using var model = new PreferencesWindowViewModel(_fixture.Theme.Object, _fixture.Preferences.Object, new LanguageHostRegistry());
+        var window = new PreferencesWindow(model);
+        window.Show();
+        try
+        {
+            model.SelectedNode = model.Nodes.Single(node => node.Id == "interface");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), block => block.IsEffectivelyVisible
+                && block.Text is { } message && message.Contains("invoklet.theme.vscode-light", StringComparison.Ordinal)
+                && message.Contains(fallback.DisplayName, StringComparison.Ordinal));
+            Assert.Equal("invoklet.theme.vscode-light", appearance.LightInterfaceTheme);
+            _fixture.Theme.Verify(service => service.SetInterfaceTheme(It.IsAny<InterfaceTheme>()), Times.Never);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void InstallConfirmation_ConnectorShowsPublisherAndExecutionPermissions()
     {
         var manifest = PluginManifestReader.Read("""

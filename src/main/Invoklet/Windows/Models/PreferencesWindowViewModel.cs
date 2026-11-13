@@ -311,6 +311,8 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
 
         _selectedInterfaceTheme = theme.Interface;
         this.RaisePropertyChanged(nameof(SelectedInterfaceTheme));
+        this.RaisePropertyChanged(nameof(MissingInterfaceThemeMessage));
+        this.RaisePropertyChanged(nameof(HasMissingInterfaceTheme));
         _selectedEditorTheme = theme.Editor;
         this.RaisePropertyChanged(nameof(SelectedEditorTheme));
     }
@@ -336,6 +338,19 @@ public class PreferencesWindowViewModel : ViewModelBase, IDisposable
     public bool IsLightMode { get => SelectedMode == ThemeMode.Light; set { if (value) SelectedMode = ThemeMode.Light; } }
 
     // ── Interface theme ───────────────────────────────────────────────────────
+
+    public string? MissingInterfaceThemeMessage
+    {
+        get
+        {
+            var active = _themeService.CurrentTheme.Interface;
+            var saved = active.IsDark ? _prefs.Appearance?.DarkInterfaceTheme : _prefs.Appearance?.LightInterfaceTheme;
+            if (string.IsNullOrWhiteSpace(saved) || saved == active.Id) return null;
+            return $"The saved theme '{saved}' is not installed or is disabled. Invoklet is using {active.DisplayName}. Manage themes under Plugins.";
+        }
+    }
+
+    public bool HasMissingInterfaceTheme => MissingInterfaceThemeMessage is not null;
 
     public InterfaceTheme? SelectedInterfaceTheme
     {

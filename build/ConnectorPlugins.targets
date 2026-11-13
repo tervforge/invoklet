@@ -1,4 +1,7 @@
 <Project>
+  <PropertyGroup>
+    <_ConnectorHostProperties>OutDir;OutputPath;PublishDir;SelfContained;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun</_ConnectorHostProperties>
+  </PropertyGroup>
   <ItemGroup>
     <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.EfCore/Invoklet.Connectors.EfCore.csproj"
                               PluginPath="library/invoklet.connector.efcore" />
@@ -15,7 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="@(InvokletConnectorProject)" ReferenceOutputAssembly="false"
-                      Private="false" GlobalPropertiesToRemove="OutDir;OutputPath;PublishDir;RuntimeIdentifier;SelfContained;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun"
+                      Private="false" GlobalPropertiesToRemove="$(_ConnectorHostProperties)"
                       Condition="'$(InvokletConnectorBuildReferences)' != 'false'" />
   </ItemGroup>
   <Target Name="StageConnectorPluginSources">
@@ -27,7 +30,7 @@
     <RemoveDir Directories="$(_ConnectorSourceDirectory)"
                Condition="Exists('$(_ConnectorSourceDirectory)')" />
     <MSBuild Projects="@(InvokletConnectorProject)" Targets="Publish"
-             RemoveProperties="OutDir;OutputPath;RuntimeIdentifier;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun"
-             Properties="PublishDir=$(_ConnectorSourceDirectory)/%(InvokletConnectorProject.PluginPath)/;NoBuild=true;SelfContained=false;InvokletConnectorPackage=%(InvokletConnectorProject.Filename)" />
+             RemoveProperties="OutDir;OutputPath;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun"
+             Properties="PublishDir=$(_ConnectorSourceDirectory)/%(InvokletConnectorProject.PluginPath)/;NoBuild=true;RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=false;InvokletConnectorPackage=%(InvokletConnectorProject.Filename)" />
   </Target>
 </Project>

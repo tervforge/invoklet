@@ -132,6 +132,8 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
+                    <TextBlock IsVisible="{Binding HasMissingInterfaceTheme}"
+                               Text="{Binding MissingInterfaceThemeMessage}" TextWrapping="Wrap"/>
 
                     <!-- Editor theme -->
                     <TextBlock Text="Editor theme:" Margin="0,8,0,2" FontWeight="SemiBold"/>
