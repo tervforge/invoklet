@@ -12,6 +12,7 @@ using Invoklet.Services;
 using Invoklet.Services.Preferences;
 using Invoklet.Windows;
 using Invoklet.Windows.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using TextMateSharp.Grammars;
 using Xunit;
@@ -230,6 +231,126 @@ public sealed class PreferencesPluginsTests
         }
         finally { if (window.IsVisible) window.Close(); }
     }
+    [AvaloniaFact]
+    public async Task PluginsPage_InstallPackage_ChangesNothingUntilApprovedAndThenWaitsForRestart()
+    {
+        using var packages = new PluginPackageFolderFixture();
+        var source = packages.WriteTheme(PluginPackageFolderFixture.Parent);
+        var page = packages.CreatePage(packages.Load());
+        var confirm = new Mock<Func<PluginManifest, Task<bool>>>();
+        confirm.SetupSequence(ask => ask(It.IsAny<PluginManifest>())).ReturnsAsync(false).ReturnsAsync(true);
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            await page.InstallAsync(source, archive: false, confirm.Object);
+            Assert.Empty(packages.Store.Read().Entries);
+            Assert.False(page.HasPendingRestart);
+
+            await page.InstallAsync(source, archive: false, confirm.Object);
+            Dispatcher.UIThread.RunJobs();
+
+            var text = PreferencesPluginsFixture.PageText(window);
+            Assert.Contains("Pending restart", text);
+            Assert.Contains("Will be enabled.", text);
+            Assert.True(window.FindControl<Button>("RestartForPluginsButton")!.IsEffectivelyVisible);
+            Assert.Equal(PluginContent.ComputeHash(source), Assert.Single(packages.Store.Read().Entries).ContentHash);
+            confirm.Verify(ask => ask(It.Is<PluginManifest>(manifest => manifest.Id == PluginPackageFolderFixture.Parent)), Times.Exactly(2));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task PluginsPage_CorruptedArchive_ShowsAnErrorWithoutAskingOrRevealingThePath()
+    {
+        using var packages = new PluginPackageFolderFixture();
+        var archive = packages.WriteFile("broken.invplugin", "not an archive");
+        var page = packages.CreatePage(PluginSession.Empty);
+        var confirm = new Mock<Func<PluginManifest, Task<bool>>>();
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            await page.InstallAsync(archive, archive: true, confirm.Object);
+            Dispatcher.UIThread.RunJobs();
+
+            var text = PreferencesPluginsFixture.PageText(window);
+            Assert.Contains(text, line => line?.StartsWith("Could not update the plugin package.", StringComparison.Ordinal) == true);
+            Assert.DoesNotContain(text, line => line?.Contains(packages.Root, StringComparison.Ordinal) == true);
+            Assert.Empty(packages.Store.Read().Entries);
+            confirm.Verify(ask => ask(It.IsAny<PluginManifest>()), Times.Never);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task PluginsPage_RemoveWithAnInstalledDependant_IsBlockedAndNamesTheDependant()
+    {
+        using var packages = new PluginPackageFolderFixture();
+        packages.Install(PluginPackageFolderFixture.Parent);
+        packages.Install(PluginPackageFolderFixture.Child, dependsOn: PluginPackageFolderFixture.Parent);
+        var session = packages.Load();
+        var page = packages.CreatePage(session);
+        var confirm = new Mock<Func<Task<bool>>>();
+        confirm.Setup(ask => ask()).ReturnsAsync(true);
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            Assert.Equal(2, session.Loaded.Count);
+            await page.RemoveAsync(Row(PluginPackageFolderFixture.Parent), confirm.Object);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Contains("Remove the plugins that depend on it first: Reef.", PreferencesPluginsFixture.PageText(window));
+            Assert.Equal(2, packages.Store.Read().Entries.Count);
+            Assert.False(page.HasPendingRestart);
+
+            await page.RemoveAsync(Row(PluginPackageFolderFixture.Child), confirm.Object);
+            await page.RemoveAsync(Row(PluginPackageFolderFixture.Parent), confirm.Object);
+
+            Assert.Empty(packages.Store.Read().Entries);
+            Assert.True(page.HasPendingRestart);
+            Assert.Equal(2, session.Loaded.Count);
+            confirm.Verify(ask => ask(), Times.Exactly(3));
+        }
+        finally { window.Close(); }
+
+        PluginStatusRow Row(string id) => page.Rows.Single(row => row.Id == id && row.Status == "Loaded");
+    }
+
+    [AvaloniaFact]
+    public async Task PluginsPage_ChangedPackageContents_ShowsContentChangedAndIsApprovedAgainByReinstalling()
+    {
+        using var packages = new PluginPackageFolderFixture();
+        var source = packages.Install(PluginPackageFolderFixture.Parent);
+        packages.ChangeInstalled(PluginPackageFolderFixture.Parent);
+        var page = packages.CreatePage(packages.Load());
+        var remove = new Mock<Func<Task<bool>>>();
+        remove.Setup(ask => ask()).ReturnsAsync(true);
+        var install = new Mock<Func<PluginManifest, Task<bool>>>();
+        install.Setup(ask => ask(It.IsAny<PluginManifest>())).ReturnsAsync(true);
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            var text = PreferencesPluginsFixture.PageText(window);
+            Assert.Contains("Content changed", text);
+            Assert.Contains("Remove the plugin and install its package again to approve the new contents.", text);
+            Assert.DoesNotContain(text, line => line?.Contains(packages.Root, StringComparison.Ordinal) == true);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), button => button.IsEffectivelyVisible && Equals(button.Content, "Remove"));
+
+            await page.RemoveAsync(page.Rows.Single(row => row.Status == "Content changed"), remove.Object);
+            await page.InstallAsync(source, archive: false, install.Object);
+
+            Assert.Equal(PluginContent.ComputeHash(source), Assert.Single(packages.Store.Read().Entries).ContentHash);
+            Assert.Single(packages.Load().Loaded);
+        }
+        finally { window.Close(); }
+    }
 }
 
 /// <summary>The Preferences window with the services its view model needs mocked; the Plugins page model is the test's own.</summary>
@@ -266,4 +387,63 @@ public sealed class PreferencesPluginsFixture
 
     public static string?[] PageText(PreferencesWindow window) =>
         window.FindControl<StackPanel>("PluginsSettingsPage")!.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
+}
+
+/// <summary>A temporary user plugin folder and inventory with theme packages written, installed and loaded through the real installer and loader.</summary>
+public sealed class PluginPackageFolderFixture : IDisposable
+{
+    public const string Parent = "example.theme.ocean";
+    public const string Child = "example.theme.reef";
+
+    public string Root { get; } = Directory.CreateTempSubdirectory("Invoklet-plugins-page-").FullName;
+    public PluginInventoryStore Store => new(Path.Combine(Root, PluginInventory.FileName));
+    private string UserDirectory => Path.Combine(Root, "plugins");
+    private PluginPackageInstaller Installer => new(UserDirectory, Store, BundledPluginCatalog.Empty);
+
+    public string WriteTheme(string id, string? dependsOn = null)
+    {
+        var name = id == Parent ? "Ocean" : "Reef";
+        var package = Directory.CreateDirectory(Path.Combine(Root, "source", id)).FullName;
+        var dependency = dependsOn is null ? "" : $$""","dependsOn":["{{dependsOn}}"]""";
+        File.WriteAllText(Path.Combine(package, PluginContracts.ManifestFileName), $$"""
+            {"id":"{{id}}","version":"1.0.0","displayName":"{{name}}","roles":{"theme":1},"assets":{"themes":["theme.json"]}{{dependency}}}
+            """);
+        File.WriteAllText(Path.Combine(package, "theme.json"), $$"""
+            {"id":"{{id}}","name":"{{name}}","extends":"{{dependsOn ?? "invoklet.theme.midnight"}}"}
+            """);
+        return package;
+    }
+
+    public string WriteFile(string name, string contents)
+    {
+        var path = Path.Combine(Root, name);
+        File.WriteAllText(path, contents);
+        return path;
+    }
+
+    public string Install(string id, string? dependsOn = null)
+    {
+        var source = WriteTheme(id, dependsOn);
+        var installer = Installer;
+        using var package = installer.Prepare(source);
+        installer.Install(package);
+        return source;
+    }
+
+    public void ChangeInstalled(string id) =>
+        File.AppendAllText(Path.Combine(UserDirectory, id, "1.0.0", "theme.json"), " ");
+
+    public PluginSession Load() => new PluginLoader(new PluginLoaderOptions
+    {
+        ApplicationVersion = new Version(1, 0),
+        UserDirectory = UserDirectory,
+        Inventory = Store.Read(),
+        NativeLibraryCacheDirectory = Path.Combine(Root, "native"),
+    }, [new ThemeCatalog()], NullLoggerFactory.Instance).Load();
+
+    public PluginsPageViewModel CreatePage(PluginSession session) => new(session, Store.Read, () => Task.CompletedTask,
+        setEnabled: (id, enabled) => Store.SetEnabled(id, enabled, BundledPluginCatalog.Empty, session: session, userDirectory: UserDirectory),
+        createInstaller: () => Installer);
+
+    public void Dispose() => Directory.Delete(Root, recursive: true);
 }

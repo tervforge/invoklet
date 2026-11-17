@@ -8,7 +8,14 @@ public sealed class Plugin : IConnectionPlugin
 {
     public PluginDescriptor Descriptor { get; } = new("example.connector.http", "1.0.0");
 
-    public void Register(ConnectionPluginContext context) => context.RegisterDriver(new SampleDriver());
+    /// <summary>An <see cref="AppContext"/> key a test may set to a file path; registration writes that file.</summary>
+    public const string RegisterMarkerKey = "SampleHttpConnector.RegisterMarker";
+
+    public void Register(ConnectionPluginContext context)
+    {
+        if (AppContext.GetData(RegisterMarkerKey) is string marker) File.WriteAllText(marker, Descriptor.Id);
+        context.RegisterDriver(new SampleDriver());
+    }
 }
 
 internal sealed class SampleDriver : IConnectionDriver, ICSharpClientSource

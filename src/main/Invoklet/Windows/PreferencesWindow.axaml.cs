@@ -53,40 +53,17 @@ public partial class PreferencesWindow : Window
 
     private async Task InstallPluginAsync(Func<Task<string?>> pickPath, bool archive)
     {
-        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model) return;
-        var page = model.PluginsPage;
-        try
-        {
-            if (await pickPath() is not { } path) return;
-            var installer = page.CreateInstaller();
-            using var package = await Task.Run(() => archive ? installer.PrepareArchive(path) : installer.Prepare(path));
-            if (!await PluginPackageConfirmationDialog.ForInstall(package.Manifest, path).ShowDialog<bool>(this)) return;
-            await Task.Run(() => installer.Install(package));
-            page.PackageChanged();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or ArgumentException)
-        {
-            page.ReportPackageError();
-        }
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model
+            || await pickPath() is not { } path) return;
+        await model.PluginsPage.InstallAsync(path, archive,
+            manifest => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
     }
 
     private async void RemovePlugin_Click(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model
-            || sender is not Button { DataContext: PluginStatusRow { CanRemove: true } row }) return;
-        var page = model.PluginsPage;
-        try
-        {
-            if (!await new PluginPackageConfirmationDialog("Remove plugin?",
-                $"Remove {row.Name}? The change will take effect after restarting Invoklet.", "Remove").ShowDialog<bool>(this)) return;
-            var installer = page.CreateInstaller();
-            await Task.Run(() => installer.Remove(row.Id));
-            page.PackageChanged();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
-        {
-            page.ReportPackageError();
-        }
+        if (DataContext is PreferencesWindowViewModel model && sender is Button { DataContext: PluginStatusRow row })
+            await model.PluginsPage.RemoveAsync(row, () => new PluginPackageConfirmationDialog("Remove plugin?",
+                $"Remove {row.Name}? The change will take effect after restarting Invoklet.", "Remove").ShowDialog<bool>(this));
     }
 
     private async void RestartForPlugins_Click(object? sender, RoutedEventArgs e)

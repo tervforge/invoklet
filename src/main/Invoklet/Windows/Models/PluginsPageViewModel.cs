@@ -33,17 +33,49 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
     public bool IsEmpty => Rows.Count == 0 && Diagnostics.Count == 0;
     public bool CanInstall => createInstaller is not null;
 
-    internal PluginPackageInstaller CreateInstaller() => createInstaller!();
-
-    internal void ReportPackageError()
+    /// <summary>Reviews a package folder or archive, asks <paramref name="confirm"/> to approve it and installs it for the next start.</summary>
+    internal async Task InstallAsync(string path, bool archive, Func<PluginManifest, Task<bool>> confirm)
     {
-        _writeError = "Could not update the plugin package. Check its manifest, ID and version, then try again.";
-        Refresh();
+        if (createInstaller is null) return;
+        try
+        {
+            var installer = createInstaller();
+            using var package = await Task.Run(() => archive ? installer.PrepareArchive(path) : installer.Prepare(path));
+            if (!await confirm(package.Manifest)) return;
+            await Task.Run(() => installer.Install(package));
+            PackageChanged(null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or ArgumentException)
+        {
+            PackageChanged(PackageError);
+        }
     }
 
-    internal void PackageChanged()
+    internal async Task RemoveAsync(PluginStatusRow row, Func<Task<bool>> confirm)
     {
-        _writeError = null;
+        if (createInstaller is null || !row.CanRemove || !Rows.Contains(row)) return;
+        try
+        {
+            if (!await confirm()) return;
+            var installer = createInstaller();
+            await Task.Run(() => installer.Remove(row.Id));
+            PackageChanged(null);
+        }
+        catch (PluginRegistrationException ex)
+        {
+            PackageChanged(ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            PackageChanged(PackageError);
+        }
+    }
+
+    private const string PackageError = "Could not update the plugin package. Check its manifest, ID and version, then try again.";
+
+    private void PackageChanged(string? error)
+    {
+        _writeError = error;
         Refresh();
     }
 
@@ -71,7 +103,7 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
     {
         var rows = session.Loaded.Select(plugin => CurrentRow(plugin.Id, plugin.Manifest, plugin.Trust, "Loaded", plugin.Diagnostics))
             .Concat(session.Rejected.Select(plugin => CurrentRow(plugin.Id, plugin.Manifest, plugin.Trust,
-                plugin.Diagnostics.Any(item => item.Code == PluginDiagnosticCode.PluginDisabled) ? "Disabled" : "Rejected", plugin.Diagnostics)))
+                RejectedStatus(plugin.Diagnostics), plugin.Diagnostics)))
             .ToList();
         var rowDiagnostics = session.Loaded.SelectMany(plugin => plugin.Diagnostics)
             .Concat(session.Rejected.SelectMany(plugin => plugin.Diagnostics)).ToHashSet();
@@ -138,10 +170,23 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
 
     public Task RestartAsync() => HasPendingRestart ? restart() : Task.CompletedTask;
 
+    private static string RejectedStatus(IReadOnlyList<PluginDiagnostic> diagnostics) =>
+        diagnostics.Any(item => item.Code == PluginDiagnosticCode.PluginDisabled) ? "Disabled"
+        : diagnostics.Any(item => item.Code == PluginDiagnosticCode.PluginContentChanged) ? ContentChanged
+        : "Rejected";
+
+    private const string ContentChanged = "Content changed";
+
     private static PluginStatusRow CurrentRow(string id, PluginManifest? manifest, PluginTrust trust, string status,
-        IReadOnlyList<PluginDiagnostic> diagnostics) =>
-        new(manifest?.DisplayName ?? id, id, manifest?.Version,
+        IReadOnlyList<PluginDiagnostic> diagnostics)
+    {
+        var messages = diagnostics.Select(diagnostic => diagnostic.Message).Distinct(StringComparer.Ordinal);
+        // Approval covers the exact package bytes, so changed contents are approved again by reinstalling the package.
+        if (status == ContentChanged && trust == PluginTrust.Trusted)
+            messages = messages.Append("Remove the plugin and install its package again to approve the new contents.");
+        return new(manifest?.DisplayName ?? id, id, manifest?.Version,
             manifest is null ? "" : string.Join(", ", manifest.Roles.Keys.Select(PluginRoles.Name).Order(StringComparer.Ordinal)),
-            trust.ToString(), status, diagnostics.Select(diagnostic => diagnostic.Message).Distinct(StringComparer.Ordinal).ToArray())
+            trust.ToString(), status, messages.ToArray())
         { IsContentVerified = status == "Loaded" && trust is PluginTrust.Bundled or PluginTrust.Trusted };
+    }
 }

@@ -46,6 +46,27 @@ public sealed class ConnectorPluginLoadingTests
     }
 
     [Fact]
+    public void Installer_ApprovedConnector_RunsNoPluginCodeUntilTheNextStart()
+    {
+        using var package = new SampleConnectorPackage();
+        var marker = Path.Combine(package.UserDirectory + "-marker", "registered");
+        Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+        var installer = new PluginPackageInstaller(package.UserDirectory, package.Inventory, BundledPluginCatalog.Empty);
+        AppContext.SetData("SampleHttpConnector.RegisterMarker", marker);
+        try
+        {
+            using (var prepared = installer.PrepareArchive(package.CreateSource(".invplugin")))
+                installer.Install(prepared);
+            Assert.False(File.Exists(marker));
+
+            Load(new ConnectionDriverRegistry(), package.Inventory.Read(), package.UserDirectory);
+
+            Assert.True(File.Exists(marker));
+        }
+        finally { AppContext.SetData("SampleHttpConnector.RegisterMarker", null); }
+    }
+
+    [Fact]
     public void UserConnector_RegistersOnlyAfterContentApproval()
     {
         const string id = "example.connector.http";
