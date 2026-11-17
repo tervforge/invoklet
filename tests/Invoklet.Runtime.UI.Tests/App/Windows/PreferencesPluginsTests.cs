@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
@@ -237,6 +238,7 @@ public sealed class PreferencesPluginsTests
     {
         using var packages = new PluginPackageFolderFixture();
         var source = packages.WriteTheme(PluginPackageFolderFixture.Parent);
+        var package = PluginPackageFolderFixture.Pack(source);
         var page = packages.CreatePage(packages.Load());
         var confirm = new Mock<Func<PluginManifest, Task<bool>>>();
         confirm.SetupSequence(ask => ask(It.IsAny<PluginManifest>())).ReturnsAsync(false).ReturnsAsync(true);
@@ -245,11 +247,11 @@ public sealed class PreferencesPluginsTests
         try
         {
             PreferencesPluginsFixture.ShowPlugins(window);
-            await page.InstallAsync(source, archive: false, confirm.Object);
+            await page.InstallAsync(package, confirm.Object);
             Assert.Empty(packages.Store.Read().Entries);
             Assert.False(page.HasPendingRestart);
 
-            await page.InstallAsync(source, archive: false, confirm.Object);
+            await page.InstallAsync(package, confirm.Object);
             Dispatcher.UIThread.RunJobs();
 
             var text = PreferencesPluginsFixture.PageText(window);
@@ -266,7 +268,7 @@ public sealed class PreferencesPluginsTests
     public async Task PluginsPage_CorruptedArchive_ShowsAnErrorWithoutAskingOrRevealingThePath()
     {
         using var packages = new PluginPackageFolderFixture();
-        var archive = packages.WriteFile("broken.invplugin", "not an archive");
+        var archive = packages.WriteFile("broken.nupkg", "not an archive");
         var page = packages.CreatePage(PluginSession.Empty);
         var confirm = new Mock<Func<PluginManifest, Task<bool>>>();
         var window = _fixture.CreateSut(page);
@@ -274,7 +276,7 @@ public sealed class PreferencesPluginsTests
         try
         {
             PreferencesPluginsFixture.ShowPlugins(window);
-            await page.InstallAsync(archive, archive: true, confirm.Object);
+            await page.InstallAsync(archive, confirm.Object);
             Dispatcher.UIThread.RunJobs();
 
             var text = PreferencesPluginsFixture.PageText(window);
@@ -345,7 +347,7 @@ public sealed class PreferencesPluginsTests
             Assert.Contains(window.GetVisualDescendants().OfType<Button>(), button => button.IsEffectivelyVisible && Equals(button.Content, "Remove"));
 
             await page.RemoveAsync(page.Rows.Single(row => row.Status == "Content changed"), remove.Object);
-            await page.InstallAsync(source, archive: false, install.Object);
+            await page.InstallAsync(PluginPackageFolderFixture.Pack(source), install.Object);
 
             Assert.Equal(PluginContent.ComputeHash(source), Assert.Single(packages.Store.Read().Entries).ContentHash);
             Assert.Single(packages.Load().Loaded);
@@ -426,9 +428,20 @@ public sealed class PluginPackageFolderFixture : IDisposable
     {
         var source = WriteTheme(id, dependsOn);
         var installer = Installer;
-        using var package = installer.Prepare(source);
+        using var package = installer.PrepareArchive(Pack(source));
         installer.Install(package);
         return source;
+    }
+
+    /// <summary>Packs a package folder as a NuGet package with its files under <c>plugin/</c>, beside the folder.</summary>
+    public static string Pack(string source)
+    {
+        var path = source + ".nupkg";
+        File.Delete(path);
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
+        foreach (var file in Directory.EnumerateFiles(source))
+            archive.CreateEntryFromFile(file, "plugin/" + Path.GetFileName(file));
+        return path;
     }
 
     public void ChangeInstalled(string id) =>

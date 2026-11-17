@@ -33,7 +33,7 @@ public sealed class ThemePluginStartupTests
         var temp = Directory.CreateTempSubdirectory("Invoklet-theme-archive-").FullName;
         try
         {
-            var archivePath = Path.Combine(temp, "invalid.invplugin");
+            var archivePath = Path.Combine(temp, "invalid.nupkg");
             using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
             using (var writer = new StreamWriter(archive.CreateEntry("../outside.txt").Open()))
                 writer.Write("outside the package");
@@ -55,7 +55,7 @@ public sealed class ThemePluginStartupTests
         var temp = Directory.CreateTempSubdirectory("Invoklet-archive-size");
         try
         {
-            var path = Path.Combine(temp.FullName, "invalid.invplugin");
+            var path = Path.Combine(temp.FullName, "invalid.nupkg");
             using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
             using (var entry = archive.CreateEntry("payload.txt").Open())
                 entry.Write(new byte[4096]);
@@ -76,11 +76,8 @@ public sealed class ThemePluginStartupTests
         finally { temp.Delete(recursive: true); }
     }
 
-    [AvaloniaTheory]
-    [InlineData(null)]
-    [InlineData(".invplugin")]
-    [InlineData(".nupkg")]
-    public void Startup_ThemeInstalledFromPreferences_AppliesApprovalToggleAndRemovalOnNextStart(string? extension)
+    [AvaloniaFact]
+    public void Startup_ThemeInstalledFromPreferences_AppliesApprovalToggleAndRemovalOnNextStart()
     {
         using var source = new ThemePackageFixture();
         source.Write();
@@ -90,15 +87,13 @@ public sealed class ThemePluginStartupTests
             var user = Path.Combine(temp, "plugins");
             var store = new PluginInventoryStore(Path.Combine(temp, PluginInventory.FileName));
             var installer = new PluginPackageInstaller(user, store, BundledPluginCatalog.Empty);
-            var archive = Path.Combine(temp, "ocean" + extension);
-            if (extension == ".nupkg")
+            var archive = Path.Combine(temp, "ocean.nupkg");
+            using (var packageArchive = ZipFile.Open(archive, ZipArchiveMode.Create))
             {
-                using var packageArchive = ZipFile.Open(archive, ZipArchiveMode.Create);
                 foreach (var file in Directory.EnumerateFiles(source.PackageDirectory))
                     packageArchive.CreateEntryFromFile(file, "plugin/" + Path.GetFileName(file));
                 packageArchive.CreateEntry("example.theme.ocean.nuspec");
             }
-            else if (extension is not null) ZipFile.CreateFromDirectory(source.PackageDirectory, archive);
 
             var initial = Load();
             using (var cancelled = Prepare())
@@ -107,12 +102,9 @@ public sealed class ThemePluginStartupTests
             Assert.False(Directory.Exists(user));
             Assert.Empty(Directory.EnumerateDirectories(temp, ".plugin-install-*"));
 
-            if (extension == ".nupkg")
-            {
-                var previousBundle = new BundledPluginCatalog(
-                    [new BundledPluginEntry(ThemePackageFixture.Id, "1.0.0", new string('a', 64))]);
-                store.SetEnabled(ThemePackageFixture.Id, false, previousBundle);
-            }
+            var previousBundle = new BundledPluginCatalog(
+                [new BundledPluginEntry(ThemePackageFixture.Id, "1.0.0", new string('a', 64))]);
+            store.SetEnabled(ThemePackageFixture.Id, false, previousBundle);
 
             using var package = Prepare();
             installer.Install(package);
@@ -141,7 +133,7 @@ public sealed class ThemePluginStartupTests
             Assert.Empty(removed.Session.Rejected);
             Assert.DoesNotContain(removed.Catalog.Interfaces, theme => theme.Id == ThemePackageFixture.Id);
 
-            PreparedPluginPackage Prepare() => extension is null ? installer.Prepare(source.PackageDirectory) : installer.PrepareArchive(archive);
+            PreparedPluginPackage Prepare() => installer.PrepareArchive(archive);
 
             (ThemeCatalog Catalog, PluginSession Session) Load()
             {

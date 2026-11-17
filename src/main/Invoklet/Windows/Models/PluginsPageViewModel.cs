@@ -33,14 +33,14 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
     public bool IsEmpty => Rows.Count == 0 && Diagnostics.Count == 0;
     public bool CanInstall => createInstaller is not null;
 
-    /// <summary>Reviews a package folder or archive, asks <paramref name="confirm"/> to approve it and installs it for the next start.</summary>
-    internal async Task InstallAsync(string path, bool archive, Func<PluginManifest, Task<bool>> confirm)
+    /// <summary>Reviews a NuGet plugin package, asks <paramref name="confirm"/> to approve it and installs it for the next start.</summary>
+    internal async Task InstallAsync(string path, Func<PluginManifest, Task<bool>> confirm)
     {
         if (createInstaller is null) return;
         try
         {
             var installer = createInstaller();
-            using var package = await Task.Run(() => archive ? installer.PrepareArchive(path) : installer.Prepare(path));
+            using var package = await Task.Run(() => installer.PrepareArchive(path));
             if (!await confirm(package.Manifest)) return;
             await Task.Run(() => installer.Install(package));
             PackageChanged(null);

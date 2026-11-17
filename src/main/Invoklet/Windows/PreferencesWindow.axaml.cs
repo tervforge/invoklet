@@ -34,35 +34,25 @@ public partial class PreferencesWindow : Window
             viewModel.PluginsPage.Toggle(row);
     }
 
-    private async void InstallPluginFolder_Click(object? sender, RoutedEventArgs e)
-    {
-        await InstallPluginAsync(async () => (await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select a plugin package folder",
-        })).FirstOrDefault()?.TryGetLocalPath(), archive: false);
-    }
-
-    private async void InstallPluginArchive_Click(object? sender, RoutedEventArgs e)
-    {
-        await InstallPluginAsync(async () => (await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Select a plugin package archive",
-            FileTypeFilter = [new FilePickerFileType("Plugin packages") { Patterns = ["*.nupkg", "*.invplugin", "*.zip"] }],
-        })).FirstOrDefault()?.TryGetLocalPath(), archive: true);
-    }
-
-    private async Task InstallPluginAsync(Func<Task<string?>> pickPath, bool archive)
+    private async void InstallPlugin_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model) return;
         string? path;
-        try { path = await pickPath(); }
+        try
+        {
+            path = (await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Select a plugin package",
+                FileTypeFilter = [new FilePickerFileType("NuGet plugin packages") { Patterns = ["*.nupkg"] }],
+            })).FirstOrDefault()?.TryGetLocalPath();
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
             model.PluginsPage.ReportPackageError();
             return;
         }
         if (path is null) return;
-        await model.PluginsPage.InstallAsync(path, archive,
+        await model.PluginsPage.InstallAsync(path,
             manifest => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
     }
 

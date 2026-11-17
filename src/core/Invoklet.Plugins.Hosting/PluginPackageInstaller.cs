@@ -8,32 +8,27 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
     public const string InstalledSource = "preferences";
     private const long MaxArchiveBytes = 64L * 1024 * 1024;
 
+    /// <summary>Extracts a NuGet package and prepares its <c>plugin/</c> folder for review.</summary>
     public PreparedPluginPackage PrepareArchive(string path)
     {
+        if (!string.Equals(Path.GetExtension(path), ".nupkg", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Choose a NuGet package (.nupkg).");
         using var archive = ZipFile.OpenRead(path);
         if (archive.Entries.Count > 2048 || archive.Entries.Sum(entry => (decimal)entry.Length) > MaxArchiveBytes
             || archive.Entries.Any(entry => ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000))
             throw new InvalidDataException("The archive exceeds the plugin package limits or contains a link.");
         var staging = CreateStaging();
-        var isNuGetPackage = string.Equals(Path.GetExtension(path), ".nupkg", StringComparison.OrdinalIgnoreCase);
-        var keepStaging = false;
         try
         {
             ExtractArchive(archive, staging);
-            if (isNuGetPackage)
-            {
-                var payload = Path.Combine(staging, "plugin");
-                if (!Directory.Exists(payload))
-                    throw new InvalidDataException("The NuGet package has no plugin folder.");
-                return Prepare(payload);
-            }
-            var package = ReadPreparedPackage(staging, PluginContent.ComputeHash(staging));
-            keepStaging = true;
-            return package;
+            var payload = Path.Combine(staging, "plugin");
+            if (!Directory.Exists(payload))
+                throw new InvalidDataException("The NuGet package has no plugin folder.");
+            return Prepare(payload);
         }
         finally
         {
-            if (!keepStaging) Directory.Delete(staging, recursive: true);
+            Directory.Delete(staging, recursive: true);
         }
     }
 
@@ -75,7 +70,7 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
         }
     }
 
-    public PreparedPluginPackage Prepare(string source)
+    private PreparedPluginPackage Prepare(string source)
     {
         // Hashing also rejects links throughout the source tree.
         var sourceHash = PluginContent.ComputeHash(source);

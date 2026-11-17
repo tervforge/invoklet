@@ -247,11 +247,10 @@
                 </ItemsControl>
 
                 <StackPanel x:Name="PluginsSettingsPage" Tag="plugins" IsVisible="{Binding IsPluginsSelected}" Spacing="10">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                         <TextBlock Classes="settings-heading" Text="Plugins" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Content="Install folder…" IsVisible="{Binding PluginsPage.CanInstall}" Click="InstallPluginFolder_Click"/>
-                        <Button Grid.Column="2" Content="Install archive…" IsVisible="{Binding PluginsPage.CanInstall}" Click="InstallPluginArchive_Click"/>
-                        <Button x:Name="RefreshPluginsButton" Grid.Column="3" Content="Refresh" Click="RefreshPlugins_Click"/>
+                        <Button x:Name="InstallPluginButton" Grid.Column="1" Content="Install package…" IsVisible="{Binding PluginsPage.CanInstall}" Click="InstallPlugin_Click"/>
+                        <Button x:Name="RefreshPluginsButton" Grid.Column="2" Content="Refresh" Click="RefreshPlugins_Click"/>
                     </Grid>
                     <StackPanel IsVisible="{Binding PluginsPage.HasPendingRestart}" Spacing="6">
                         <TextBlock Text="Plugin changes will take effect after restarting Invoklet." TextWrapping="Wrap"/>

@@ -19,6 +19,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - Install and remove third-party connector packages in Preferences → Plugins with explicit approval before code runs.
 - Disable dependent plugins when their dependency is disabled in Preferences.
 - Show a "Content changed" state in Preferences → Plugins when installed plugin files no longer match their approval, and block removal of a plugin that other installed plugins depend on, naming them.
+- Install plugins in Preferences → Plugins from NuGet packages (`.nupkg`) with the **Install package…** button.
 - Avoid loading plugins for CLI help and version commands, enforce archive size limits during extraction, and preserve successful removal if staging cleanup fails.
 
 ### Fixed

@@ -13,17 +13,14 @@ namespace Invoklet.Connectors.IntegrationTests;
 [Trait("Category", "Integration")]
 public sealed class ConnectorPluginLoadingTests
 {
-    [Theory]
-    [InlineData(null)]
-    [InlineData(".invplugin")]
-    [InlineData(".nupkg")]
-    public void Installer_ConnectorCanBeApprovedAndRemoved(string? extension)
+    [Fact]
+    public void Installer_ConnectorCanBeApprovedAndRemoved()
     {
         const string id = "example.connector.http";
         using var package = new SampleConnectorPackage();
         var installer = new PluginPackageInstaller(package.UserDirectory, package.Inventory, BundledPluginCatalog.Empty);
-        var path = package.CreateSource(extension);
-        PreparedPluginPackage Prepare() => extension is null ? installer.Prepare(path) : installer.PrepareArchive(path);
+        var path = package.CreatePackage();
+        PreparedPluginPackage Prepare() => installer.PrepareArchive(path);
 
         using (var preview = Prepare())
             Assert.True(preview.Manifest.RequiresCode);
@@ -55,7 +52,7 @@ public sealed class ConnectorPluginLoadingTests
         AppContext.SetData("SampleHttpConnector.RegisterMarker", marker);
         try
         {
-            using (var prepared = installer.PrepareArchive(package.CreateSource(".invplugin")))
+            using (var prepared = installer.PrepareArchive(package.CreatePackage()))
                 installer.Install(prepared);
             Assert.False(File.Exists(marker));
 
@@ -165,7 +162,7 @@ public sealed class ConnectorPluginLoadingTests
         var store = package.Inventory;
         var bundled = BundledCatalog();
         var installer = new PluginPackageInstaller(package.UserDirectory, store, bundled);
-        using var prepared = installer.Prepare(package.CreateSource(extension: null, dependency: sqlite));
+        using var prepared = installer.PrepareArchive(package.CreatePackage(dependency: sqlite));
         var registry = new ConnectionDriverRegistry();
         if (!installedDuringSession) installer.Install(prepared);
         var current = Load(registry, store.Read(), package.UserDirectory);
@@ -254,7 +251,8 @@ internal sealed class SampleConnectorPackage : IDisposable
     public string UserDirectory => Path.Combine(_root.FullName, "plugins");
     public PluginInventoryStore Inventory => new(Path.Combine(_root.FullName, PluginInventory.FileName));
 
-    public string CreateSource(string? extension, string? dependency = null)
+    /// <summary>Packs the sample connector as a NuGet package with its files under <c>plugin/</c>.</summary>
+    public string CreatePackage(string? dependency = null)
     {
         var source = _root.CreateSubdirectory("source").FullName;
         File.Copy(Path.Combine(AppContext.BaseDirectory, "SampleHttpConnector.dll"), Path.Combine(source, "SampleHttpConnector.dll"));
@@ -266,16 +264,11 @@ internal sealed class SampleConnectorPackage : IDisposable
             manifest["dependsOn"] = new System.Text.Json.Nodes.JsonArray(System.Text.Json.Nodes.JsonValue.Create(dependency));
             File.WriteAllText(manifestPath, manifest.ToJsonString());
         }
-        if (extension is null) return source;
 
-        var archive = Path.Combine(_root.FullName, "sample" + extension);
-        if (extension == ".nupkg")
-        {
-            using var zip = ZipFile.Open(archive, ZipArchiveMode.Create);
-            foreach (var file in Directory.EnumerateFiles(source))
-                zip.CreateEntryFromFile(file, "plugin/" + Path.GetFileName(file));
-        }
-        else ZipFile.CreateFromDirectory(source, archive);
+        var archive = Path.Combine(_root.FullName, "sample.nupkg");
+        using var zip = ZipFile.Open(archive, ZipArchiveMode.Create);
+        foreach (var file in Directory.EnumerateFiles(source))
+            zip.CreateEntryFromFile(file, "plugin/" + Path.GetFileName(file));
         return archive;
     }
 

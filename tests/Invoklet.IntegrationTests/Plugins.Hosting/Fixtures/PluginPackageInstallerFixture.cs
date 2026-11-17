@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Invoklet.Plugins;
 using Invoklet.Plugins.Hosting;
 
@@ -27,7 +28,11 @@ public sealed class PluginPackageInstallerFixture : IDisposable
             """);
         File.WriteAllText(Path.Combine(source, "theme.json"), $$"""{"id":"{{id}}","name":"{{name}}"}""");
         var installer = CreateSut();
-        using var package = installer.Prepare(source);
+        var path = source + ".nupkg";
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+            foreach (var file in Directory.EnumerateFiles(source))
+                archive.CreateEntryFromFile(file, "plugin/" + Path.GetFileName(file));
+        using var package = installer.PrepareArchive(path);
         installer.Install(package);
     }
 
