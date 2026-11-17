@@ -170,9 +170,7 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
                 var entry = current.Find(id);
                 if (!IsManaged(entry))
                     throw new InvalidOperationException("The plugin is not installed in the user inventory.");
-                var dependants = PluginInventoryStore.ReadPendingPackages(current, [], userDirectory)
-                    .Where(manifest => manifest.DependsOn.Contains(id, StringComparer.Ordinal))
-                    .Select(manifest => manifest.DisplayName).Order(StringComparer.Ordinal).ToArray();
+                var dependants = FindDependants(current, id);
                 if (dependants.Length > 0)
                     throw new PluginRegistrationException($"Remove the plugins that depend on '{id}' first: {string.Join(", ", dependants)}.");
 
@@ -204,6 +202,39 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Display names of the installed packages whose manifest depends on <paramref name="id"/>. The manifests are read whether or not
+    /// their contents still match the approval: a package changed after approval comes back once it is approved again.
+    /// </summary>
+    private string[] FindDependants(PluginInventory inventory, string id)
+    {
+        var source = new PluginSource(userDirectory, PluginTrust.Trusted);
+        var dependants = new List<string>();
+        foreach (var entry in inventory.Entries.Where(entry => entry.Id != id && entry.Source != PluginInventoryStore.BundledSource))
+        {
+            var directory = Path.Combine(userDirectory, entry.Id, entry.Version);
+            if (!Directory.Exists(directory)) directory = Path.Combine(userDirectory, entry.Id);
+            // A package with no folder left cannot load, so it depends on nothing.
+            if (!Directory.Exists(directory)) continue;
+
+            PluginManifest? manifest;
+            try
+            {
+                PluginFiles.RejectLinksBetween(userDirectory, directory);
+                manifest = PluginDiscovery.ReadFolder(directory, source).Manifest;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                manifest = null;
+            }
+            if (manifest is null || manifest.Id != entry.Id)
+                throw new PluginRegistrationException(
+                    $"The manifest of '{entry.Id}' could not be read, so its dependencies are unknown. Remove or repair '{entry.Id}' first.");
+            if (manifest.DependsOn.Contains(id, StringComparer.Ordinal)) dependants.Add(manifest.DisplayName);
+        }
+        return dependants.Order(StringComparer.Ordinal).ToArray();
     }
 
     public static bool IsManaged([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] PluginInventoryEntry? entry) =>

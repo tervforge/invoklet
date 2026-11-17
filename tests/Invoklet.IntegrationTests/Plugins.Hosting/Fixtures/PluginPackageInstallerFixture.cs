@@ -1,7 +1,7 @@
 using Invoklet.Plugins;
 using Invoklet.Plugins.Hosting;
 
-namespace Invoklet.NonUI.Tests.Plugins.Fixtures;
+namespace Invoklet.IntegrationTests;
 
 /// <summary>A temporary user plugin folder and inventory with theme packages installed through the real installer.</summary>
 public sealed class PluginPackageInstallerFixture : IDisposable
@@ -30,6 +30,12 @@ public sealed class PluginPackageInstallerFixture : IDisposable
         using var package = installer.Prepare(source);
         installer.Install(package);
     }
+
+    /// <summary>Edits a file of an installed package after it was approved.</summary>
+    public void ChangeInstalled(string id) => File.AppendAllText(Path.Combine(InstalledDirectory(id), "theme.json"), " ");
+
+    public void CorruptInstalledManifest(string id) =>
+        File.WriteAllText(Path.Combine(InstalledDirectory(id), PluginContracts.ManifestFileName), "{");
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 }

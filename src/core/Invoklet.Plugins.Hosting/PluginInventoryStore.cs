@@ -74,7 +74,7 @@ public sealed class PluginInventoryStore(string path)
         });
     }
 
-    internal static IEnumerable<PluginManifest> ReadPendingPackages(PluginInventory inventory,
+    private static IEnumerable<PluginManifest> ReadPendingPackages(PluginInventory inventory,
         IReadOnlyList<PluginManifest> known, string? userDirectory)
     {
         if (userDirectory is null) yield break;
