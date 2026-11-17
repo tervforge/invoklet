@@ -26,6 +26,7 @@ Notable changes in each Invoklet release. Downloads are on the
 
 - Publish connector plugins for the release runtime and exclude unused EF Core design tools.
 - Show when a saved interface theme is unavailable while keeping it selected in settings.
+- Loaded plugin dependencies when the plugin folder is reached through a symbolic link, such as `/var` on macOS or `/home` on some Linux systems.
 
 - Asked for Secret Store access again after an externally changed script is reloaded and saved.
 - Rejected malformed Windows stream paths in Path Store while accepting valid NTFS streams.
@@ -53,6 +54,7 @@ Notable changes in each Invoklet release. Downloads are on the
 ### Changed
 
 - C# accessibility diagnostics now honor the configured style. With the default `omit_if_default`, IDE0040 suggests removing redundant access modifiers.
+- The HTTP, gRPC, SQLite, PostgreSQL and SQL Server connectors now ship as separate NuGet plugin packages. Releases bundle these packages. Preferences → Plugins can install the shared EF Core library package and accepts packages up to 256 MB.
 
 ## [0.12.2] — 2026-11-10
 

@@ -64,14 +64,14 @@ jobs:
       - name: 🔨 Build the projects with light tests
         run: |
           set -e
-          for proj in tests/Invoklet.NonUI.Tests tests/Invoklet.Format.MdRun.Tests tests/Invoklet.Runtime.Tests tests/Invoklet.Connectors.Tests; do
+          for proj in tests/Invoklet.NonUI.Tests tests/Invoklet.Format.MdRun.Tests tests/Invoklet.Runtime.Tests; do
             dotnet build "$proj" --configuration Release -warnaserror
           done
 
       - name: 🧪 Light tests (Platform=Independent)
         run: |
           set -e
-          for proj in tests/Invoklet.NonUI.Tests tests/Invoklet.Format.MdRun.Tests tests/Invoklet.Runtime.Tests tests/Invoklet.Connectors.Tests; do
+          for proj in tests/Invoklet.NonUI.Tests tests/Invoklet.Format.MdRun.Tests tests/Invoklet.Runtime.Tests; do
             dotnet test "$proj" --no-build --configuration Release --verbosity normal --filter "Platform=Independent"
           done
 
@@ -112,6 +112,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write # creates/uploads to the draft release on push only
+      packages: read # the connector packages
+    env:
+      InvokletShipConnectors: 'true'
     outputs:
       release-id: ${{ steps.draft.outputs.release-id }}
       version: ${{ steps.draft.outputs.version }}
@@ -130,6 +133,10 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
+
+      # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
+      - name: 🔌 Connector packages from GitHub Packages
+        run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
         run: dotnet restore
@@ -161,8 +168,6 @@ jobs:
               --filter "Platform!=Independent"
           done
           dotnet test tests/Invoklet.NonUI.Tests --no-build --configuration Release --verbosity normal \
-            --filter "Category!=RealBuild&Platform!=Independent"
-          dotnet test tests/Invoklet.Connectors.Tests --no-build --configuration Release --verbosity normal \
             --filter "Category!=RealBuild&Platform!=Independent"
 
       # RealBuild is skipped above, but ScriptCompilerTests'/ScriptPackageRestoreTests' cleanup (deleting
@@ -267,6 +272,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # uploads to the draft release on push only
+      packages: read # the connector packages
+    env:
+      InvokletShipConnectors: 'true'
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v5
@@ -282,6 +290,10 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
+
+      # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
+      - name: 🔌 Connector packages from GitHub Packages
+        run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
         run: dotnet restore
@@ -374,6 +386,9 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write # uploads to the draft release on push only
+      packages: read # the connector packages
+    env:
+      InvokletShipConnectors: 'true'
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v5
@@ -389,6 +404,10 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
+
+      # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
+      - name: 🔌 Connector packages from GitHub Packages
+        run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
         run: dotnet restore
@@ -412,8 +431,6 @@ jobs:
               --filter "Platform!=Independent"
           done
           dotnet test tests/Invoklet.NonUI.Tests --no-build --configuration Release --verbosity normal \
-            --filter "Category!=RealBuild&Platform!=Independent"
-          dotnet test tests/Invoklet.Connectors.Tests --no-build --configuration Release --verbosity normal \
             --filter "Category!=RealBuild&Platform!=Independent"
 
       # Not the tests marked Platform=Independent (see UNIT-TESTING-RULES.md): their outcome does not depend on the OS, and build-linux runs them.

@@ -1,6 +1,6 @@
 using System.Reactive.Linq;
 using System.Windows.Input;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
@@ -58,7 +58,7 @@ public class ScriptConnectionsViewModelTests
         store.Setup(s => s.Save(It.IsAny<IReadOnlyList<MdRunConnection>>(), It.IsAny<string?>()))
             .Callback<IReadOnlyList<MdRunConnection>, string?>((saved, _) => { list.Clear(); list.AddRange(saved); });
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         drivers.Register(new SqlLikeDriver());
         var sources = new Mock<INuGetSourceStore>();
         sources.Setup(s => s.Load()).Returns([]);
@@ -561,7 +561,7 @@ public class ScriptConnectionsViewModelTests
             var driver = new CountingSchemaDriver();
             var drivers = new ConnectionDriverRegistry();
             drivers.Register(driver);
-            drivers.Register(new HttpConnectionDriver());
+            drivers.Register(new HttpTestDriver());
             var schemas = new ConnectionSchemas(drivers, folder, new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
             var described = new MdRunConnection { Name = "stock", Driver = "described" };
             await schemas.EnsureAsync([described], null, ConnectionSchemaRefresh.Missing, CancellationToken.None);

@@ -27,8 +27,5 @@
   </ItemGroup>
 
   <Import Project="../../../build/ConnectorPlugins.targets" />
-  <PropertyGroup>
-    <InvokletShipConnectors>true</InvokletShipConnectors>
-  </PropertyGroup>
   <Import Project="..\..\..\build\BundledPlugins.targets" />
 </Project>

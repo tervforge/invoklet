@@ -1,36 +1,34 @@
 <Project>
+  <!-- The connectors Invoklet ships with. They are built in the invoklet-plugins repository and taken here as NuGet packages: the
+       invoklet-plugins source of nuget.config is a local folder (fill it with `dotnet pack PluginPackages.slnx -o <this repository>/artifacts/plugins`),
+       and release builds point it at GitHub Packages. Each package's plugin/ folder is staged as it is; the plugin packager then
+       writes bundled.json. Without the packages Invoklet builds with no bundled connector; set InvokletShipConnectors to require them. -->
   <PropertyGroup>
-    <_ConnectorHostProperties>OutDir;OutputPath;PublishDir;SelfContained;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun</_ConnectorHostProperties>
+    <InvokletConnectorsVersion>1.0.0</InvokletConnectorsVersion>
+    <InvokletShipConnectors Condition="'$(InvokletShipConnectors)' == '' and Exists('$(MSBuildThisFileDirectory)../artifacts/plugins/invoklet.connector.http.$(InvokletConnectorsVersion).nupkg')">true</InvokletShipConnectors>
   </PropertyGroup>
   <ItemGroup>
-    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.EfCore/Invoklet.Connectors.EfCore.csproj"
-                              PluginPath="library/invoklet.connector.efcore" />
-    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Http/Invoklet.Connectors.Http.csproj"
-                              PluginPath="connection/invoklet.connector.http" />
-    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Grpc/Invoklet.Connectors.Grpc.csproj"
-                              PluginPath="connection/invoklet.connector.grpc" />
-    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Sqlite/Invoklet.Connectors.Sqlite.csproj"
-                              PluginPath="connection/invoklet.connector.sqlite" />
-    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.Postgres/Invoklet.Connectors.Postgres.csproj"
-                              PluginPath="connection/invoklet.connector.postgres" />
-    <InvokletConnectorProject Include="$(MSBuildThisFileDirectory)../src/connectors/Invoklet.Connectors.SqlServer/Invoklet.Connectors.SqlServer.csproj"
-                              PluginPath="connection/invoklet.connector.sqlserver" />
+    <InvokletConnectorPackage Include="invoklet.connector.efcore" PluginPath="library/invoklet.connector.efcore" />
+    <InvokletConnectorPackage Include="invoklet.connector.http" PluginPath="connection/invoklet.connector.http" />
+    <InvokletConnectorPackage Include="invoklet.connector.grpc" PluginPath="connection/invoklet.connector.grpc" />
+    <InvokletConnectorPackage Include="invoklet.connector.sqlite" PluginPath="connection/invoklet.connector.sqlite" />
+    <InvokletConnectorPackage Include="invoklet.connector.postgres" PluginPath="connection/invoklet.connector.postgres" />
+    <InvokletConnectorPackage Include="invoklet.connector.sqlserver" PluginPath="connection/invoklet.connector.sqlserver" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="@(InvokletConnectorProject)" ReferenceOutputAssembly="false"
-                      Private="false" GlobalPropertiesToRemove="$(_ConnectorHostProperties)"
-                      Condition="'$(InvokletConnectorBuildReferences)' != 'false'" />
+  <ItemGroup Condition="'$(InvokletShipConnectors)' == 'true'">
+    <PackageDownload Include="@(InvokletConnectorPackage)" Version="[$(InvokletConnectorsVersion)]" />
   </ItemGroup>
   <Target Name="StageConnectorPluginSources">
     <PropertyGroup>
       <_ConnectorSourceDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)connector-packages'))</_ConnectorSourceDirectory>
       <InvokletBundledPluginsSource>$(_ConnectorSourceDirectory)</InvokletBundledPluginsSource>
     </PropertyGroup>
-    <!-- The project graph builds each connector once. Publish only stages those build outputs. -->
-    <RemoveDir Directories="$(_ConnectorSourceDirectory)"
-               Condition="Exists('$(_ConnectorSourceDirectory)')" />
-    <MSBuild Projects="@(InvokletConnectorProject)" Targets="Publish"
-             RemoveProperties="OutDir;OutputPath;PublishSelfContained;PublishSingleFile;PublishAot;PublishTrimmed;PublishReadyToRun"
-             Properties="PublishDir=$(_ConnectorSourceDirectory)/%(InvokletConnectorProject.PluginPath)/;NoBuild=true;RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=false;InvokletConnectorPackage=%(InvokletConnectorProject.Filename)" />
+    <ItemGroup>
+      <_ConnectorPackageFolder Include="@(InvokletConnectorPackage->'$(NuGetPackageRoot)%(Identity)/$(InvokletConnectorsVersion)/plugin')" />
+      <_ConnectorPayloadFile Include="%(_ConnectorPackageFolder.Identity)/**" PluginPath="%(_ConnectorPackageFolder.PluginPath)" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(_ConnectorPackageFolder.Identity)')" Text="The connector package has no plugin folder: %(_ConnectorPackageFolder.Identity)" />
+    <RemoveDir Directories="$(_ConnectorSourceDirectory)" Condition="Exists('$(_ConnectorSourceDirectory)')" />
+    <Copy SourceFiles="@(_ConnectorPayloadFile)" DestinationFiles="@(_ConnectorPayloadFile->'$(_ConnectorSourceDirectory)/%(PluginPath)/%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 </Project>

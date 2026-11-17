@@ -6,7 +6,8 @@ namespace Invoklet.Plugins.Hosting;
 public sealed class PluginPackageInstaller(string userDirectory, PluginInventoryStore inventory, BundledPluginCatalog bundled)
 {
     public const string InstalledSource = "preferences";
-    private const long MaxArchiveBytes = 64L * 1024 * 1024;
+    // A connector carries native assets for every supported runtime; SQL Server's identity broker alone is tens of megabytes.
+    private const long MaxArchiveBytes = 256L * 1024 * 1024;
 
     /// <summary>Extracts a NuGet package and prepares its <c>plugin/</c> folder for review.</summary>
     public PreparedPluginPackage PrepareArchive(string path)
@@ -94,13 +95,15 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
         var manifest = PluginDiscovery.ReadFolder(staging, new PluginSource(staging, PluginTrust.Trusted)).Manifest;
         if (manifest is null || bundled.ReadError is not null || bundled.Find(manifest.Id) is not null)
             throw new InvalidOperationException("Choose a valid plugin package with a unique ID.");
-        if (manifest.Roles.Count != 1 || (!manifest.HasRole(PluginRole.Theme) && !manifest.HasRole(PluginRole.Connection)))
-            throw new InvalidOperationException("Choose a theme or connector package.");
+        // A library is code that connectors share, such as the EF Core reader of the database connectors; it registers nothing.
+        if (manifest.Roles.Count != 1 || !(manifest.HasRole(PluginRole.Theme) || manifest.HasRole(PluginRole.Connection)
+            || manifest.HasRole(PluginRole.Library)))
+            throw new InvalidOperationException("Choose a theme, connector or library package.");
         if (manifest.HasRole(PluginRole.Theme) && manifest.Entry is not null)
             throw new InvalidOperationException("A theme package cannot contain an entry point.");
-        if (manifest.HasRole(PluginRole.Connection) && (manifest.Entry is not { } entry
+        if (!manifest.HasRole(PluginRole.Theme) && (manifest.Entry is not { } entry
             || !File.Exists(Path.Combine(staging, entry.Assembly))))
-            throw new InvalidOperationException("The connector entry assembly is missing.");
+            throw new InvalidOperationException("The plugin entry assembly is missing.");
         return new PreparedPluginPackage(manifest, staging, hash);
     }
 
@@ -233,7 +236,7 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
     }
 
     public static bool IsManaged([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] PluginInventoryEntry? entry) =>
-        entry is { Approved: true, Source: InstalledSource, Roles: ["theme" or "connection"] };
+        entry is { Approved: true, Source: InstalledSource, Roles: ["theme" or "connection" or "library"] };
 
     private string CreateStaging()
     {

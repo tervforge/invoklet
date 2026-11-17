@@ -1,7 +1,7 @@
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Windows.Input;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
@@ -126,7 +126,7 @@ public class ConnectionsWindowViewModelTests
         var secretStore = new Mock<ISecretStore>();
         secretStore.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot(secrets ?? [new Secret("billing", "t0k"), new Secret("db", "pw")], null));
         var registry = new ConnectionDriverRegistry();
-        registry.Register(new HttpConnectionDriver());
+        registry.Register(new HttpTestDriver());
         var fake = new FakeDriver();
         registry.Register(fake);
         return (new ConnectionsWindowViewModel(store.Object, registry, secretStore.Object), store, fake);

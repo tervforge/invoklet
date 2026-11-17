@@ -243,19 +243,6 @@ public class CliRunnerTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
-    [Trait("Category", "Integration")]
-    public void CreateDefault_Should_LoadConnectorPluginsInTheExistingDriverOrder()
-    {
-        var services = CliServices.CreateDefault();
-
-        Assert.Equal(["csharp", "vb"], services.Registry.SupportedLanguages);
-        Assert.True(services.Plugins.IsLoaded("invoklet.connector.efcore"));
-        Assert.True(services.Plugins.IsLoaded("invoklet.connector.http"));
-        Assert.Equal(["http", "openapi", "grpc", "sqlite", "postgres", "sqlserver"],
-            services.ConnectionDrivers!.Drivers.Select(driver => driver.Id));
-    }
-
     // The runner's request is the window's: the shared front-matter mapping, built in the temporary
     // build folder, with the PATH's dotnet and no debugger; command-line arguments replace args:.
     [Fact]

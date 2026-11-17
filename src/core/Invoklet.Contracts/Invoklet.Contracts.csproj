@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../build/ContractPackage.props" />
   <ItemGroup>
     <ProjectReference Include="..\Invoklet.Format.MdRun\Invoklet.Format.MdRun.csproj" />
     <ProjectReference Include="..\Invoklet.Plugins\Invoklet.Plugins.csproj" />

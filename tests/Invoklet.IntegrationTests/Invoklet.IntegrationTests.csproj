@@ -31,6 +31,11 @@
     <ProjectReference Include="..\..\src\main\Invoklet\Invoklet.csproj" />
     <!-- ControlClick lives in the macOS integration; its tests run on every OS. -->
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.MacOS\Invoklet.Desktop.MacOS.csproj" />
+    <!-- The sample connector of the plugin documentation: built and copied here, never referenced, so only the plugin host loads it. -->
+    <ProjectReference Include="../fixtures/plugins/SampleHttpConnector/SampleHttpConnector.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../fixtures/plugins/SampleHttpConnector/invoklet-plugin.json"
+          Link="sample-http-connector.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />

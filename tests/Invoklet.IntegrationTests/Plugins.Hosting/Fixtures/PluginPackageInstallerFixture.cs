@@ -36,6 +36,22 @@ public sealed class PluginPackageInstallerFixture : IDisposable
         installer.Install(package);
     }
 
+    /// <summary>Packs a library plugin (code that connectors share), with or without the entry assembly its manifest names.</summary>
+    public string PackLibrary(string id, bool withEntryAssembly)
+    {
+        var path = Path.Combine(_root, id + ".nupkg");
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
+        using (var writer = new StreamWriter(archive.CreateEntry("plugin/" + PluginContracts.ManifestFileName).Open()))
+            writer.Write($$$"""
+                {"id":"{{{id}}}","version":"1.0.0","displayName":"Shared","roles":{"library":1},"entry":{"assembly":"Shared.dll","type":"Shared.Plugin"}}
+                """);
+        // Installing never loads the assembly, so any bytes stand in for it.
+        if (withEntryAssembly)
+            using (var writer = new StreamWriter(archive.CreateEntry("plugin/Shared.dll").Open()))
+                writer.Write("MZ");
+        return path;
+    }
+
     /// <summary>Edits a file of an installed package after it was approved.</summary>
     public void ChangeInstalled(string id) => File.AppendAllText(Path.Combine(InstalledDirectory(id), "theme.json"), " ");
 

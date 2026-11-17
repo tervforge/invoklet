@@ -11,7 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using Invoklet.Avalonia.Themes;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.IntelliSense;
@@ -75,7 +75,7 @@ public sealed class NavigationSidebarTests : IDisposable
 
         var windowService = new Mock<IWindowService>();
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var store = new FileConnectionStore(Path.Combine(_dataFolder, "connections.json"));
         MdRunConnection Http(string name) => new()
         {

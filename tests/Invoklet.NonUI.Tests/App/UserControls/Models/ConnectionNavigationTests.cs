@@ -1,4 +1,4 @@
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
@@ -159,7 +159,7 @@ public sealed class ConnectionNavigationViewModelTests : IDisposable
         var store = new FileConnectionStore(ConnectionsPath);
         store.Save(connections, null);
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         drivers.Register(new PackagedDriver());
         var vm = new ConnectionNavigationViewModel(store, drivers);
         await vm.RefreshAsync();
@@ -428,7 +428,7 @@ public sealed class ConnectionNavigationViewModelTests : IDisposable
         tree.MoveConnection(tree.Find("orders", isConnection: true)!, group.Id);
 
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var secrets = Mock.Of<ISecretStore>(s => s.LoadSnapshot() == new SecretStoreSnapshot(Array.Empty<Secret>(), null));
         var window = new ConnectionsWindowViewModel(new FileConnectionStore(ConnectionsPath), drivers, secrets);
         window.Connections[0].Name = "invoices";
@@ -479,7 +479,7 @@ public sealed class ConnectionStatusTests : IDisposable
         var store = new FileConnectionStore(Path.Combine(_folder, "connections.json"));
         store.Save(connections, null);
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var driver = new ContractDriver();
         drivers.Register(driver);
         var schemas = new ConnectionSchemas(drivers, Path.Combine(_folder, "schemas"),

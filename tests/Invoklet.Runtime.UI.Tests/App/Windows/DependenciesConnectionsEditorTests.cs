@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
@@ -43,7 +43,7 @@ public class DependenciesConnectionsEditorTests
 
         public Fixture()
         {
-            Drivers.Register(new HttpConnectionDriver());
+            Drivers.Register(new HttpTestDriver());
             Store.Setup(s => s.LoadSnapshot()).Returns(() => new ConnectionStoreSnapshot([.. Mine], null));
             Store.Setup(s => s.FilePath).Returns("/data/Invoklet/connections.json");
             Store.Setup(s => s.Save(It.IsAny<IReadOnlyList<MdRunConnection>>(), It.IsAny<string?>()))

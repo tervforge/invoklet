@@ -10,8 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Invoklet.Connectors.Http;
-using Invoklet.Connectors.Postgres;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
@@ -250,7 +249,7 @@ public class ConnectionsWindowTests
         var secrets = new Mock<ISecretStore>();
         secrets.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([new Secret("billing-token", "t0k")], null));
         var registry = new ConnectionDriverRegistry();
-        registry.Register(new HttpConnectionDriver());
+        registry.Register(new HttpTestDriver());
 
         var owner = new Window();
         owner.Show();
@@ -303,7 +302,7 @@ public class ConnectionsWindowTests
         var secrets = new Mock<ISecretStore>();
         secrets.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
         var registry = new ConnectionDriverRegistry();
-        registry.Register(new PostgresConnectionDriver());
+        registry.Register(new DatabaseTestDriver());
         var owner = new Window();
         owner.Show();
         var window = new ConnectionsWindow(new ConnectionsWindowViewModel(store.Object, registry, secrets.Object));
@@ -343,7 +342,7 @@ public class ConnectionsWindowTests
         var secrets = new Mock<ISecretStore>();
         secrets.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var vm = new ConnectionsWindowViewModel(store.Object, drivers, secrets.Object);
         ((System.Windows.Input.ICommand)vm.AddCommand).Execute(drivers.Find("http"));
         vm.Connections[0].Name = "draft";
@@ -385,7 +384,7 @@ public class ConnectionsWindowTests
         var secrets = new Mock<ISecretStore>();
         secrets.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot([], null));
         var registry = new ConnectionDriverRegistry();
-        registry.Register(new HttpConnectionDriver());
+        registry.Register(new HttpTestDriver());
         var owner = new Window();
         owner.Show();
         var window = new ConnectionsWindow(new ConnectionsWindowViewModel(store.Object, registry, secrets.Object));

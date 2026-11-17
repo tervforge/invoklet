@@ -24,6 +24,10 @@ internal sealed class PluginFiles(string root, Dictionary<string, byte[]> digest
         ? throw new InvalidOperationException("No native library cache directory was given for this plugin.")
         : OpenNativeSnapshot(root, digests, nativeCacheDirectory, contentHash));
 
+    // The dependency resolver reports paths with links resolved (macOS's /var is /private/var, /home is /var/home on some Linux
+    // systems); the approved names are relative to the folder as the plugin was found, so such a path is mapped back first.
+    private readonly string _resolvedRoot = ResolveLinks(root);
+
     internal string ContentHash { get; } = contentHash;
 
     internal static PluginFiles Read(string directory, string? nativeCacheDirectory)
@@ -61,7 +65,7 @@ internal sealed class PluginFiles(string root, Dictionary<string, byte[]> digest
     }
 
     /// <summary>Whether the path is one of the approved files.</summary>
-    internal bool Contains(string path) => digests.ContainsKey(RelativeName(root, path));
+    internal bool Contains(string path) => digests.ContainsKey(RelativeName(root, AsFound(path)));
 
     internal MemoryStream ReadVerified(string path)
     {
@@ -110,7 +114,7 @@ internal sealed class PluginFiles(string root, Dictionary<string, byte[]> digest
     internal string GetNativeLoadPath(string path)
     {
         GetExpectedDigest(path);
-        return Path.Combine(_nativeSnapshot.Value, RelativeName(root, path));
+        return Path.Combine(_nativeSnapshot.Value, RelativeName(root, AsFound(path)));
     }
 
     /// <summary>
@@ -276,10 +280,21 @@ internal sealed class PluginFiles(string root, Dictionary<string, byte[]> digest
 
     private byte[] GetExpectedDigest(string path)
     {
+        path = AsFound(path);
         if (!digests.TryGetValue(RelativeName(root, path), out var expected))
             throw new IOException($"Path is outside the approved plugin files: {path}");
         RejectLinksBetween(root, path);
         return expected;
+    }
+
+    private string AsFound(string path) =>
+        !IsInside(root, path) && IsInside(_resolvedRoot, path) ? Path.Combine(root, Path.GetRelativePath(_resolvedRoot, path)) : path;
+
+    private static string ResolveLinks(string path)
+    {
+        if (Path.GetDirectoryName(path) is not { } parent) return path;
+        var current = Path.Combine(ResolveLinks(parent), Path.GetFileName(path));
+        return new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? current;
     }
 
     private static string RelativeName(string root, string path) =>

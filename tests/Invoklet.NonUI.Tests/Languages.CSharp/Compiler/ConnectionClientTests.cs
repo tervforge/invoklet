@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.IntelliSense;
 using Invoklet.Contracts.Models;
@@ -29,7 +29,7 @@ public sealed class ConnectionClientTests : IDisposable
     private static ConnectionDriverRegistry Drivers()
     {
         var registry = new ConnectionDriverRegistry();
-        registry.Register(new HttpConnectionDriver());
+        registry.Register(new HttpTestDriver());
         return registry;
     }
 

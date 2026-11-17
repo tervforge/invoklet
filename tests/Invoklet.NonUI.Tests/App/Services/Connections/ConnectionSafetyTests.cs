@@ -1,6 +1,6 @@
 using System.Reactive.Linq;
 using System.Windows.Input;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
@@ -28,7 +28,7 @@ public sealed class ConnectionSafetyTests : IDisposable
     private static ConnectionDriverRegistry Drivers()
     {
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         return drivers;
     }
 

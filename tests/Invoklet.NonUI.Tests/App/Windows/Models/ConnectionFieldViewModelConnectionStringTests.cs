@@ -1,4 +1,3 @@
-using Invoklet.Connectors.Postgres;
 using Invoklet.Contracts.Connections;
 using Invoklet.NonUI.Tests.App.Windows.Models.Fixtures;
 using Invoklet.Windows.Models;
@@ -77,83 +76,6 @@ public sealed class ConnectionFieldViewModelConnectionStringTests
 
         // Assert
         Assert.Equal("Host=a;Password=${secret:shop}", sut.Text);
-    }
-
-    [Fact]
-    public void Constructor_APostgresStringWithAPassword_SignsInWithThePasswordAndHidesThePgpassFile()
-    {
-        // Arrange
-        var fixture = new ConnectionFieldViewModelConnectionStringFixture();
-
-        // Act
-        var sut = fixture.CreateSut(fixture.Postgres, "Host=db;Username=app;Password=${secret:shop}");
-
-        // Assert
-        Assert.Equal("Password", sut.SelectedAuthMode!.Label);
-        Assert.True(ConnectionFieldViewModelConnectionStringFixture.Shown(sut, "Password"));
-        Assert.False(ConnectionFieldViewModelConnectionStringFixture.Shown(sut, "Passfile"));
-    }
-
-    // The usual pgpass file of this system goes into its empty field, and the password goes.
-    [Fact]
-    public void SelectedAuthMode_PgpassChosen_WritesTheSystemsFileAndShowsItsField()
-    {
-        // Arrange
-        var fixture = new ConnectionFieldViewModelConnectionStringFixture();
-        var sut = fixture.CreateSut(fixture.Postgres, "Host=db;Username=app;Password=${secret:shop}");
-
-        // Act
-        sut.SelectedAuthMode = sut.AuthModes.Single(m => m.Label == "pgpass file");
-
-        // Assert
-        Assert.Equal("Host=db;Username=app;Passfile=" + PostgresConnectionDriver.DefaultPassfile, sut.Text);
-        Assert.False(ConnectionFieldViewModelConnectionStringFixture.Shown(sut, "Password"));
-        Assert.True(ConnectionFieldViewModelConnectionStringFixture.Shown(sut, "Passfile"));
-        Assert.True(sut.HasAuthHint);
-    }
-
-    [Fact]
-    public void Text_IntegratedSecurityWritten_SignsInWithKerberos()
-    {
-        // Arrange
-        var fixture = new ConnectionFieldViewModelConnectionStringFixture();
-        var sut = fixture.CreateSut(fixture.Postgres, "Host=db;Username=app;Password=${secret:shop}");
-
-        // Act
-        sut.Text = "Host=db;Integrated Security=true";
-
-        // Assert
-        Assert.Equal("Kerberos (GSSAPI)", sut.SelectedAuthMode!.Label);
-        Assert.False(ConnectionFieldViewModelConnectionStringFixture.Shown(sut, "Password"));
-    }
-
-    // A new connection starts with the server's own defaults written in, not with examples to copy.
-    [Fact]
-    public void Constructor_ANewPostgresConnection_StartsWithTheServersDefaults()
-    {
-        // Arrange
-        var fixture = new ConnectionFieldViewModelConnectionStringFixture();
-
-        // Act
-        var sut = fixture.CreateSut(fixture.Postgres);
-
-        // Assert
-        Assert.Equal("Host=localhost;Port=5432;Database=postgres;Username=postgres", sut.Text);
-        Assert.Equal(["localhost", "5432", "postgres", "postgres", "", ""], sut.Parts.Select(p => p.Value));
-        Assert.Equal("Password", sut.SelectedAuthMode!.Label);
-    }
-
-    [Fact]
-    public void Constructor_ANewSqlServerConnection_StartsWithTheServersDefaults()
-    {
-        // Arrange
-        var fixture = new ConnectionFieldViewModelConnectionStringFixture();
-
-        // Act
-        var sut = fixture.CreateSut(fixture.SqlServer);
-
-        // Assert
-        Assert.Equal("Server=localhost;Database=master;User Id=sa;TrustServerCertificate=true", sut.Text);
     }
 
     // Only a database's connection string starts filled in; another parameter's default stays a default, not text.

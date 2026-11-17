@@ -12,6 +12,36 @@ public sealed class PluginPackageInstallerTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     [Fact]
+    public void Install_ALibraryPackage_IsApprovedAndManagedLikeAConnector()
+    {
+        // Arrange
+        var sut = _fixture.CreateSut();
+        using var package = sut.PrepareArchive(_fixture.PackLibrary("example.library.shared", withEntryAssembly: true));
+
+        // Act
+        sut.Install(package);
+
+        // Assert
+        var entry = Assert.Single(_fixture.Store.Read().Entries);
+        Assert.Equal(["library"], entry.Roles);
+        Assert.True(PluginPackageInstaller.IsManaged(entry));
+    }
+
+    [Fact]
+    public void PrepareArchive_ALibraryWithoutItsEntryAssembly_IsRejected()
+    {
+        // Arrange
+        var sut = _fixture.CreateSut();
+        var path = _fixture.PackLibrary("example.library.shared", withEntryAssembly: false);
+
+        // Act
+        var error = Assert.Throws<InvalidOperationException>(() => sut.PrepareArchive(path));
+
+        // Assert
+        Assert.Equal("The plugin entry assembly is missing.", error.Message);
+    }
+
+    [Fact]
     public void Remove_AnInstalledPackageDependsOnIt_IsRefusedAndNamesTheDependant()
     {
         // Arrange

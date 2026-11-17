@@ -9,7 +9,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
-using Invoklet.Connectors.Http;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Runtime.UI.Tests.App.Windows;
@@ -47,7 +47,7 @@ public class WindowDesignRegressionTests
             },
         }], "v1"));
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var vm = new ConnectionsWindowViewModel(store.Object, drivers, Secrets().Object);
         return (new ConnectionsWindow(vm), vm);
     }
