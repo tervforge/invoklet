@@ -53,8 +53,15 @@ public partial class PreferencesWindow : Window
 
     private async Task InstallPluginAsync(Func<Task<string?>> pickPath, bool archive)
     {
-        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model
-            || await pickPath() is not { } path) return;
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model) return;
+        string? path;
+        try { path = await pickPath(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            model.PluginsPage.ReportPackageError();
+            return;
+        }
+        if (path is null) return;
         await model.PluginsPage.InstallAsync(path, archive,
             manifest => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
     }

@@ -71,6 +71,8 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
         }
     }
 
+    internal void ReportPackageError() => PackageChanged(PackageError);
+
     private const string PackageError = "Could not update the plugin package. Check its manifest, ID and version, then try again.";
 
     private void PackageChanged(string? error)
@@ -132,11 +134,15 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
             var installed = row.Trust == nameof(PluginTrust.Trusted) && entry is { Approved: true }
                 && entry.Source != PluginInventoryStore.BundledSource && entry.Version == row.Version;
             var manageable = installed || bundled && (row.Status is "Loaded" or "Disabled");
+            var canRemove = CanInstall && !unreadableInventory && installed && PluginPackageInstaller.IsManaged(entry);
             rows[index] = row with
             {
                 CanToggle = setEnabled is not null && !unreadableInventory && manageable,
-                CanRemove = CanInstall && !unreadableInventory && installed
-                    && PluginPackageInstaller.IsManaged(entry),
+                CanRemove = canRemove,
+                // Approval covers the exact package bytes, so changed contents are approved again by reinstalling the package.
+                Diagnostics = canRemove && row.Status == ContentChanged
+                    ? [.. row.Diagnostics, "Remove the plugin and install its package again to approve the new contents."]
+                    : row.Diagnostics,
                 DesiredEnabled = bundled ? entry is not { Source: PluginInventoryStore.BundledSource, Enabled: false } : entry?.Enabled == true,
             };
         }
@@ -181,9 +187,6 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
         IReadOnlyList<PluginDiagnostic> diagnostics)
     {
         var messages = diagnostics.Select(diagnostic => diagnostic.Message).Distinct(StringComparer.Ordinal);
-        // Approval covers the exact package bytes, so changed contents are approved again by reinstalling the package.
-        if (status == ContentChanged && trust == PluginTrust.Trusted)
-            messages = messages.Append("Remove the plugin and install its package again to approve the new contents.");
         return new(manifest?.DisplayName ?? id, id, manifest?.Version,
             manifest is null ? "" : string.Join(", ", manifest.Roles.Keys.Select(PluginRoles.Name).Order(StringComparer.Ordinal)),
             trust.ToString(), status, messages.ToArray())

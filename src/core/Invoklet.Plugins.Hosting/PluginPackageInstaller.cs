@@ -174,7 +174,7 @@ public sealed class PluginPackageInstaller(string userDirectory, PluginInventory
                     .Where(manifest => manifest.DependsOn.Contains(id, StringComparer.Ordinal))
                     .Select(manifest => manifest.DisplayName).Order(StringComparer.Ordinal).ToArray();
                 if (dependants.Length > 0)
-                    throw new PluginRegistrationException($"Remove the plugins that depend on it first: {string.Join(", ", dependants)}.");
+                    throw new PluginRegistrationException($"Remove the plugins that depend on '{id}' first: {string.Join(", ", dependants)}.");
 
                 var destination = Path.Combine(userDirectory, id, entry.Version);
                 if (Directory.Exists(destination))

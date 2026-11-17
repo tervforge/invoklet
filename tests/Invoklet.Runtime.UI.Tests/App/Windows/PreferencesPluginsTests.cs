@@ -231,6 +231,7 @@ public sealed class PreferencesPluginsTests
         }
         finally { if (window.IsVisible) window.Close(); }
     }
+
     [AvaloniaFact]
     public async Task PluginsPage_InstallPackage_ChangesNothingUntilApprovedAndThenWaitsForRestart()
     {
@@ -304,7 +305,7 @@ public sealed class PreferencesPluginsTests
             await page.RemoveAsync(Row(PluginPackageFolderFixture.Parent), confirm.Object);
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Contains("Remove the plugins that depend on it first: Reef.", PreferencesPluginsFixture.PageText(window));
+            Assert.Contains("Remove the plugins that depend on 'example.theme.ocean' first: Reef.", PreferencesPluginsFixture.PageText(window));
             Assert.Equal(2, packages.Store.Read().Entries.Count);
             Assert.False(page.HasPendingRestart);
 
