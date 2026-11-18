@@ -1,6 +1,5 @@
 <Project>
   <PropertyGroup>
-    <InvokletPluginSourceTargets Condition="'$(InvokletBundledPluginsSource)' == '' and '$(InvokletPluginSourceTargets)' == '' and '$(InvokletShipConnectors)' == 'true'">StageConnectorPluginSources</InvokletPluginSourceTargets>
     <InvokletBundledPluginsSource Condition="'$(InvokletBundledPluginsSource)' == ''">$(MSBuildThisFileDirectory)plugins</InvokletBundledPluginsSource>
     <_InvokletPluginPackager>$(MSBuildThisFileDirectory)Invoklet.PluginPackager/Invoklet.PluginPackager.csproj</_InvokletPluginPackager>
     <_InvokletPackagerHost>$(DOTNET_HOST_PATH)</_InvokletPackagerHost>

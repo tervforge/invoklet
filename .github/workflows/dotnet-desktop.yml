@@ -112,10 +112,6 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write # creates/uploads to the draft release on push only
-      packages: read # the connector packages
-    env:
-      # Pull requests build without them until the packages are on GitHub Packages; pushes to main bundle them.
-      InvokletShipConnectors: ${{ github.event_name == 'push' }}
     outputs:
       release-id: ${{ steps.draft.outputs.release-id }}
       version: ${{ steps.draft.outputs.version }}
@@ -134,35 +130,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
-
-      # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
-      # A release must not wait on, or silently miss, a connector package: fail early, naming what is not published yet.
-      - name: 🔌 Check the connector packages are published
-        if: github.event_name == 'push'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          version=$(sed -n 's:.*<InvokletConnectorsVersion>\(.*\)</InvokletConnectorsVersion>.*:\1:p' build/ConnectorPlugins.targets)
-          missing=""
-          for id in efcore http grpc sqlite postgres sqlserver; do
-            if versions=$(gh api "orgs/tervforge/packages/nuget/invoklet.connector.$id/versions" --paginate --jq '.[].name' 2>gh-error); then
-              grep -qx "$version" <<< "$versions" || missing="$missing invoklet.connector.$id"
-            elif grep -q "HTTP 404" gh-error; then
-              missing="$missing invoklet.connector.$id"
-            else
-              echo "::error::Could not read the published versions of invoklet.connector.$id:"; cat gh-error; exit 1
-            fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Not on GitHub Packages at $version:$missing. Publish them from invoklet-plugins (push to its main) first."
-            exit 1
-          fi
-
-      - name: 🔌 Connector packages from GitHub Packages
-        if: github.event_name == 'push'
-        run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
         run: dotnet restore
@@ -298,12 +265,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # uploads to the draft release on push only
-      packages: read # the connector packages
-    env:
-      # This lane always bundles the connectors, so the bundled-connector tests run on pull requests too: built from the
-      # invoklet-plugins sources there, from GitHub Packages on pushes to main.
-      InvokletShipConnectors: 'true'
-      InvokletConnectorPackages: ${{ github.workspace }}/invoklet-plugins/artifacts/packages
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v5
@@ -319,34 +280,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
-
-      # The commit build/ConnectorPlugins.targets pins, so a change in invoklet-plugins never breaks or shifts this check.
-      - name: 🔌 Connector revision
-        if: github.event_name == 'pull_request'
-        id: plugins
-        run: echo "ref=$(sed -n 's:.*<InvokletPluginsCommit>\(.*\)</InvokletPluginsCommit>.*:\1:p' build/ConnectorPlugins.targets)" >> "$GITHUB_OUTPUT"
-
-      - name: 🔌 Connector sources
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v5
-        with:
-          repository: tervforge/invoklet-plugins
-          ref: ${{ steps.plugins.outputs.ref }}
-          path: invoklet-plugins
-
-      - name: 🔌 Connector packages from their sources
-        if: github.event_name == 'pull_request'
-        run: |
-          set -e
-          for p in Invoklet.Plugins Invoklet.Contracts Invoklet.Format.MdRun; do
-            dotnet pack "src/core/$p" -c Release -o invoklet-plugins/artifacts/contracts
-          done
-          dotnet pack invoklet-plugins/PluginPackages.slnx -c Release -o "$InvokletConnectorPackages"
-
-      # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
-      - name: 🔌 Connector packages from GitHub Packages
-        if: github.event_name == 'push'
-        run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
         run: dotnet restore
@@ -439,10 +372,6 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write # uploads to the draft release on push only
-      packages: read # the connector packages
-    env:
-      # Pull requests build without them until the packages are on GitHub Packages; pushes to main bundle them.
-      InvokletShipConnectors: ${{ github.event_name == 'push' }}
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v5
@@ -458,11 +387,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
-
-      # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
-      - name: 🔌 Connector packages from GitHub Packages
-        if: github.event_name == 'push'
-        run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
         run: dotnet restore
