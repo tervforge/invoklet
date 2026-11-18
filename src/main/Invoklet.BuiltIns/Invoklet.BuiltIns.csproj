@@ -3,6 +3,7 @@
     <ProjectReference Include="..\..\core\Invoklet.Plugins.Hosting\Invoklet.Plugins.Hosting.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.CSharp\Invoklet.Languages.CSharp.csproj" />
     <ProjectReference Include="..\..\languages\Invoklet.Languages.VB\Invoklet.Languages.VB.csproj" />
+    <PackageReference Include="NuGet.Protocol" />
   </ItemGroup>
   <Target Name="ReadInvokletProductVersion" BeforeTargets="GetAssemblyVersion">
     <!-- GUI and CLI use the same version for plugin compatibility. The desktop project owns the release version. -->

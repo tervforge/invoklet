@@ -36,6 +36,16 @@ public static class PluginStartup
             roles?.Keys.Select(PluginRoles.Name).ToArray(), session, Path.Combine(UserDataDirectory, "plugins"));
     }
 
+    /// <summary>The NuGet feed the Plugins page offers packages from.</summary>
+    public const string DefaultPluginFeed = "https://nuget.pkg.github.com/tervforge/index.json";
+
+    /// <summary>Points the Plugins page at another NuGet v3 feed, such as a local test feed.</summary>
+    public const string PluginFeedVariable = "INVOKLET_PLUGIN_FEED";
+
+    public static PluginFeedResolver CreatePluginFeed() =>
+        new(new NuGetPluginFeed(Environment.GetEnvironmentVariable(PluginFeedVariable) is { Length: > 0 } feed ? feed : DefaultPluginFeed),
+            ApplicationVersion, ReadBundledCatalog(BundledDirectory()));
+
     public static PluginPackageInstaller CreatePluginInstaller() =>
         new(Path.Combine(UserDataDirectory, "plugins"), InventoryStore, ReadBundledCatalog(BundledDirectory()));
 

@@ -354,6 +354,67 @@ public sealed class PreferencesPluginsTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public async Task PluginsPage_InstallFromFeed_DownloadsTheCompatibleVersionAndWaitsForRestart()
+    {
+        using var packages = new PluginPackageFolderFixture();
+        var package = File.ReadAllBytes(PluginPackageFolderFixture.Pack(packages.WriteTheme(PluginPackageFolderFixture.Parent)));
+        var feed = new Mock<IPluginFeed>();
+        feed.Setup(item => item.ListAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new PluginFeedPackage(PluginPackageFolderFixture.Parent, "Ocean", "A theme.", "1.0.0")]);
+        feed.Setup(item => item.GetVersionsAsync(PluginPackageFolderFixture.Parent, It.IsAny<CancellationToken>())).ReturnsAsync(["1.0.0"]);
+        feed.Setup(item => item.DownloadAsync(PluginPackageFolderFixture.Parent, "1.0.0", It.IsAny<CancellationToken>())).ReturnsAsync(package);
+        var page = packages.CreatePage(packages.Load(), feed.Object);
+        var confirm = new Mock<Func<PluginManifest, string, Task<bool>>>();
+        confirm.Setup(ask => ask(It.IsAny<PluginManifest>(), It.IsAny<string>())).ReturnsAsync(true);
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            window.FindControl<Button>("BrowsePluginsButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("A theme.", PreferencesPluginsFixture.PageText(window));
+
+            await page.InstallFromFeedAsync(Assert.Single(page.FeedPackages), confirm.Object, TestContext.Current.CancellationToken);
+            Dispatcher.UIThread.RunJobs();
+
+            var text = PreferencesPluginsFixture.PageText(window);
+            Assert.Contains("Pending restart", text);
+            Assert.Contains("Installed 1.0.0", text);
+            Assert.True(window.FindControl<Button>("RestartForPluginsButton")!.IsEffectivelyVisible);
+            Assert.Equal(PluginContent.ComputeHash(Path.Combine(packages.Root, "source", PluginPackageFolderFixture.Parent)),
+                Assert.Single(packages.Store.Read().Entries).ContentHash);
+            confirm.Verify(ask => ask(It.Is<PluginManifest>(manifest => manifest.Version == "1.0.0"),
+                It.Is<string>(path => Path.GetFileName(path) == "example.theme.ocean.1.0.0.nupkg")), Times.Once);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task PluginsPage_FeedUnreachable_ShowsTheReasonAndKeepsInstalledPlugins()
+    {
+        using var packages = new PluginPackageFolderFixture();
+        packages.Install(PluginPackageFolderFixture.Parent);
+        var feed = new Mock<IPluginFeed>();
+        feed.Setup(item => item.ListAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new PluginFeedException(PluginFeedError.Unreachable));
+        var page = packages.CreatePage(packages.Load(), feed.Object);
+        var window = _fixture.CreateSut(page);
+
+        try
+        {
+            PreferencesPluginsFixture.ShowPlugins(window);
+            await page.BrowseAsync(TestContext.Current.CancellationToken);
+            Dispatcher.UIThread.RunJobs();
+
+            var text = PreferencesPluginsFixture.PageText(window);
+            Assert.Contains("The plugin feed could not be reached. Check the connection and try again.", text);
+            Assert.Contains("Ocean", text);
+            Assert.Single(packages.Store.Read().Entries);
+        }
+        finally { window.Close(); }
+    }
 }
 
 /// <summary>The Preferences window with the services its view model needs mocked; the Plugins page model is the test's own.</summary>
@@ -455,9 +516,10 @@ public sealed class PluginPackageFolderFixture : IDisposable
         NativeLibraryCacheDirectory = Path.Combine(Root, "native"),
     }, [new ThemeCatalog()], NullLoggerFactory.Instance).Load();
 
-    public PluginsPageViewModel CreatePage(PluginSession session) => new(session, Store.Read, () => Task.CompletedTask,
+    public PluginsPageViewModel CreatePage(PluginSession session, IPluginFeed? feed = null) => new(session, Store.Read, () => Task.CompletedTask,
         setEnabled: (id, enabled) => Store.SetEnabled(id, enabled, BundledPluginCatalog.Empty, session: session, userDirectory: UserDirectory),
-        createInstaller: () => Installer);
+        createInstaller: () => Installer,
+        createFeed: feed is null ? null : () => new PluginFeedResolver(feed, new Version(1, 0), BundledPluginCatalog.Empty));
 
     public void Dispose() => Directory.Delete(Root, recursive: true);
 }

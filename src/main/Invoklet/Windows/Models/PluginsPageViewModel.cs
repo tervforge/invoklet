@@ -17,11 +17,23 @@ public sealed record PluginStatusRow(string Name, string Id, string? Version, st
     public string ToggleAutomationName => $"{ToggleLabel} {Name}";
 }
 
+/// <summary>A package the plugin feed offers, with what installing it would mean here.</summary>
+public sealed record PluginFeedRow(PluginFeedPackage Package, string State, bool CanInstall)
+{
+    public string Name => Package.Title;
+    public string Metadata => $"{Package.Id} · {Package.LatestVersion}";
+    public string InstallAutomationName => $"Install {Package.Title}";
+}
+
 /// <param name="startupError">What kept the host from applying its plugin arguments at this start, if anything; shown first.</param>
 public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInventory> readInventory, Func<Task> restart,
     string? startupError = null, Func<string, bool>? directoryExists = null, Action<string, bool>? setEnabled = null,
-    Func<PluginPackageInstaller>? createInstaller = null) : ViewModelBase
+    Func<PluginPackageInstaller>? createInstaller = null, Func<PluginFeedResolver>? createFeed = null) : ViewModelBase
 {
+    private IReadOnlyList<PluginFeedRow> _feedPackages = [];
+    private string? _feedStatus;
+    private bool _isFeedBusy;
+
     private IReadOnlyList<PluginStatusRow> _rows = [];
     private IReadOnlyList<string> _diagnostics = [];
     private bool _hasPendingRestart;
@@ -32,6 +44,89 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
     public bool HasPendingRestart => _hasPendingRestart;
     public bool IsEmpty => Rows.Count == 0 && Diagnostics.Count == 0;
     public bool CanInstall => createInstaller is not null;
+    public bool CanBrowse => createFeed is not null && createInstaller is not null;
+    public IReadOnlyList<PluginFeedRow> FeedPackages => _feedPackages;
+    public string? FeedStatus => _feedStatus;
+    public bool IsFeedBusy => _isFeedBusy;
+
+    /// <summary>Lists the feed's plugin packages; nothing is downloaded until one is installed.</summary>
+    internal async Task BrowseAsync(CancellationToken cancellationToken = default)
+    {
+        if (!CanBrowse || IsFeedBusy) return;
+        SetFeed(busy: true, "Loading the plugin feed…");
+        try
+        {
+            var packages = await createFeed!().ListAsync(cancellationToken);
+            this.RaiseAndSetIfChanged(ref _feedPackages, packages.Select(FeedRow).ToArray(), nameof(FeedPackages));
+            SetFeed(busy: false, packages.Count == 0 ? "The plugin feed lists no plugins." : null);
+        }
+        catch (PluginFeedException ex)
+        {
+            SetFeed(busy: false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Downloads the newest version of a feed package that works with this Invoklet and installs it through the same review and
+    /// approval as a package file.
+    /// </summary>
+    internal async Task InstallFromFeedAsync(PluginFeedRow row, Func<PluginManifest, string, Task<bool>> confirm,
+        CancellationToken cancellationToken = default)
+    {
+        if (!CanBrowse || IsFeedBusy || !row.CanInstall) return;
+        SetFeed(busy: true, $"Finding a version of {row.Name} for this Invoklet…");
+        string? staging = null;
+        try
+        {
+            var skipped = new List<string>();
+            if (await createFeed!().ChooseAsync(row.Package.Id, skipped, cancellationToken) is not { } choice)
+            {
+                SetFeed(busy: false, $"No version of {row.Name} works with this Invoklet. Newest: {skipped[0]}");
+                return;
+            }
+            staging = Directory.CreateTempSubdirectory("invoklet-plugin-").FullName;
+            var path = Path.Combine(staging, $"{choice.Id}.{choice.Version}.nupkg");
+            await File.WriteAllBytesAsync(path, choice.Package, cancellationToken);
+            SetFeed(busy: false, null);
+            await InstallAsync(path, manifest => confirm(manifest, path));
+            this.RaiseAndSetIfChanged(ref _feedPackages, _feedPackages.Select(item => FeedRow(item.Package)).ToArray(), nameof(FeedPackages));
+        }
+        catch (PluginFeedException ex)
+        {
+            SetFeed(busy: false, ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetFeed(busy: false, "The downloaded plugin package could not be saved for review.");
+        }
+        finally
+        {
+            if (staging is not null)
+            {
+                try { Directory.Delete(staging, recursive: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+        }
+    }
+
+    private PluginFeedRow FeedRow(PluginFeedPackage package)
+    {
+        if (Rows.Any(row => row.Id == package.Id && row.Trust == nameof(PluginTrust.Bundled)))
+            return new PluginFeedRow(package, "Included with Invoklet", CanInstall: false);
+        PluginInventoryEntry? entry;
+        try { entry = readInventory().Entries.FirstOrDefault(item => item.Id == package.Id); }
+        catch (InvalidOperationException) { entry = null; }
+        if (entry is { Source: not PluginInventoryStore.BundledSource })
+            return new PluginFeedRow(package, entry.Version == package.LatestVersion ? $"Installed {entry.Version}"
+                : $"Installed {entry.Version}; {package.LatestVersion} is available. To update, remove it and install again.", CanInstall: false);
+        return new PluginFeedRow(package, "", CanInstall: CanInstall);
+    }
+
+    private void SetFeed(bool busy, string? status)
+    {
+        this.RaiseAndSetIfChanged(ref _isFeedBusy, busy, nameof(IsFeedBusy));
+        this.RaiseAndSetIfChanged(ref _feedStatus, status, nameof(FeedStatus));
+    }
 
     /// <summary>Reviews a NuGet plugin package, asks <paramref name="confirm"/> to approve it and installs it for the next start.</summary>
     internal async Task InstallAsync(string path, Func<PluginManifest, Task<bool>> confirm)

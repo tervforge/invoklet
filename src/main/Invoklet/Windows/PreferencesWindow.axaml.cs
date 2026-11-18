@@ -56,6 +56,18 @@ public partial class PreferencesWindow : Window
             manifest => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
     }
 
+    private async void BrowsePlugins_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel model) await model.PluginsPage.BrowseAsync();
+    }
+
+    private async void InstallFeedPlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel model && sender is Button { DataContext: PluginFeedRow row })
+            await model.PluginsPage.InstallFromFeedAsync(row,
+                (manifest, path) => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
+    }
+
     private async void RemovePlugin_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is PreferencesWindowViewModel model && sender is Button { DataContext: PluginStatusRow row })
