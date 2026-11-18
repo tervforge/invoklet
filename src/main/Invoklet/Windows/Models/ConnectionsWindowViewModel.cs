@@ -289,7 +289,7 @@ public sealed class ConnectionFieldViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> AddRowCommand { get; }
     public ReactiveCommand<ConnectionMapRowViewModel, Unit> RemoveRowCommand { get; }
 
-    internal ConnectionFieldViewModel(ConnectionParam param, MdRunValue? value, IReadOnlyList<string> secretNames)
+    public ConnectionFieldViewModel(ConnectionParam param, MdRunValue? value, IReadOnlyList<string> secretNames)
     {
         Param = param;
         SecretNames = secretNames;

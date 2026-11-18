@@ -1,15 +1,15 @@
 <Project>
   <!-- The connectors Invoklet ships with. They are built in the invoklet-plugins repository and taken here as NuGet packages: from
-       this repository's artifacts/plugins folder when it holds them (`dotnet pack PluginPackages.slnx -o <this repository>/artifacts/plugins`),
-       read straight from the .nupkg files so a repacked version is never stale; otherwise restored from the invoklet-plugins source of
-       nuget.config, which release builds point at GitHub Packages. Each package's plugin/ folder is staged, without the native
-       libraries of other operating systems when the build has a runtime identifier; the plugin packager then writes bundled.json.
-       Without the packages Invoklet builds with no bundled connector; set InvokletShipConnectors to require them. -->
+       InvokletConnectorPackages, by default the artifacts/packages folder of an invoklet-plugins checkout beside this one
+       (`dotnet pack PluginPackages.slnx -c Release -o artifacts/packages` there), read straight from the .nupkg files so a repacked
+       version is never stale; otherwise restored from the invoklet-plugins source of nuget.config, which release builds point at
+       GitHub Packages. Each package's plugin/ folder is staged, without the native libraries of other operating systems when the
+       build has a runtime identifier; the plugin packager then writes bundled.json. Without the packages Invoklet builds with no
+       bundled connector; set InvokletShipConnectors to require them. -->
   <PropertyGroup>
     <InvokletConnectorsVersion>1.0.0</InvokletConnectorsVersion>
-    <_InvokletLocalConnectors>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../artifacts/plugins'))</_InvokletLocalConnectors>
-    <_InvokletUseLocalConnectors Condition="Exists('$(_InvokletLocalConnectors)/invoklet.connector.http.$(InvokletConnectorsVersion).nupkg')">true</_InvokletUseLocalConnectors>
-    <InvokletShipConnectors Condition="'$(InvokletShipConnectors)' == '' and '$(_InvokletUseLocalConnectors)' == 'true'">true</InvokletShipConnectors>
+    <InvokletConnectorPackages Condition="'$(InvokletConnectorPackages)' == ''">$(MSBuildThisFileDirectory)../../invoklet-plugins/artifacts/packages</InvokletConnectorPackages>
+    <_InvokletLocalConnectors>$([System.IO.Path]::GetFullPath('$(InvokletConnectorPackages)'))</_InvokletLocalConnectors>
   </PropertyGroup>
   <ItemGroup>
     <InvokletConnectorPackage Include="invoklet.connector.efcore" PluginPath="library/invoklet.connector.efcore" />
@@ -19,6 +19,20 @@
     <InvokletConnectorPackage Include="invoklet.connector.postgres" PluginPath="connection/invoklet.connector.postgres" />
     <InvokletConnectorPackage Include="invoklet.connector.sqlserver" PluginPath="connection/invoklet.connector.sqlserver" />
   </ItemGroup>
+  <!-- Local packages are used when the folder holds any of them; then all six must be there. -->
+  <PropertyGroup>
+    <_InvokletUseLocalConnectors Condition="Exists('$(_InvokletLocalConnectors)/invoklet.connector.efcore.$(InvokletConnectorsVersion).nupkg') or Exists('$(_InvokletLocalConnectors)/invoklet.connector.http.$(InvokletConnectorsVersion).nupkg') or Exists('$(_InvokletLocalConnectors)/invoklet.connector.grpc.$(InvokletConnectorsVersion).nupkg') or Exists('$(_InvokletLocalConnectors)/invoklet.connector.sqlite.$(InvokletConnectorsVersion).nupkg') or Exists('$(_InvokletLocalConnectors)/invoklet.connector.postgres.$(InvokletConnectorsVersion).nupkg') or Exists('$(_InvokletLocalConnectors)/invoklet.connector.sqlserver.$(InvokletConnectorsVersion).nupkg')">true</_InvokletUseLocalConnectors>
+    <InvokletShipConnectors Condition="'$(InvokletShipConnectors)' == '' and '$(_InvokletUseLocalConnectors)' == 'true'">true</InvokletShipConnectors>
+  </PropertyGroup>
+  <Target Name="CheckLocalConnectorPackages" BeforeTargets="Restore;_GenerateRestoreGraph;Build"
+          Condition="'$(InvokletShipConnectors)' == 'true' and '$(_InvokletUseLocalConnectors)' == 'true'">
+    <ItemGroup>
+      <_InvokletMissingLocalConnector Include="@(InvokletConnectorPackage->'%(Identity).$(InvokletConnectorsVersion).nupkg')"
+                                      Condition="!Exists('$(_InvokletLocalConnectors)/%(Identity).$(InvokletConnectorsVersion).nupkg')" />
+    </ItemGroup>
+    <Error Condition="'@(_InvokletMissingLocalConnector)' != ''"
+           Text="$(_InvokletLocalConnectors) holds some connector packages but not: @(_InvokletMissingLocalConnector, ', '). Pack all of invoklet-plugins (PluginPackages.slnx) at version $(InvokletConnectorsVersion), or empty the folder." />
+  </Target>
   <ItemGroup Condition="'$(InvokletShipConnectors)' == 'true' and '$(_InvokletUseLocalConnectors)' != 'true'">
     <PackageDownload Include="@(InvokletConnectorPackage)" Version="[$(InvokletConnectorsVersion)]" />
   </ItemGroup>

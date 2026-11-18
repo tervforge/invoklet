@@ -31,6 +31,12 @@ public sealed class CSharpLanguageHost : CompiledDotnetLanguageHostBase
 
     protected override DotnetLanguageProjectProfile ProjectProfile => CSharpProjectProfile.Instance;
 
+    /// <summary>A host that compiles and runs with the default compiler and child processes.</summary>
+    public CSharpLanguageHost(CompiledDotnetLanguageHostOptions options, ILoggerFactory loggerFactory)
+        : this(options, loggerFactory, null, null, null)
+    {
+    }
+
     internal CSharpLanguageHost(
         CompiledDotnetLanguageHostOptions options,
         ILoggerFactory loggerFactory,
