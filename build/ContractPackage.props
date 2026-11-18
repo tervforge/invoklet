@@ -1,8 +1,8 @@
 <Project>
-  <!-- The public contracts a plugin compiles against. They ship as NuGet packages that share one version:
-       the major version changes only when a role contract changes incompatibly (the manifest's role version
-       follows it), and minor/patch releases add members without breaking plugins built against an older one.
-       The host always supplies its own copy of these assemblies, so a plugin never carries them. -->
+  <!-- The public contracts a plugin compiles against. They ship as NuGet packages that share one version: the major version
+       changes only when a role contract changes incompatibly (the manifest's role version follows it); minor and patch releases
+       only add. A plugin that uses something a minor release added sets the manifest's minAppVersion to the first Invoklet with it.
+       The host always supplies its own copy of these assemblies, so a plugin package leaves them out. -->
   <PropertyGroup>
     <InvokletContractsVersion>1.0.0</InvokletContractsVersion>
     <IsPackable>true</IsPackable>

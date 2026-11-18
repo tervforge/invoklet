@@ -248,6 +248,31 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Equal(["1.0.0", "2.0.0"], _fixture.Connections.Registrations.Select(r => r.Plugin!.Descriptor.Version));
     }
 
+    // The dependency resolver reports a library's path with links resolved; the plugin folder was found through a link above it.
+    // (A link as the plugin folder itself is refused.)
+    [Fact]
+    public void Load_Should_LoadAPrivateLibraryWhenTheUserFolderIsReachedThroughALinkAboveIt()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating a symbolic link needs a privilege on Windows.");
+        _fixture.AddPluginWithPrivateLibrary("invoklet.fixture.linked", "1.0.0");
+        var link = _fixture.Root + "-parent-link";
+        Directory.CreateSymbolicLink(link, Path.GetDirectoryName(_fixture.Root)!);
+        try
+        {
+            var session = _fixture.CreateSut(new PluginLoaderOptions
+            {
+                ApplicationVersion = _fixture.ApplicationVersion,
+                UserDirectory = Path.Combine(link, Path.GetFileName(_fixture.Root)),
+                Inventory = _fixture.ApproveDiscovered(),
+                NativeLibraryCacheDirectory = _fixture.NativeCache,
+            }).Load();
+
+            Assert.Empty(session.Rejected);
+            Assert.Equal("1.0.0", Assert.Single(_fixture.Connections.Registrations).Plugin!.Descriptor.Version);
+        }
+        finally { Directory.Delete(link); }
+    }
+
     [Fact]
     public void Load_Should_RejectTheDependantsOfAPluginThatFailed()
     {

@@ -1,11 +1,15 @@
 <Project>
-  <!-- The connectors Invoklet ships with. They are built in the invoklet-plugins repository and taken here as NuGet packages: the
-       invoklet-plugins source of nuget.config is a local folder (fill it with `dotnet pack PluginPackages.slnx -o <this repository>/artifacts/plugins`),
-       and release builds point it at GitHub Packages. Each package's plugin/ folder is staged as it is; the plugin packager then
-       writes bundled.json. Without the packages Invoklet builds with no bundled connector; set InvokletShipConnectors to require them. -->
+  <!-- The connectors Invoklet ships with. They are built in the invoklet-plugins repository and taken here as NuGet packages: from
+       this repository's artifacts/plugins folder when it holds them (`dotnet pack PluginPackages.slnx -o <this repository>/artifacts/plugins`),
+       read straight from the .nupkg files so a repacked version is never stale; otherwise restored from the invoklet-plugins source of
+       nuget.config, which release builds point at GitHub Packages. Each package's plugin/ folder is staged, without the native
+       libraries of other operating systems when the build has a runtime identifier; the plugin packager then writes bundled.json.
+       Without the packages Invoklet builds with no bundled connector; set InvokletShipConnectors to require them. -->
   <PropertyGroup>
     <InvokletConnectorsVersion>1.0.0</InvokletConnectorsVersion>
-    <InvokletShipConnectors Condition="'$(InvokletShipConnectors)' == '' and Exists('$(MSBuildThisFileDirectory)../artifacts/plugins/invoklet.connector.http.$(InvokletConnectorsVersion).nupkg')">true</InvokletShipConnectors>
+    <_InvokletLocalConnectors>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../artifacts/plugins'))</_InvokletLocalConnectors>
+    <_InvokletUseLocalConnectors Condition="Exists('$(_InvokletLocalConnectors)/invoklet.connector.http.$(InvokletConnectorsVersion).nupkg')">true</_InvokletUseLocalConnectors>
+    <InvokletShipConnectors Condition="'$(InvokletShipConnectors)' == '' and '$(_InvokletUseLocalConnectors)' == 'true'">true</InvokletShipConnectors>
   </PropertyGroup>
   <ItemGroup>
     <InvokletConnectorPackage Include="invoklet.connector.efcore" PluginPath="library/invoklet.connector.efcore" />
@@ -15,20 +19,34 @@
     <InvokletConnectorPackage Include="invoklet.connector.postgres" PluginPath="connection/invoklet.connector.postgres" />
     <InvokletConnectorPackage Include="invoklet.connector.sqlserver" PluginPath="connection/invoklet.connector.sqlserver" />
   </ItemGroup>
-  <ItemGroup Condition="'$(InvokletShipConnectors)' == 'true'">
+  <ItemGroup Condition="'$(InvokletShipConnectors)' == 'true' and '$(_InvokletUseLocalConnectors)' != 'true'">
     <PackageDownload Include="@(InvokletConnectorPackage)" Version="[$(InvokletConnectorsVersion)]" />
   </ItemGroup>
   <Target Name="StageConnectorPluginSources">
     <PropertyGroup>
       <_ConnectorSourceDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)connector-packages'))</_ConnectorSourceDirectory>
+      <_ConnectorUnpackedDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)connector-nupkgs'))</_ConnectorUnpackedDirectory>
       <InvokletBundledPluginsSource>$(_ConnectorSourceDirectory)</InvokletBundledPluginsSource>
+      <!-- runtimes/<rid> folders a build for $(RuntimeIdentifier) can load: its own, its operating system's and unix for macOS and Linux. -->
+      <_ConnectorRuntimeOs>$(RuntimeIdentifier.Split('-')[0])</_ConnectorRuntimeOs>
+      <_ConnectorRuntimes>;$(RuntimeIdentifier);$(_ConnectorRuntimeOs);</_ConnectorRuntimes>
+      <_ConnectorRuntimes Condition="'$(_ConnectorRuntimeOs)' != 'win'">$(_ConnectorRuntimes)unix;</_ConnectorRuntimes>
     </PropertyGroup>
+    <RemoveDir Directories="$(_ConnectorSourceDirectory);$(_ConnectorUnpackedDirectory)" />
+    <Unzip Condition="'$(_InvokletUseLocalConnectors)' == 'true'"
+           SourceFiles="@(InvokletConnectorPackage->'$(_InvokletLocalConnectors)/%(Identity).$(InvokletConnectorsVersion).nupkg')"
+           DestinationFolder="$(_ConnectorUnpackedDirectory)/%(InvokletConnectorPackage.Identity)" />
     <ItemGroup>
-      <_ConnectorPackageFolder Include="@(InvokletConnectorPackage->'$(NuGetPackageRoot)%(Identity)/$(InvokletConnectorsVersion)/plugin')" />
+      <_ConnectorPackageFolder Condition="'$(_InvokletUseLocalConnectors)' == 'true'"
+                               Include="@(InvokletConnectorPackage->'$(_ConnectorUnpackedDirectory)/%(Identity)/plugin')" />
+      <_ConnectorPackageFolder Condition="'$(_InvokletUseLocalConnectors)' != 'true'"
+                               Include="@(InvokletConnectorPackage->'$(NuGetPackageRoot)%(Identity)/$(InvokletConnectorsVersion)/plugin')" />
       <_ConnectorPayloadFile Include="%(_ConnectorPackageFolder.Identity)/**" PluginPath="%(_ConnectorPackageFolder.PluginPath)" />
+      <_ConnectorPayloadFile Remove="@(_ConnectorPayloadFile)"
+                             Condition="'$(RuntimeIdentifier)' != '' and $([System.String]::Copy('%(RecursiveDir)').Replace('\', '/').StartsWith('runtimes/'))
+                                        and !$(_ConnectorRuntimes.Contains(';$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/').Split('/')[1]);'))" />
     </ItemGroup>
     <Error Condition="!Exists('%(_ConnectorPackageFolder.Identity)')" Text="The connector package has no plugin folder: %(_ConnectorPackageFolder.Identity)" />
-    <RemoveDir Directories="$(_ConnectorSourceDirectory)" Condition="Exists('$(_ConnectorSourceDirectory)')" />
     <Copy SourceFiles="@(_ConnectorPayloadFile)" DestinationFiles="@(_ConnectorPayloadFile->'$(_ConnectorSourceDirectory)/%(PluginPath)/%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 </Project>

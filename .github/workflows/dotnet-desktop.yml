@@ -114,7 +114,8 @@ jobs:
       contents: write # creates/uploads to the draft release on push only
       packages: read # the connector packages
     env:
-      InvokletShipConnectors: 'true'
+      # Pull requests build without them until the packages are on GitHub Packages; pushes to main bundle them.
+      InvokletShipConnectors: ${{ github.event_name == 'push' }}
     outputs:
       release-id: ${{ steps.draft.outputs.release-id }}
       version: ${{ steps.draft.outputs.version }}
@@ -136,6 +137,7 @@ jobs:
 
       # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
       - name: 🔌 Connector packages from GitHub Packages
+        if: github.event_name == 'push'
         run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
@@ -274,7 +276,8 @@ jobs:
       contents: write # uploads to the draft release on push only
       packages: read # the connector packages
     env:
-      InvokletShipConnectors: 'true'
+      # Pull requests build without them until the packages are on GitHub Packages; pushes to main bundle them.
+      InvokletShipConnectors: ${{ github.event_name == 'push' }}
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v5
@@ -293,6 +296,7 @@ jobs:
 
       # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
       - name: 🔌 Connector packages from GitHub Packages
+        if: github.event_name == 'push'
         run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore
@@ -388,7 +392,8 @@ jobs:
       contents: write # uploads to the draft release on push only
       packages: read # the connector packages
     env:
-      InvokletShipConnectors: 'true'
+      # Pull requests build without them until the packages are on GitHub Packages; pushes to main bundle them.
+      InvokletShipConnectors: ${{ github.event_name == 'push' }}
     steps:
       - name: 🚚 Checkout
         uses: actions/checkout@v5
@@ -407,6 +412,7 @@ jobs:
 
       # The connectors Invoklet ships with come from the invoklet-plugins packages (build/ConnectorPlugins.targets).
       - name: 🔌 Connector packages from GitHub Packages
+        if: github.event_name == 'push'
         run: dotnet nuget update source invoklet-plugins --source https://nuget.pkg.github.com/tervforge/index.json --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --configfile nuget.config
 
       - name: 📦 Restore

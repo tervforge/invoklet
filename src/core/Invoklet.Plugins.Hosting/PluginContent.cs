@@ -294,7 +294,8 @@ internal sealed class PluginFiles(string root, Dictionary<string, byte[]> digest
     {
         if (Path.GetDirectoryName(path) is not { } parent) return path;
         var current = Path.Combine(ResolveLinks(parent), Path.GetFileName(path));
-        return new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? current;
+        // A link's target can itself sit under a link (~/x -> /var/x on macOS), so the target is resolved again.
+        return new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true) is { } target ? ResolveLinks(target.FullName) : current;
     }
 
     private static string RelativeName(string root, string path) =>
