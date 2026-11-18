@@ -30,10 +30,8 @@ public partial class ThemeResourceKeyParityTests
     [Fact]
     public void BuiltInPalettes_LoadedFromJson_DefineEveryCataloguedPaletteKey()
     {
-        var builtIn = Directory.GetFiles(Path.Combine(_root, ThemeDirectory, "Themes"), "*.json");
-        var bundled = Directory.GetFiles(Path.Combine(_root, "build", "plugins", "themes"), "*.json", SearchOption.AllDirectories)
-            .Where(path => Path.GetFileName(path) != "invoklet-plugin.json").ToArray();
-        var files = builtIn.Concat(bundled);
+        // The theme packages (VS Code, Rider, VS 2022) are plugins with a check of their own where they are built.
+        var files = Directory.GetFiles(Path.Combine(_root, ThemeDirectory, "Themes"), "*.json");
         var reader = new ThemeDefinitionReader();
         var expected = ThemeKeyCatalog.Palette.Select(key => key.Name).Order(StringComparer.Ordinal).ToArray();
         var ids = new List<string>();
@@ -46,9 +44,7 @@ public partial class ThemeResourceKeyParityTests
             ids.Add(definition.Id);
         }
 
-        Assert.Equal(8, ids.Count);
-        Assert.Equal(8, ids.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(6, bundled.Length);
+        Assert.Equal(2, ids.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(2, BuiltInInterfaceThemes.All.Count);
         Assert.All(BuiltInInterfaceThemes.All, theme => Assert.Contains(theme.Id, ids));
     }
