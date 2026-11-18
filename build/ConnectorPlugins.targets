@@ -8,6 +8,9 @@
        bundled connector; set InvokletShipConnectors to require them. -->
   <PropertyGroup>
     <InvokletConnectorsVersion>1.0.0</InvokletConnectorsVersion>
+    <!-- The invoklet-plugins commit pull request CI packs the connectors from: one that builds them at InvokletConnectorsVersion
+         against this Invoklet. Moved on together with the version. -->
+    <InvokletPluginsCommit>65de7db1284b7ad70439c3cf62438b59a10bd044</InvokletPluginsCommit>
     <InvokletConnectorPackages Condition="'$(InvokletConnectorPackages)' == ''">$(MSBuildThisFileDirectory)../../invoklet-plugins/artifacts/packages</InvokletConnectorPackages>
     <_InvokletLocalConnectors>$([System.IO.Path]::GetFullPath('$(InvokletConnectorPackages)'))</_InvokletLocalConnectors>
   </PropertyGroup>

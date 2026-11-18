@@ -147,8 +147,12 @@ jobs:
           version=$(sed -n 's:.*<InvokletConnectorsVersion>\(.*\)</InvokletConnectorsVersion>.*:\1:p' build/ConnectorPlugins.targets)
           missing=""
           for id in efcore http grpc sqlite postgres sqlserver; do
-            if ! gh api "orgs/tervforge/packages/nuget/invoklet.connector.$id/versions" --jq '.[].name' 2>/dev/null | grep -qx "$version"; then
+            if versions=$(gh api "orgs/tervforge/packages/nuget/invoklet.connector.$id/versions" --paginate --jq '.[].name' 2>gh-error); then
+              grep -qx "$version" <<< "$versions" || missing="$missing invoklet.connector.$id"
+            elif grep -q "HTTP 404" gh-error; then
               missing="$missing invoklet.connector.$id"
+            else
+              echo "::error::Could not read the published versions of invoklet.connector.$id:"; cat gh-error; exit 1
             fi
           done
           if [ -n "$missing" ]; then
@@ -316,11 +320,18 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      # The commit build/ConnectorPlugins.targets pins, so a change in invoklet-plugins never breaks or shifts this check.
+      - name: 🔌 Connector revision
+        if: github.event_name == 'pull_request'
+        id: plugins
+        run: echo "ref=$(sed -n 's:.*<InvokletPluginsCommit>\(.*\)</InvokletPluginsCommit>.*:\1:p' build/ConnectorPlugins.targets)" >> "$GITHUB_OUTPUT"
+
       - name: 🔌 Connector sources
         if: github.event_name == 'pull_request'
         uses: actions/checkout@v5
         with:
           repository: tervforge/invoklet-plugins
+          ref: ${{ steps.plugins.outputs.ref }}
           path: invoklet-plugins
 
       - name: 🔌 Connector packages from their sources
@@ -598,30 +609,38 @@ jobs:
             dotnet pack "src/core/$p" -c Release -o artifacts/contracts
           done
 
-      - name: 🔎 Check versions
+      # A version is pushed only once GitHub Packages confirmed it is not there; one already there is fine only when the contracts
+      # did not change. Any other answer from the API stops the job, so a failed lookup never passes an old package off as new.
+      - name: 🚀 Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BEFORE: ${{ github.event.before }}
+          API_KEY: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
+          set -euo pipefail
           version=$(sed -n 's:.*<InvokletContractsVersion>\(.*\)</InvokletContractsVersion>.*:\1:p' build/ContractPackage.props)
-          changed=true
-          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            git diff --quiet "$BEFORE" HEAD -- src/core/Invoklet.Plugins src/core/Invoklet.Contracts src/core/Invoklet.Format.MdRun \
-              build/ContractPackage.props Directory.Build.props Directory.Packages.props && changed=false
+          unchanged=false
+          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null && git diff --quiet "$BEFORE" HEAD -- src/core/Invoklet.Plugins \
+              src/core/Invoklet.Contracts src/core/Invoklet.Format.MdRun build/ContractPackage.props Directory.Build.props Directory.Packages.props; then
+            unchanged=true
           fi
           for id in Invoklet.Plugins Invoklet.Contracts Invoklet.Format.MdRun; do
             lower=$(echo "$id" | tr '[:upper:]' '[:lower:]')
-            if gh api "orgs/tervforge/packages/nuget/$lower/versions" --jq '.[].name' 2>/dev/null | grep -qx "$version" && [ "$changed" = true ]; then
-              echo "::error::$id $version is already published and the contracts changed: raise InvokletContractsVersion."
+            if versions=$(gh api "orgs/tervforge/packages/nuget/$lower/versions" --paginate --jq '.[].name' 2>gh-error); then
+              published=$(grep -qx "$version" <<< "$versions" && echo true || echo false)
+            elif grep -q "HTTP 404" gh-error; then
+              published=false
+            else
+              echo "::error::Could not read the published versions of $id:"; cat gh-error; exit 1
+            fi
+            if [ "$published" = true ]; then
+              if [ "$unchanged" = true ]; then echo "$id $version is published and unchanged."; continue; fi
+              echo "::error::$id $version is already published and the contracts may have changed: raise InvokletContractsVersion."
               exit 1
             fi
+            dotnet nuget push "artifacts/contracts/$id.$version.nupkg" --source https://nuget.pkg.github.com/tervforge/index.json \
+              --api-key "$API_KEY" --no-symbols
           done
-
-      - name: 🚀 Publish
-        run: >
-          dotnet nuget push "artifacts/contracts/*.nupkg" --source https://nuget.pkg.github.com/tervforge/index.json
-          --api-key "${{ secrets.GITHUB_TOKEN }}" --skip-duplicate --no-symbols
 
   release:
     name: Publish GitHub Release
