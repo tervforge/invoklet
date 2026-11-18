@@ -20,7 +20,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - Disable dependent plugins when their dependency is disabled in Preferences.
 - Show a "Content changed" state in Preferences → Plugins when installed plugin files no longer match their approval, and block removal of a plugin that other installed plugins depend on, naming them.
 - Install plugins in Preferences → Plugins from NuGet packages (`.nupkg`) with the **Install package…** button.
-- List the plugins of the Invoklet plugin feed in Preferences → Plugins → Available plugins and install the newest version that works with this Invoklet, through the same review and approval as a package file.
+- List the plugins of the public Invoklet plugin feed (no sign-in) in Preferences → Plugins → Available plugins and install the newest version that works with this Invoklet, through the same review and approval as a package file.
 - Avoid loading plugins for CLI help and version commands, enforce archive size limits during extraction, and preserve successful removal if staging cleanup fails.
 
 ### Fixed

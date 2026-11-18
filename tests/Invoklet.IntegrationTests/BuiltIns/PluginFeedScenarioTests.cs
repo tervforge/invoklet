@@ -11,7 +11,8 @@ namespace Invoklet.IntegrationTests;
 
 /// <summary>
 /// The whole Plugins page flow with real packages over HTTP: browse the feed, install a theme, restart, disable, enable, remove and
-/// restart again. The packages are the ones the plugins repository packs; set INVOKLET_PLUGIN_PACKAGES to a folder that holds them (searched recursively).
+/// restart again. The packages are the ones the plugins repository packs: set INVOKLET_PLUGIN_FEED to a feed that serves them (such as
+/// the static feed its build/static_feed.py writes), or INVOKLET_PLUGIN_PACKAGES to a folder that holds them (searched recursively).
 /// </summary>
 [Trait("Category", "Integration")]
 public sealed class PluginFeedScenarioTests : IDisposable
@@ -19,6 +20,7 @@ public sealed class PluginFeedScenarioTests : IDisposable
     private const string Theme = "invoklet.theme.vscode";
     private readonly StaticPluginFeed _feed = new();
     private readonly string _root = Directory.CreateTempSubdirectory("Invoklet-feed-scenario-").FullName;
+    private string _feedUrl = "";
 
     public void Dispose()
     {
@@ -32,10 +34,17 @@ public sealed class PluginFeedScenarioTests : IDisposable
     [AvaloniaFact]
     public async Task FeedTheme_InstalledApprovedDisabledEnabledAndRemoved_TakesEffectAtEachRestart()
     {
+        var feed = Environment.GetEnvironmentVariable(PluginStartup.PluginFeedVariable);
         var packages = Environment.GetEnvironmentVariable("INVOKLET_PLUGIN_PACKAGES");
-        Assert.SkipWhen(string.IsNullOrEmpty(packages), "INVOKLET_PLUGIN_PACKAGES names no folder of plugin packages.");
-        foreach (var file in Directory.EnumerateFiles(packages!, "*.nupkg", SearchOption.AllDirectories))
-            _feed.AddPackage(File.ReadAllBytes(file));
+        Assert.SkipWhen(string.IsNullOrEmpty(feed) && string.IsNullOrEmpty(packages),
+            "Neither INVOKLET_PLUGIN_FEED nor INVOKLET_PLUGIN_PACKAGES is set.");
+        if (string.IsNullOrEmpty(feed))
+        {
+            foreach (var file in Directory.EnumerateFiles(packages!, "*.nupkg", SearchOption.AllDirectories))
+                _feed.AddPackage(File.ReadAllBytes(file));
+            feed = _feed.IndexUrl;
+        }
+        _feedUrl = feed;
         var cancel = TestContext.Current.CancellationToken;
 
         var (session, _) = Start();
@@ -98,7 +107,7 @@ public sealed class PluginFeedScenarioTests : IDisposable
         var page = new PluginsPageViewModel(session, Store.Read, () => Task.CompletedTask,
             setEnabled: (id, enabled) => Store.SetEnabled(id, enabled, BundledPluginCatalog.Empty, session: session, userDirectory: UserDirectory),
             createInstaller: () => new PluginPackageInstaller(UserDirectory, Store, BundledPluginCatalog.Empty),
-            createFeed: () => new PluginFeedResolver(new NuGetPluginFeed(_feed.IndexUrl), PluginStartup.ApplicationVersion, BundledPluginCatalog.Empty));
+            createFeed: () => new PluginFeedResolver(new NuGetPluginFeed(_feedUrl), PluginStartup.ApplicationVersion, BundledPluginCatalog.Empty));
         page.Refresh();
         return page;
     }

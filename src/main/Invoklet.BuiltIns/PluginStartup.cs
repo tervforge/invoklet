@@ -36,8 +36,11 @@ public static class PluginStartup
             roles?.Keys.Select(PluginRoles.Name).ToArray(), session, Path.Combine(UserDataDirectory, "plugins"));
     }
 
-    /// <summary>The NuGet feed the Plugins page offers packages from.</summary>
-    public const string DefaultPluginFeed = "https://nuget.pkg.github.com/tervforge/index.json";
+    /// <summary>
+    /// The NuGet feed the Plugins page offers packages from: the anonymous static feed the plugins repository deploys to GitHub
+    /// Pages, because GitHub Packages asks for a token even for public packages.
+    /// </summary>
+    public const string DefaultPluginFeed = "https://tervforge.github.io/invoklet-plugins/v3/index.json";
 
     /// <summary>Points the Plugins page at another NuGet v3 feed, such as a local test feed.</summary>
     public const string PluginFeedVariable = "INVOKLET_PLUGIN_FEED";
