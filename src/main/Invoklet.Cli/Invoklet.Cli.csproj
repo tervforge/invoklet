@@ -26,6 +26,5 @@
     <InternalsVisibleTo Include="Invoklet.Cli.Tests" />
   </ItemGroup>
 
-  <Import Project="../../../build/ConnectorPlugins.targets" />
   <Import Project="..\..\..\build\BundledPlugins.targets" />
 </Project>

@@ -55,7 +55,7 @@ Notable changes in each Invoklet release. Downloads are on the
 ### Changed
 
 - C# accessibility diagnostics now honor the configured style. With the default `omit_if_default`, IDE0040 suggests removing redundant access modifiers.
-- The HTTP, gRPC, SQLite, PostgreSQL and SQL Server connectors now ship as separate NuGet plugin packages. Releases bundle these packages. Preferences → Plugins also installs library packages that connectors share, and accepts packages up to 256 MB.
+- The HTTP, gRPC, SQLite, PostgreSQL and SQL Server connectors are installed separately as NuGet plugins through Preferences → Plugins. The installer also accepts shared library packages and packages up to 256 MB.
 
 ## [0.12.2] — 2026-11-10
 

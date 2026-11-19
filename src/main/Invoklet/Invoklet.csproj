@@ -152,6 +152,5 @@
   <ItemGroup>
     <AvaloniaResource Include="TemplatedControls\IconButton.axaml"/>
   </ItemGroup>
-  <Import Project="../../../build/ConnectorPlugins.targets" />
   <Import Project="..\..\..\build\BundledPlugins.targets" />
 </Project>

@@ -19,10 +19,4 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\main\Invoklet.Cli\Invoklet.Cli.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="BundledConnectorTests.cs" Condition="'$(InvokletShipConnectors)' != 'true'" />
-  </ItemGroup>
-  <!-- The connector packages, staged beside the tests as an installation has them, when the build bundles them. -->
-  <Import Project="../../build/ConnectorPlugins.targets" />
-  <Import Project="../../build/BundledPlugins.targets" />
 </Project>

@@ -32,15 +32,8 @@ built and formatted with the solution but not run when the `CI` environment vari
 
 The connection connectors (HTTP and OpenAPI, gRPC, SQLite, PostgreSQL, SQL Server and their shared EF Core
 library) are plugins in the [invoklet-plugins](https://github.com/tervforge/invoklet-plugins) repository, with
-their unit and integration tests. Invoklet takes them as NuGet packages (`build/ConnectorPlugins.targets`). A
-plain build has no bundled connector. To include them, check out invoklet-plugins beside this repository, pack
-it and build again; the packages are read from its `artifacts/packages` folder (another folder:
-`-p:InvokletConnectorPackages=<folder>`):
-
-```bash
-dotnet pack ../invoklet-plugins/PluginPackages.slnx -c Release -o ../invoklet-plugins/artifacts/packages
-dotnet build --configuration Release
-```
+their unit and integration tests. Build and release CI for Invoklet run independently of those packages.
+Install connector packages through Preferences → Plugins to try them in the application.
 
 Release builds restore the same packages from GitHub Packages instead.
 
