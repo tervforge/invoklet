@@ -103,6 +103,26 @@ public sealed class PluginsPageViewModelTests
     }
 
     [Fact]
+    public async Task BrowseAsync_PackagesWithAPublisherPrefix_MatchTheirBundledAndInstalledPlugins()
+    {
+        // Arrange
+        var fixture = new PluginsPageViewModelFixture();
+        fixture.Feed.Setup(feed => feed.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync([
+            PluginsPageViewModelFixture.Package("tervforge.example.theme.bundled"),
+            PluginsPageViewModelFixture.Package("tervforge.example.theme.installed")]);
+        var sut = fixture.CreateFeedSut();
+
+        // Act
+        await sut.BrowseAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            [("tervforge.example.theme.bundled", "Included with Invoklet", false),
+             ("tervforge.example.theme.installed", "Installed 1.0.0", false)],
+            sut.FeedPackages.Select(row => (row.Package.Id, row.State, row.CanInstall)));
+    }
+
+    [Fact]
     public async Task InstallFromFeedAsync_NoCompatibleVersion_ShowsTheReasonWithoutAskingForApproval()
     {
         // Arrange

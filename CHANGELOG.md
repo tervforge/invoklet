@@ -22,6 +22,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - Install plugins in Preferences → Plugins from NuGet packages (`.nupkg`) with the **Install package…** button.
 - List the plugins of the public Invoklet plugin feed (no sign-in) in Preferences → Plugins → Available plugins and install the newest version that works with this Invoklet, through the same review and approval as a package file.
 - When installing from the plugin feed, offer missing dependencies and ask for approval of each package before installing.
+- The plugin feed accepts package IDs with a publisher prefix, such as `tervforge.invoklet.connector.postgres` for the `invoklet.connector.postgres` plugin.
 - Avoid loading plugins for CLI help and version commands, enforce archive size limits during extraction, and preserve successful removal if staging cleanup fails.
 
 ### Fixed

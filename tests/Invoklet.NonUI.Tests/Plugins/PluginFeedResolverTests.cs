@@ -101,4 +101,70 @@ public sealed class PluginFeedResolverTests
         Assert.Null(choice);
         Assert.Equal(["The feed has no versions of 'example.theme.ocean'."], skipped);
     }
+
+    [Fact]
+    public async Task ChooseAsync_APackageIdWithAPublisherPrefix_AcceptsTheManifestOfThePlugin()
+    {
+        // Arrange
+        _fixture.Offer(["1.0.0"], version => PluginFeedResolverFixture.Theme(version), "tervforge." + PluginFeedResolverFixture.Id);
+        var sut = _fixture.CreateSut();
+        var skipped = new List<string>();
+
+        // Act
+        var choice = await sut.ChooseAsync("tervforge." + PluginFeedResolverFixture.Id, skipped, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("1.0.0", choice?.Version);
+        Assert.Empty(skipped);
+    }
+
+    [Fact]
+    public async Task ChooseAsync_APrefixedPackageOfABundledPlugin_IsRefused()
+    {
+        // Arrange
+        _fixture.Offer(["1.0.0"], version => PluginFeedResolverFixture.Theme(version), "tervforge." + PluginFeedResolverFixture.Id);
+        var sut = _fixture.CreateSut(new BundledPluginCatalog([new BundledPluginEntry(PluginFeedResolverFixture.Id, "1.0.0", new string('a', 64))]));
+        var skipped = new List<string>();
+
+        // Act
+        var choice = await sut.ChooseAsync("tervforge." + PluginFeedResolverFixture.Id, skipped, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(choice);
+        Assert.Equal(["'example.theme.ocean' is included with Invoklet and is updated with it."], skipped);
+    }
+
+    [Theory]
+    [InlineData("example.theme.ocean", "example.theme.ocean", true)]
+    [InlineData("tervforge.example.theme.ocean", "example.theme.ocean", true)]
+    [InlineData("TervForge.Example.Theme.Ocean", "example.theme.ocean", true)]
+    [InlineData("tervforgeexample.theme.ocean", "example.theme.ocean", false)]
+    [InlineData("example.theme.ocean.extra", "example.theme.ocean", false)]
+    [InlineData("ocean", "example.theme.ocean", false)]
+    public void Names_PackageAndPluginIds_MatchOnlyTheIdOrAPrefixedId(string packageId, string pluginId, bool expected)
+    {
+        // Act
+        var names = PluginFeedResolver.Names(packageId, pluginId);
+
+        // Assert
+        Assert.Equal(expected, names);
+    }
+
+    [Fact]
+    public void Find_BothThePluginIdAndAPrefixedId_PrefersThePluginId()
+    {
+        // Arrange
+        PluginFeedPackage[] packages =
+        [
+            new("tervforge.example.theme.ocean", "Ocean", "", "1.0.0"),
+            new("example.theme.ocean", "Ocean", "", "1.0.0"),
+            new("example.theme.other", "Other", "", "1.0.0"),
+        ];
+
+        // Act
+        var found = PluginFeedResolver.Find(packages, "example.theme.ocean");
+
+        // Assert
+        Assert.Equal("example.theme.ocean", found?.Id);
+    }
 }

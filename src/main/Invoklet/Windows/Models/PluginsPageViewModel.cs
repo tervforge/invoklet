@@ -122,7 +122,9 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
                     if (DependencyAvailable(inventory, pending, dependency)) continue;
                     if (inventory.Entries.Any(entry => entry.Id == dependency) || session.Rejected.Any(plugin => plugin.Id == dependency))
                         return $"Enable or repair required plugin '{dependency}' in Preferences → Plugins first.";
-                    if (await PrepareAsync(dependency, dependency) is { } error) return error;
+                    // The feed may publish the plugin under a prefixed package id; the listing says which.
+                    var dependencyPackage = PluginFeedResolver.Find(_feedPackages.Select(item => item.Package), dependency);
+                    if (await PrepareAsync(dependencyPackage?.Id ?? dependency, dependencyPackage?.Title ?? dependency) is { } error) return error;
                 }
                 installOrder.Add((package, path));
                 visiting.Remove(id);
@@ -165,10 +167,10 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
 
     private PluginFeedRow FeedRow(PluginFeedPackage package)
     {
-        if (Rows.Any(row => row.Id == package.Id && row.Trust == nameof(PluginTrust.Bundled)))
+        if (Rows.Any(row => PluginFeedResolver.Names(package.Id, row.Id) && row.Trust == nameof(PluginTrust.Bundled)))
             return new PluginFeedRow(package, "Included with Invoklet", CanInstall: false);
         PluginInventoryEntry? entry;
-        try { entry = readInventory().Entries.FirstOrDefault(item => item.Id == package.Id); }
+        try { entry = readInventory().Entries.Where(item => PluginFeedResolver.Names(package.Id, item.Id)).MaxBy(item => item.Id.Length); }
         catch (InvalidOperationException) { entry = null; }
         if (entry is { Source: not PluginInventoryStore.BundledSource })
             return new PluginFeedRow(package, entry.Version == package.LatestVersion ? $"Installed {entry.Version}"

@@ -26,6 +26,7 @@ namespace Invoklet.IntegrationTests;
 public sealed class PluginFeedScenarioTests : IDisposable
 {
     private const string Theme = "invoklet.theme.vscode";
+    private const string ThemePackage = "tervforge." + Theme;
     private readonly StaticPluginFeed _feed = new();
     private readonly string _root = Directory.CreateTempSubdirectory("Invoklet-feed-scenario-").FullName;
     private string _feedUrl = "";
@@ -59,13 +60,13 @@ public sealed class PluginFeedScenarioTests : IDisposable
         var page = Page(session);
         await page.BrowseAsync(cancel);
         Assert.Null(page.FeedStatus);
-        Assert.Contains(page.FeedPackages, row => row.Package.Id == Theme && row.CanInstall);
+        Assert.Contains(page.FeedPackages, row => row.Package.Id == ThemePackage && row.CanInstall);
         Assert.DoesNotContain(page.FeedPackages, row => row.Package.Id.StartsWith("Invoklet.", StringComparison.Ordinal));
 
         var declined = false;
-        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == Theme), (_, _) => Task.FromResult(declined), cancel);
+        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == ThemePackage), (_, _) => Task.FromResult(declined), cancel);
         Assert.Empty(Store.Read().Entries);
-        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == Theme), (manifest, _) =>
+        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == ThemePackage), (manifest, _) =>
             Task.FromResult(manifest.Id == Theme), cancel);
         Assert.True(page.HasPendingRestart);
         Assert.False(session.IsLoaded(Theme));
@@ -109,7 +110,7 @@ public sealed class PluginFeedScenarioTests : IDisposable
         await page.BrowseAsync(cancel);
         Assert.Null(page.FeedStatus);
         var approvals = new List<string>();
-        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == sqlite), (manifest, _) =>
+        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == "tervforge." + sqlite), (manifest, _) =>
         {
             approvals.Add(manifest.Id);
             return Task.FromResult(manifest.Id == efCore);
@@ -118,7 +119,7 @@ public sealed class PluginFeedScenarioTests : IDisposable
         Assert.Empty(Store.Read().Entries);
 
         approvals.Clear();
-        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == sqlite), (manifest, _) =>
+        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == "tervforge." + sqlite), (manifest, _) =>
         {
             approvals.Add(manifest.Id);
             return Task.FromResult(true);

@@ -16,11 +16,11 @@ public sealed class PluginFeedResolverFixture
         new(Feed.Object, new Version(1, 0), bundled ?? BundledPluginCatalog.Empty);
 
     /// <summary>Makes the feed list <paramref name="versions"/>, newest first, each with the manifest <paramref name="manifest"/> gives.</summary>
-    public void Offer(IReadOnlyList<string> versions, Func<string, string?> manifest)
+    public void Offer(IReadOnlyList<string> versions, Func<string, string?> manifest, string packageId = Id)
     {
-        Feed.Setup(feed => feed.GetVersionsAsync(Id, It.IsAny<CancellationToken>())).ReturnsAsync(versions);
+        Feed.Setup(feed => feed.GetVersionsAsync(packageId, It.IsAny<CancellationToken>())).ReturnsAsync(versions);
         foreach (var version in versions)
-            Feed.Setup(feed => feed.DownloadAsync(Id, version, It.IsAny<CancellationToken>())).ReturnsAsync(Package(manifest(version)));
+            Feed.Setup(feed => feed.DownloadAsync(packageId, version, It.IsAny<CancellationToken>())).ReturnsAsync(Package(manifest(version)));
     }
 
     public static string Theme(string version, string extra = "") =>

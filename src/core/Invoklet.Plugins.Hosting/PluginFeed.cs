@@ -51,6 +51,18 @@ public sealed class PluginFeedResolver(IPluginFeed feed, Version applicationVers
 
     private const long MaxManifestBytes = 1024 * 1024;
 
+    /// <summary>
+    /// Whether a package id names the plugin: the plugin id itself, or the plugin id under a publisher prefix, such as
+    /// <c>tervforge.invoklet.connector.postgres</c> for <c>invoklet.connector.postgres</c>.
+    /// </summary>
+    public static bool Names(string packageId, string pluginId) =>
+        packageId.Length >= pluginId.Length && packageId.EndsWith(pluginId, StringComparison.OrdinalIgnoreCase)
+        && (packageId.Length == pluginId.Length || packageId[packageId.Length - pluginId.Length - 1] == '.');
+
+    /// <summary>The listed package of a plugin: the one with the plugin's own id first, then the shortest prefixed one.</summary>
+    public static PluginFeedPackage? Find(IEnumerable<PluginFeedPackage> packages, string pluginId) =>
+        packages.Where(package => Names(package.Id, pluginId)).OrderBy(package => package.Id.Length).FirstOrDefault();
+
     /// <summary>The plugin packages the feed lists.</summary>
     /// <exception cref="PluginFeedException">The feed failed.</exception>
     public Task<IReadOnlyList<PluginFeedPackage>> ListAsync(CancellationToken cancellationToken) => feed.ListAsync(cancellationToken);
@@ -68,7 +80,14 @@ public sealed class PluginFeedResolver(IPluginFeed feed, Version applicationVers
         foreach (var version in (await feed.GetVersionsAsync(id, cancellationToken)).Take(MaxCandidates))
         {
             var package = await feed.DownloadAsync(id, version, cancellationToken);
-            var reason = Check(ReadManifest(package), id, version);
+            var manifest = ReadManifest(package);
+            // A prefixed package id can only be matched with the bundled plugins once its manifest names the plugin.
+            if (manifest is not null && Names(id, manifest.Id) && bundled.Find(manifest.Id) is not null)
+            {
+                skipped.Add($"'{manifest.Id}' is included with Invoklet and is updated with it.");
+                return null;
+            }
+            var reason = Check(manifest, id, version);
             if (reason is null) return new PluginFeedChoice(id, version, package, skipped.ToArray());
             skipped.Add($"{version}: {reason}");
         }
@@ -80,7 +99,7 @@ public sealed class PluginFeedResolver(IPluginFeed feed, Version applicationVers
     internal string? Check(PluginManifest? manifest, string id, string version)
     {
         if (manifest is null) return "the package has no valid plugin/invoklet-plugin.json.";
-        if (!string.Equals(manifest.Id, id, StringComparison.OrdinalIgnoreCase)
+        if (!Names(id, manifest.Id)
             || !string.Equals(manifest.Version, version, StringComparison.OrdinalIgnoreCase))
             return "the manifest names a different package or version.";
         if (manifest.MinAppVersion is { } minimum && minimum > applicationVersion)
