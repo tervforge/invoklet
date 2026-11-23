@@ -56,4 +56,18 @@ public class HtmlThemeStylesheetTests
         Assert.Contains("color:#", highlight);
         Assert.Contains("font-weight:bold", heading);
     }
+
+    [Fact]
+    public void CodeBlocks_Should_PositionCopyActionInsideTheBlock()
+    {
+        var css = HtmlThemeStylesheet.Generate(ThemeVariant.Dark, isDark: true);
+
+        var shell = css.Split('\n').Single(l => l.TrimStart().StartsWith(".dp-code-shell { position"));
+        var copy = css.Split('\n').Single(l => l.TrimStart().StartsWith(".dp-code-copy "));
+
+        Assert.Contains("position:relative", shell);
+        Assert.Contains("position:absolute", copy);
+        Assert.Contains("top:4px", copy);
+        Assert.Contains("right:7px", copy);
+    }
 }

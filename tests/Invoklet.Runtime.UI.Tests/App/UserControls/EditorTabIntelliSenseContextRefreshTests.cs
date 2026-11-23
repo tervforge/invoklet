@@ -31,7 +31,7 @@ public sealed class EditorTabIntelliSenseContextRefreshTests : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, true);
 
-    private sealed class DescribedDriver : IConnectionSchemaDriver
+    private sealed class DescribedDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public string Id => "described";
         public string DisplayName => "Described";

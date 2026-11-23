@@ -10,12 +10,13 @@
 # ID signature or notarization, so Gatekeeper may still ask the user to allow the first launch.
 # Nothing may modify the bundle after signing.
 #
-# Usage: make-macos-app-bundle.sh <publish-dir> <output-dir>
+# Usage: make-macos-app-bundle.sh <publish-dir> <output-dir> [plugin-packager-dll]
 set -euo pipefail
 
 PUBLISH_DIR="$1"
 OUTPUT_DIR="$2"
 APP="$OUTPUT_DIR/Invoklet.app"
+PLUGIN_PACKAGER="${3:-build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll}"
 
 if ! command -v codesign > /dev/null; then
     echo "error: codesign not found — the bundle must be built on macOS with the Xcode command line tools" >&2
@@ -28,6 +29,13 @@ VERSION=$(awk -F'</?Version>' 'NF > 2 { print $2; exit }' "$CSPROJ")
 if [[ -z "$VERSION" ]]; then
     echo "error: no <Version> found in $CSPROJ" >&2
     exit 1
+fi
+
+# Bundle versions are numeric only, so a preview x.y.z-preview.N shows as x.y.z.
+BUNDLE_VERSION=${VERSION%%-*}
+
+if [[ -d "$PUBLISH_DIR/plugins" ]]; then
+    dotnet "$PLUGIN_PACKAGER" verify "$PUBLISH_DIR"
 fi
 
 rm -rf "$APP"
@@ -48,9 +56,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>
     <string>com.coddwrench.invoklet</string>
     <key>CFBundleVersion</key>
-    <string>$VERSION</string>
+    <string>$BUNDLE_VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>$VERSION</string>
+    <string>$BUNDLE_VERSION</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -70,7 +78,7 @@ chmod +x "$APP/Contents/MacOS/Invoklet"
 # codesign treats every file under Contents/MacOS as nested code, so strict verification rejects the
 # publish output's managed assemblies and data files (System.*.dll, Invoklet.deps.json, …) and its
 # satellite folders (de/, zh-Hans/, … holding *.resources.dll) as "code object is not signed at all".
-# Only Mach-O binaries stay in Contents/MacOS; every other top-level file and each culture folder is
+# Only Mach-O binaries stay in Contents/MacOS; other top-level files, culture folders and plugins are
 # moved to Contents/Resources and replaced by a relative symlink, which is sealed as-is, so
 # Contents/MacOS/X.dll and Contents/MacOS/<culture>/X.resources.dll still exist. Existing symlinks are left as they are; any other kind of subfolder, or a name
 # that already exists in Contents/Resources, fails the build instead of guessing.
@@ -90,7 +98,7 @@ for ENTRY in "$APP/Contents/MacOS"/*; do
     if [[ -L "$ENTRY" ]]; then
         continue
     elif [[ -d "$ENTRY" ]]; then
-        if [[ -n "$(find "$ENTRY" -mindepth 1 ! \( -type f -name '*.resources.dll' \) -print -quit)" ]]; then
+        if [[ "$NAME" != plugins && -n "$(find "$ENTRY" -mindepth 1 ! \( -type f -name '*.resources.dll' \) -print -quit)" ]]; then
             echo "error: Contents/MacOS/$NAME is not a satellite resource folder (only *.resources.dll expected)" >&2
             exit 1
         fi
@@ -128,6 +136,10 @@ while IFS= read -r -d '' FILE; do
         codesign --force --sign - "$FILE"
     fi
 done < <(find "$APP/Contents" -type f -print0)
+if [[ -d "$APP/Contents/Resources/plugins" ]]; then
+    # Signing changes native bytes. Record the finished package before the outer signature seals it.
+    dotnet "$PLUGIN_PACKAGER" refresh-after-signing "$APP/Contents/Resources"
+fi
 codesign --force --sign - "$APP"
 
 # Fail the build rather than ship a bundle macOS would reject.

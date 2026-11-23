@@ -225,7 +225,12 @@ public class CodeFixMargin : AbstractMargin
         // Always go through the menu, even for a single candidate — VS/Rider-style, so the lightbulb
         // never applies anything sight-unseen and there's a consistent place to add more entries later
         // (Suppress, Fix all in file/project, ...) without a special case for "exactly one fix".
-        var menu = new MenuFlyout();
+        var menu = new MenuFlyout
+        {
+            // Keep the lightbulb menu active while its presenter/scroll bar is being interacted
+            // with. Transient dismissal treats a scrollbar press as leaving the context action.
+            ShowMode = FlyoutShowMode.Standard,
+        };
         foreach (var item in BuildMenuItems(candidates))
             menu.Items.Add(item);
         // Anchored to the bulb's square, just below it. Not to the margin control (it spans the whole
@@ -321,10 +326,11 @@ public class CodeFixMargin : AbstractMargin
         {
             var diagnosticFixes = candidates
                 .Where(f => string.Equals(f.DiagnosticId, diagnosticId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => Categorize(f) != CodeFixCategory.UsingDirective)
                 .ToList();
             var diagnosticMenu = new MenuItem
             {
-                Header = $"{diagnosticId}: {diagnosticFixes[0].Title}",
+                Header = $"{diagnosticId}: {diagnosticFixes[0].DiagnosticMessage ?? diagnosticFixes[0].Title}",
                 FontFamily = MonospaceFont.Default,
             };
             var lightbulbGeo = LoadResource<StreamGeometry>("Icon.Lightbulb");
@@ -333,18 +339,18 @@ public class CodeFixMargin : AbstractMargin
             foreach (var fix in diagnosticFixes)
                 diagnosticMenu.Items.Add(BuildMenuItem(fix));
 
-            var hasAnotherOccurrence = _fixes.Count(f =>
-                string.Equals(f.DiagnosticId, diagnosticId, StringComparison.OrdinalIgnoreCase)) > 1;
-            var representative = diagnosticFixes.FirstOrDefault(f => f.SupportsFixAll);
-            if (representative is not null && hasAnotherOccurrence)
+            foreach (var fix in diagnosticFixes.Where(f => f.SupportsFixAll && f.HasMultipleDiagnosticOccurrences))
             {
                 diagnosticMenu.Items.Add(new Separator());
-                foreach (var item in BuildFixAllMenuItems(representative))
+                foreach (var item in BuildFixAllMenuItems(fix, includeActionTitle: diagnosticFixes.Count > 1))
                     diagnosticMenu.Items.Add(item);
             }
-            diagnosticMenu.Items.Add(new Separator());
-            foreach (var item in BuildSuppressMenuItems(diagnosticId, diagnosticFixes[0].Line))
-                diagnosticMenu.Items.Add(item);
+            if (diagnosticFixes.All(fix => fix.Severity != CodeFixSeverity.Error))
+            {
+                diagnosticMenu.Items.Add(new Separator());
+                foreach (var item in BuildSuppressMenuItems(diagnosticId, diagnosticFixes[0].Line))
+                    diagnosticMenu.Items.Add(item);
+            }
             items.Add(diagnosticMenu);
         }
 
@@ -453,12 +459,13 @@ public class CodeFixMargin : AbstractMargin
     }
 
     private void Apply(CodeFixEntry fix) => FixApplyRequested?.Invoke(fix);
-    internal IReadOnlyList<MenuItem> BuildFixAllMenuItems(CodeFixEntry fix)
+    internal IReadOnlyList<MenuItem> BuildFixAllMenuItems(CodeFixEntry fix, bool includeActionTitle = false)
     {
         var geo = LoadFixAllIcon();
         MenuItem Create(string scopeText, CodeFixAllScope scope)
         {
-            var item = new MenuItem { Header = $"Fix all {scopeText}", FontFamily = MonospaceFont.Default };
+            var header = includeActionTitle ? $"{fix.Title} ({scopeText})" : $"Fix all {scopeText}";
+            var item = new MenuItem { Header = header, FontFamily = MonospaceFont.Default };
             if (geo is not null)
                 item.Icon = new PathIcon { Data = geo, Width = 16, Height = 16 };
             item.Click += (_, _) => ApplyAll(fix, scope);
@@ -498,7 +505,7 @@ public class CodeFixMargin : AbstractMargin
 
         var inScript = Create("Suppress in this script");
         inScript.Click += (_, _) => SuppressInScriptRequested?.Invoke(diagnosticId, line);
-        var globally = Create("Suppress in all scripts");
+        var globally = Create("Hide fixes in all scripts");
         globally.Click += (_, _) => SuppressGloballyRequested?.Invoke(diagnosticId);
         return [inScript, globally];
     }

@@ -27,7 +27,7 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, true);
 
-    private sealed class DescribedDriver : IConnectionSchemaDriver
+    private sealed class DescribedDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public string Id => "described";
         public string DisplayName => "Described";
@@ -96,6 +96,7 @@ public sealed class EditorTabConnectionSchemaChangeTests : IDisposable
 
             var previous = tab.ContextRefreshTask;
             schemas.Cache.Put(listed, new ConnectionSchema("2 services", [], ""));
+            schemas.Cache.Put(other, new ConnectionSchema("unrelated update in the same burst", [], ""));
             Assert.Same(previous, tab.ContextRefreshTask); // nothing before the tab's UI thread runs
             ui.RunPosted();
             Assert.NotSame(previous, tab.ContextRefreshTask);

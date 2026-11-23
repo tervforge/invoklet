@@ -1,0 +1,10 @@
+{
+  "id": "example.connector.http",
+  "version": "1.0.0",
+  "displayName": "Sample HTTP Connector",
+  "roles": { "connection": 1 },
+  "entry": {
+    "assembly": "SampleHttpConnector.dll",
+    "type": "SampleHttpConnector.Plugin"
+  }
+}

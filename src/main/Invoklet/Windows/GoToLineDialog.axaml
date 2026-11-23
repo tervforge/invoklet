@@ -12,14 +12,6 @@
         TransparencyLevelHint="Transparent"
         Background="Transparent"
         Foreground="{DynamicResource Invoklet.Text.PrimaryBrush}">
-    <Window.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Metrics.axaml"/>
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </Window.Resources>
-
     <Border x:Name="DialogSurface" Background="{DynamicResource Invoklet.Panel.BackgroundBrush}"
             BorderBrush="{DynamicResource Invoklet.Border.BackgroundBrush}"
             BorderThickness="1"

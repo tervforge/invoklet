@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.ReactiveUI;
 using Avalonia.Themes.Fluent;
+using Invoklet.Avalonia.Themes;
 using Invoklet.IntegrationTests;
 
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
@@ -29,6 +30,11 @@ public static class TestAppBuilder
             .UseReactiveUI()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions())
             .AfterSetup(_ => Application.Current!.Styles.Add(new FluentTheme()))
+            .AfterSetup(_ => Application.Current!.Resources.MergedDictionaries.Add(ThemeBuilder.BuildMetrics()))
+            .AfterSetup(_ => Application.Current!.Resources.MergedDictionaries.Add(new ResourceInclude(new Uri("avares://Invoklet.Avalonia.Themes/"))
+            {
+                Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml"),
+            }))
             .AfterSetup(_ => Application.Current!.Styles.Add(new StyleInclude(new Uri("avares://AvaloniaEdit/"))
             {
                 Source = new Uri("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"),

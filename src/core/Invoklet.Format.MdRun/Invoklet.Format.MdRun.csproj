@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../build/ContractPackage.props" />
   <PropertyGroup>
     <RootNamespace>Invoklet.Format.MdRun</RootNamespace>
   </PropertyGroup>

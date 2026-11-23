@@ -122,9 +122,9 @@ public class QuickOpenDialogTests
     [AvaloniaFact]
     public void TheList_Should_UseTheThemesColours_ForTheSelectedRowAndTheBackground()
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         global::Avalonia.Application.Current!.Styles.Add(theme);
-        global::Avalonia.Application.Current!.RequestedThemeVariant = InvokletThemeVariants.InvokletMidnight;
+        global::Avalonia.Application.Current!.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.midnight");
         var dialog = new QuickOpenDialog(Content());
         try
         {
@@ -134,8 +134,8 @@ public class QuickOpenDialogTests
             var row = list.GetVisualDescendants().OfType<ListBoxItem>().First(i => i.IsSelected);
             var presenter = row.GetVisualDescendants().OfType<ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
 
-            Assert.True(theme.TryGetResource("Invoklet.ToolTab.SelectedBackgroundBrush", InvokletThemeVariants.InvokletMidnight, out var selected));
-            Assert.True(theme.TryGetResource("Invoklet.Editor.BackgroundBrush", InvokletThemeVariants.InvokletMidnight, out var background));
+            Assert.True(theme.TryGetResource("Invoklet.ToolTab.SelectedBackgroundBrush", TestInterfaceThemes.GetVariant("invoklet.theme.midnight"), out var selected));
+            Assert.True(theme.TryGetResource("Invoklet.Editor.BackgroundBrush", TestInterfaceThemes.GetVariant("invoklet.theme.midnight"), out var background));
             Assert.Equal(((ISolidColorBrush)selected!).Color, ((ISolidColorBrush)presenter.Background!).Color);
             Assert.Equal(((ISolidColorBrush)background!).Color, ((ISolidColorBrush)list.Background!).Color);
         }

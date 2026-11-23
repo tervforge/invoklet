@@ -36,7 +36,7 @@ public static class IlGrammar
 /// The bundled TextMate registry plus <see cref="IlGrammar"/>: every other scope and every theme come from
 /// <paramref name="inner"/>, so the IL grammar follows the editor's theme like any other language.
 /// </summary>
-public sealed class IlAwareRegistryOptions(RegistryOptions inner) : IRegistryOptions
+public sealed class IlAwareRegistryOptions(RegistryOptions inner, IRawTheme? theme = null) : IRegistryOptions
 {
     public RegistryOptions Inner { get; } = inner;
 
@@ -48,7 +48,7 @@ public sealed class IlAwareRegistryOptions(RegistryOptions inner) : IRegistryOpt
 
     public IRawTheme GetTheme(string scopeName) => Inner.GetTheme(scopeName);
 
-    public IRawTheme GetDefaultTheme() => Inner.GetDefaultTheme();
+    public IRawTheme GetDefaultTheme() => theme ?? Inner.GetDefaultTheme();
 }
 
 /// <summary>
@@ -57,21 +57,23 @@ public sealed class IlAwareRegistryOptions(RegistryOptions inner) : IRegistryOpt
 /// </summary>
 public sealed class IlHighlighting : IDisposable
 {
-    private readonly RegistryOptions _registry;
     private readonly TextMate.Installation _installation;
 
-    private IlHighlighting(TextEditor editor, ThemeName theme)
+    private IlHighlighting(TextEditor editor, RegistryOptions options, IRawTheme? theme)
     {
-        _registry = new RegistryOptions(theme);
-        _installation = editor.InstallTextMate(new IlAwareRegistryOptions(_registry));
+        _installation = editor.InstallTextMate(new IlAwareRegistryOptions(options, theme));
         _installation.SetGrammar(IlGrammar.ScopeName);
     }
 
-    public static IlHighlighting Install(TextEditor editor, ThemeName theme) => new(editor, theme);
+    public static IlHighlighting Install(TextEditor editor, ThemeName theme) => new(editor, new RegistryOptions(theme), null);
+
+    public static IlHighlighting Install(TextEditor editor, IRawTheme theme) => new(editor, new RegistryOptions(ThemeName.DarkPlus), theme);
 
     public string GrammarScope => IlGrammar.ScopeName;
 
-    public void SetTheme(ThemeName theme) => _installation.SetTheme(_registry.LoadTheme(theme));
+    public void SetTheme(ThemeName theme) => SetTheme(new RegistryOptions(theme).GetDefaultTheme());
+
+    public void SetTheme(IRawTheme theme) => _installation.SetTheme(theme);
 
     internal TextMate.Installation Installation => _installation;
 

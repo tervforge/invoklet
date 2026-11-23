@@ -2,7 +2,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Invoklet.UserControls;
 using Invoklet.Windows.Models;
 
@@ -19,6 +22,66 @@ public partial class PreferencesWindow : Window
     }
 
     public PreferencesWindow() => InitializeComponent();
+
+    private void RefreshPlugins_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel viewModel) viewModel.PluginsPage.Refresh();
+    }
+
+    private void TogglePlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel viewModel && sender is Button { DataContext: PluginStatusRow row })
+            viewModel.PluginsPage.Toggle(row);
+    }
+
+    private async void InstallPlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.CanInstall: true } model) return;
+        string? path;
+        try
+        {
+            path = (await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Select a plugin package",
+                FileTypeFilter = [new FilePickerFileType("NuGet plugin packages") { Patterns = ["*.nupkg"] }],
+            })).FirstOrDefault()?.TryGetLocalPath();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            model.PluginsPage.ReportPackageError();
+            return;
+        }
+        if (path is null) return;
+        await model.PluginsPage.InstallAsync(path,
+            manifest => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
+    }
+
+    private async void BrowsePlugins_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel model) await model.PluginsPage.BrowseAsync();
+    }
+
+    private async void InstallFeedPlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel model && sender is Button { DataContext: PluginFeedRow row })
+            await model.PluginsPage.InstallFromFeedAsync(row,
+                (manifest, path) => PluginPackageConfirmationDialog.ForInstall(manifest, path,
+                    manifest.Id == row.Package.Id ? null : row.Name).ShowDialog<bool>(this));
+    }
+
+    private async void RemovePlugin_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PreferencesWindowViewModel model && sender is Button { DataContext: PluginStatusRow row })
+            await model.PluginsPage.RemoveAsync(row, () => new PluginPackageConfirmationDialog("Remove plugin?",
+                $"Remove {row.Name}? The change will take effect after restarting Invoklet.", "Remove").ShowDialog<bool>(this));
+    }
+
+    private async void RestartForPlugins_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PreferencesWindowViewModel { PluginsPage.HasPendingRestart: true } viewModel) return;
+        Close();
+        await Dispatcher.UIThread.InvokeAsync(viewModel.PluginsPage.RestartAsync, DispatcherPriority.Background);
+    }
 
     // Escape closes it, as it does every dialog; settings apply as they change, so nothing is lost. A control that takes Escape itself keeps it.
     protected override void OnKeyDown(KeyEventArgs e)

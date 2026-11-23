@@ -126,8 +126,12 @@ internal static class CssUtils
                 return cssBox.PageBreakInside;
             case "left":
                 return cssBox.Left;
+            case "right":
+                return cssBox.Right;
             case "top":
                 return cssBox.Top;
+            case "bottom":
+                return cssBox.Bottom;
             case "width":
                 return cssBox.Width;
             case "max-width":
@@ -300,8 +304,14 @@ internal static class CssUtils
             case "left":
                 cssBox.Left = value;
                 break;
+            case "right":
+                cssBox.Right = value;
+                break;
             case "top":
                 cssBox.Top = value;
+                break;
+            case "bottom":
+                cssBox.Bottom = value;
                 break;
             case "width":
                 cssBox.Width = value;

@@ -61,7 +61,7 @@ internal sealed class EditorTabsControlStripFixture : IAsyncDisposable
         // The theme's backgrounds: without one a header has no surface, and a press goes through it.
         _window.Resources["Invoklet.Panel.BackgroundBrush"] = Brushes.DimGray;
         _window.Resources["Invoklet.Editor.BackgroundBrush"] = Brushes.Black;
-        if (applicationTheme) _window.Styles.Add(new InvokletTheme());
+        if (applicationTheme) _window.Styles.Add(TestInterfaceThemes.CreateStyle());
         _window.Show();
         Strip.Attach(ViewModel); // opens the first, blank tab
         for (var i = 1; i < tabs; i++) ViewModel.NewMdRunFile();

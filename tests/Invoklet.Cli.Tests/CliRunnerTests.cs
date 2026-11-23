@@ -2,8 +2,12 @@ using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.Models;
 using Invoklet.Format.MdRun;
+using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
+using Invoklet.Plugins;
+using Invoklet.Plugins.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console.Testing;
 using Xunit;
 
@@ -16,6 +20,23 @@ public class CliRunnerTests
 {
     private static readonly DotnetSdk Platform = new("net10.0", "10.0.100", ".NET 10.0.100", ".NET 10");
     private const string RuntimeLib = "/Invoklet/Invoklet.Runtime.dll";
+
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("--version")]
+    public async Task InformationalCommand_DoesNotCreateScriptServices(string option)
+    {
+        var stdout = new TestConsole();
+        var stderr = new TestConsole();
+
+        var exitCode = await CliRunner.RunAsync([option],
+            () => throw new InvalidOperationException("The command should not load plugins."),
+            stdout, stderr, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotEmpty(stdout.Output);
+        Assert.Empty(stderr.Output);
+    }
 
     // The options the runner's request gets from the .NET backend: what its run is built with.
     private static ILanguageHostOptions BuildOptions(
@@ -137,6 +158,46 @@ public class CliRunnerTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public async Task RunAsync_ConcurrentPathRequests_ReturnTheValueOfEachRequestedName()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var path = Path.Combine(Path.GetTempPath(), $"Invoklet-cli-paths-{Guid.NewGuid():N}.inv");
+        var root = Path.GetPathRoot(path)!;
+        var registry = new LanguageHostRegistry { PathReader = name => Path.Combine(root, name) };
+        registry.Register(new CSharpLanguageHostFactory(NullLoggerFactory.Instance, new DotnetRuntimeReferenceLocator()));
+        var services = new CliServices(registry, new DotnetSdkProvider());
+        try
+        {
+            await File.WriteAllTextAsync(path, """
+                ---
+                language: csharp
+                kind: statements
+                ---
+
+                ```csharp run
+                var root = System.IO.Path.GetPathRoot(Util.CurrentQueryPath);
+                System.Threading.Tasks.Parallel.For(0, 128, i =>
+                {
+                    var name = $"path{i}";
+                    var actual = Util.GetPath(name);
+                    if (actual != System.IO.Path.Combine(root, name))
+                        throw new InvalidOperationException($"Wrong path for {name}: {actual}");
+                });
+                Console.WriteLine("all paths matched");
+                ```
+                """, timeout.Token);
+            var stdout = new TestConsole();
+            var stderr = new TestConsole();
+
+            var exit = await CliRunner.RunAsync([path], services, stdout, stderr, timeout.Token);
+
+            Assert.True(exit == 0, stderr.Output);
+            Assert.Contains("all paths matched", stdout.Output);
+        }
+        finally { File.Delete(path); }
+    }
+
     // --quiet: the compiler's warning isn't written, its error still is.
     [Fact]
     public async Task RunAsync_Quiet_WritesTheErrorsButNotTheWarnings()
@@ -180,14 +241,6 @@ public class CliRunnerTests
             Assert.DoesNotContain("script output", stdout.Output);
         }
         finally { File.Delete(path); }
-    }
-
-    [Fact]
-    public void CreateDefault_Should_RegisterCSharpAndVb()
-    {
-        var services = CliServices.CreateDefault();
-
-        Assert.Equal(["csharp", "vb"], services.Registry.SupportedLanguages);
     }
 
     // The runner's request is the window's: the shared front-matter mapping, built in the temporary
@@ -269,7 +322,7 @@ public class CliRunnerTests
         finally { Directory.Delete(folder, true); }
     }
 
-    private sealed class CountingSchemaDriver : IConnectionSchemaDriver
+    private sealed class CountingSchemaDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public int Fetches;
         public string Id => "counting";
@@ -419,6 +472,32 @@ public class CliRunnerTests
 
         Assert.Equal(CliRunner.NotRunExitCode, exitCode);
         Assert.Contains("Usage:", stderr.Output);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_PluginDiagnostics_QuietSuppressesWarningsAndKeepsErrors(bool quiet)
+    {
+        var rejected = new RejectedPlugin("example.plugin", null, "/plugins/example", PluginTrust.Trusted,
+            [PluginDiagnostic.Error("example.plugin", PluginDiagnosticCode.PluginNotApproved, "'example.plugin' needs approval before it can load.")]);
+        var warnings = new RejectedPlugin("example.warning", null, "/plugins/warning", PluginTrust.Development,
+            [PluginDiagnostic.Warning("example.warning", PluginDiagnosticCode.DevelopmentPlugin, "Example plugin warning.")]);
+        var services = new CliServices(new LanguageHostRegistry(), new DotnetSdkProvider())
+        {
+            Plugins = new PluginSession([], [rejected, warnings]),
+        };
+        var path = Path.Combine(Path.GetTempPath(), $"Invoklet-plugin-diagnostics-{Guid.NewGuid():N}.inv");
+        await File.WriteAllTextAsync(path, "---\nlanguage: csharp\n---\n\n```csharp run\nConsole.WriteLine(1);\n```\n");
+        try
+        {
+            var stderr = new TestConsole().Width(1000);
+            await CliRunner.RunAsync(quiet ? ["-q", path] : [path], services, new TestConsole(), stderr, CancellationToken.None);
+
+            Assert.Contains("error: 'example.plugin' needs approval", stderr.Output);
+            Assert.Equal(!quiet, stderr.Output.Contains("warning: Example plugin warning.", StringComparison.Ordinal));
+        }
+        finally { File.Delete(path); }
     }
 
     [Fact]

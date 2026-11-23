@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Invoklet.TemplatedControls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="clr-namespace:Invoklet.Windows.Models"
@@ -80,13 +81,16 @@
                     <windows:MacWindowButtons x:Name="MacWindowButtons" IsVisible="False"/>
 
                     <Button x:Name="SidebarToggleButton" Classes="wc-btn" Width="30" Command="{Binding Sidebar.ToggleCommand}" ToolTip.Tip="Toggle file tree">
-                        <PathIcon x:Name="SidebarToggleIcon" Data="{StaticResource Icon.SidebarLeft}" Width="14" Height="14"/>
+                        <PathIcon x:Name="SidebarToggleIcon" Data="{DynamicResource Icon.SidebarLeft}" Width="14" Height="14"/>
                     </Button>
 
                 </StackPanel>
 
-                <!-- Middle: drag region (empty) -->
-                <Border Grid.Column="1" Background="Transparent"/>
+                <Border Grid.Column="1" Background="Transparent">
+                    <TextBlock x:Name="PluginDevelopmentWarning" Text="Plugin development mode" IsVisible="False"
+                               IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" FontWeight="SemiBold"/>
+                </Border>
 
                 <!-- Right: window control buttons -->
                 <StackPanel x:Name="WindowControlButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch" chrome:WindowDecorationProperties.ElementRole="User">
@@ -130,10 +134,10 @@
                                   AutomationProperties.Name="Connections navigation bundle">
                             <Expander.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Path Classes="bundle-icon" Data="{StaticResource Icon.NavigationConnections}"/>
+                                    <Path Classes="bundle-icon" Data="{DynamicResource Icon.NavigationConnections}"/>
                                     <TextBlock Text="Connections" VerticalAlignment="Center"/>
                                     <uc:TreeActionButton x:Name="AddConnectionButton" Margin="2,0,0,0"
-                                                         Icon="{StaticResource Icon.ConnectionAdd}"
+                                                         Icon="{DynamicResource Icon.ConnectionAdd}"
                                                          ToolTip.Tip="Add connection"
                                                          AutomationProperties.Name="Add connection"
                                                          Click="AddConnection_Click"/>
@@ -152,7 +156,7 @@
                                   AutomationProperties.Name="Scripts navigation bundle">
                             <Expander.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Path Classes="bundle-icon" Data="{StaticResource Icon.NavigationScripts}"/>
+                                    <Path Classes="bundle-icon" Data="{DynamicResource Icon.NavigationScripts}"/>
                                     <TextBlock Text="Scripts"/>
                                 </StackPanel>
                             </Expander.Header>
@@ -167,7 +171,7 @@
                                   AutomationProperties.Name="Samples navigation bundle">
                             <Expander.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <Path Classes="bundle-icon" Data="{StaticResource Icon.NavigationSamples}"/>
+                                    <Path Classes="bundle-icon" Data="{DynamicResource Icon.NavigationSamples}"/>
                                     <TextBlock Text="Samples"/>
                                 </StackPanel>
                             </Expander.Header>
@@ -191,10 +195,10 @@
                                         <TreeDataTemplate DataType="ucm:SampleTreeNode" ItemsSource="{Binding Children}">
                                             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center" Margin="0,1">
                                                 <Panel Width="14" Height="14" VerticalAlignment="Center">
-                                                    <PathIcon IsVisible="{Binding IsFolder}" Data="{StaticResource Icon.FolderOpen}"
+                                                    <PathIcon IsVisible="{Binding IsFolder}" Data="{DynamicResource Icon.FolderOpen}"
                                                               Width="14" Height="14" Opacity="0.55"/>
                                                     <Path IsVisible="{Binding !IsFolder}" Stretch="Uniform" Opacity="0.55"
-                                                          Data="{Binding IconKey, Converter={x:Static conv:ResourceKeyToGeometryConverter.Instance}}"
+                                                          controls:ThemeIcon.Key="{Binding IconKey}"
                                                           Fill="{DynamicResource Invoklet.Text.PrimaryBrush}"/>
                                                 </Panel>
                                                 <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>

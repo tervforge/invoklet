@@ -8,6 +8,15 @@ using Invoklet.Runtime;
 public static partial class Util
 {
     /// <summary>
+    /// Creates a formatted source-code block for the output panel.
+    /// </summary>
+    public static object Code(string source, CodeLanguage language = CodeLanguage.CSharp)
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        return new CodeBlock(source, language);
+    }
+
+    /// <summary>
     /// Wraps a value so that it shows with a highlight (yellow unless <paramref name="color"/> says another CSS colour) when it is dumped —
     /// LINQPad-compatible <c>Util.Highlight</c>. Printed as text, the result is the value itself.
     /// </summary>

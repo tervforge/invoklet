@@ -10,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.App.Windows;
@@ -20,13 +21,13 @@ namespace Invoklet.Runtime.UI.Tests.App.Windows;
 public class PrimaryActionAndSplitterTests
 {
     public static TheoryData<string> AllThemes() =>
-        new(typeof(InvokletThemeVariants).GetFields().Where(f => f.FieldType == typeof(ThemeVariant)).Select(f => f.Name));
+        new(TestInterfaceThemes.All.Select(theme => (string)theme.Variant.Key));
 
-    private static ThemeVariant Variant(string name) => (ThemeVariant)typeof(InvokletThemeVariants).GetField(name)!.GetValue(null)!;
+    private static ThemeVariant Variant(string name) => TestInterfaceThemes.GetVariant(name);
 
-    private static T Themed<T>(T window, string theme = "VsCodeDark") where T : Window
+    private static T Themed<T>(T window, string theme = "invoklet.theme.vscode-dark") where T : Window
     {
-        window.Styles.Add(new InvokletTheme());
+        window.Styles.Add(TestInterfaceThemes.CreateStyle());
         window.RequestedThemeVariant = Variant(theme);
         return window;
     }
@@ -39,7 +40,7 @@ public class PrimaryActionAndSplitterTests
     [MemberData(nameof(AllThemes))]
     public void PrimaryButtonAndSelection_Should_KeepTextAt4Point5To1_InEveryState(string themeName)
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         Color Get(string key)
         {
             Assert.True(theme.TryGetResource(key, Variant(themeName), out var value), $"{key} missing in {themeName}");
@@ -58,10 +59,10 @@ public class PrimaryActionAndSplitterTests
     }
 
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
-    [InlineData("InvokletMidnight")]
-    [InlineData("RiderLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
+    [InlineData("invoklet.theme.midnight")]
+    [InlineData("invoklet.theme.rider-light")]
     public void TheDefaultButton_Should_UseThePrimaryBrushes_InEachState_AndOthersShouldNot(string themeName)
     {
         var dialog = Themed(new Window { Content = new StackPanel { Children = { new Button { Content = "Done", IsDefault = true }, new Button { Content = "Cancel", IsCancel = true } } } }, themeName);

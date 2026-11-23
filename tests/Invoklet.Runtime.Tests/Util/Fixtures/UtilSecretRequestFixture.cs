@@ -18,10 +18,15 @@ internal sealed class UtilSecretRequestFixture : IDisposable
     /// <summary>Invoklet answers with these lines, one per request: "1"+Base64 value, "0", "2"+Base64 reason, "3",
     /// "4"+Base64 reason.</summary>
     public UtilSecretRequestFixture(params string[] answers)
+        : this(new StringReader(string.Concat(answers.Select(a => a + "\n"))))
+    {
+    }
+
+    public UtilSecretRequestFixture(TextReader answers)
     {
         Environment.SetEnvironmentVariable(Util.InputEnvVar, "1");
         Console.SetOut(_written);
-        Console.SetIn(new StringReader(string.Concat(answers.Select(a => a + "\n"))));
+        Console.SetIn(answers);
     }
 
     public static string Found(string value) => "1" + Convert.ToBase64String(Encoding.UTF8.GetBytes(value));

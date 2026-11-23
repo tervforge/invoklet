@@ -46,14 +46,14 @@ public partial class TextEditorWindow : Window
         onAttached = (_, _) =>
         {
             editor.AttachedToVisualTree -= onAttached;
-            editor.TrySetLanguage(themeService.CurrentTheme.Editor.TextMateName, Path.GetExtension(viewModel.FilePath));
+            editor.TrySetLanguage(themeService.CurrentTheme.Editor.RawTheme, Path.GetExtension(viewModel.FilePath));
         };
         editor.AttachedToVisualTree += onAttached;
 
         // The window is always shown while open: a theme change recolours it at once.
         void OnThemeChanged(ActiveTheme theme)
         {
-            editor.SetTheme(theme.Editor.TextMateName);
+            editor.SetTheme(theme.Editor.RawTheme);
             editor.Background = themeService.GetBrush("Invoklet.Editor.BackgroundBrush");
         }
         themeService.ThemeChanged += OnThemeChanged;

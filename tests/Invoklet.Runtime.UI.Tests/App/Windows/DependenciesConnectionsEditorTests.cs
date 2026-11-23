@@ -3,12 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Invoklet.Connectors.Http;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
 using Invoklet.Services.Connections;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Windows;
 using Invoklet.Windows.Models;
 using Moq;
@@ -20,7 +20,7 @@ namespace Invoklet.Runtime.UI.Tests.App.Windows;
 // Connections window as Tools → Connections over the Dependencies window, whose draft is left alone.
 public class DependenciesConnectionsEditorTests
 {
-    private sealed class PackageDriver : IConnectionDriver
+    private sealed class PackageDriver : IConnectionDriver, ICSharpClientSource
     {
         public string Id => "package";
         public string DisplayName => "Package";
@@ -43,7 +43,7 @@ public class DependenciesConnectionsEditorTests
 
         public Fixture()
         {
-            Drivers.Register(new HttpConnectionDriver());
+            Drivers.Register(new HttpTestDriver());
             Store.Setup(s => s.LoadSnapshot()).Returns(() => new ConnectionStoreSnapshot([.. Mine], null));
             Store.Setup(s => s.FilePath).Returns("/data/Invoklet/connections.json");
             Store.Setup(s => s.Save(It.IsAny<IReadOnlyList<MdRunConnection>>(), It.IsAny<string?>()))

@@ -198,7 +198,7 @@ internal sealed class BackgroundAnalysis(
         var compilation = await document.Project.GetCompilationAsync(ct);
         var analyzerDiagnostics = compilation is null
             ? []
-            : await _analyzerEngine.ComputeAsync(compilation, _analyzersEnabled(), ct);
+            : await _analyzerEngine.ComputeAsync(compilation, document.Project.AnalyzerOptions, _analyzersEnabled(), ct);
 
         var headerLength = _layout.HeaderLength(code);
         var visible = new List<IDiagnosticInfo>();
@@ -265,7 +265,7 @@ internal sealed class BackgroundAnalysis(
         if (!CanPublish(version, ct)) return;
         DiagnosticsChanged?.Invoke(code, visible);
 
-        var fixes = await _codeFixEngine.ComputeFixesAsync(document, forCodeFixes, _layout.Projection(code).Text, headerLength, ct);
+        var fixes = await _codeFixEngine.ComputeFixesAsync(document, forCodeFixes, _layout.Projection(code).Text, headerLength, version, ct);
         if (CanPublish(version, ct)) CodeFixesChanged?.Invoke(code, fixes);
     }
 

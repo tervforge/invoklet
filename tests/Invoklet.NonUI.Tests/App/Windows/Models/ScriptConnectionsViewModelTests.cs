@@ -1,11 +1,11 @@
 using System.Reactive.Linq;
 using System.Windows.Input;
-using Invoklet.Connectors.Http;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
 using Invoklet.Services.Connections;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Windows.Models;
 using Moq;
 using Xunit;
@@ -29,7 +29,7 @@ public class ScriptConnectionsViewModelTests
             },
     };
 
-    private sealed class SqlLikeDriver : IConnectionDriver
+    private sealed class SqlLikeDriver : IConnectionDriver, ICSharpClientSource
     {
         public string Id => "sqlish";
         public string DisplayName => "SQL-ish";
@@ -58,7 +58,7 @@ public class ScriptConnectionsViewModelTests
         store.Setup(s => s.Save(It.IsAny<IReadOnlyList<MdRunConnection>>(), It.IsAny<string?>()))
             .Callback<IReadOnlyList<MdRunConnection>, string?>((saved, _) => { list.Clear(); list.AddRange(saved); });
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         drivers.Register(new SqlLikeDriver());
         var sources = new Mock<INuGetSourceStore>();
         sources.Setup(s => s.Load()).Returns([]);
@@ -152,7 +152,7 @@ public class ScriptConnectionsViewModelTests
             ],
         });
         Assert.Equal(
-            ["The Secret Store has no secret named 'missing-token'.", "This Invoklet has no 'snowflake' driver.", "The base address is missing."],
+            ["The Secret Store has no secret named 'missing-token'.", "Driver 'snowflake' is not installed or is disabled.", "The base address is missing."],
             vm.Connections.Items.Select(i => i.Problem));
 
         vm.SetFrontMatter(new MdRunFrontMatter { Language = MdRunLanguage.Vb, Connections = [Http("a", "https://a/")] });
@@ -528,7 +528,7 @@ public class ScriptConnectionsViewModelTests
         secrets.Verify(s => s.LoadSnapshot(), Times.Once);
     }
 
-    private sealed class CountingSchemaDriver : IConnectionSchemaDriver
+    private sealed class CountingSchemaDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public int Fetches;
         public string? Failure;
@@ -561,7 +561,7 @@ public class ScriptConnectionsViewModelTests
             var driver = new CountingSchemaDriver();
             var drivers = new ConnectionDriverRegistry();
             drivers.Register(driver);
-            drivers.Register(new HttpConnectionDriver());
+            drivers.Register(new HttpTestDriver());
             var schemas = new ConnectionSchemas(drivers, folder, new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
             var described = new MdRunConnection { Name = "stock", Driver = "described" };
             await schemas.EnsureAsync([described], null, ConnectionSchemaRefresh.Missing, CancellationToken.None);

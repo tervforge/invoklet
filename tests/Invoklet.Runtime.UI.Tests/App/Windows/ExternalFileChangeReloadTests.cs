@@ -14,6 +14,7 @@ using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
 using Invoklet.Services.Preferences;
+using Invoklet.Services.Secrets;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows;
@@ -41,21 +42,24 @@ public class ExternalFileChangeReloadTests
         public string Path { get; }
         public EditorTabsControl Tabs { get; }
         public MainWindowViewModel MainVm { get; }
+        public Mock<IPreferencesService> Preferences { get; } = new();
         public Mock<IWindowService> Windows { get; } = new();
+        public IReadOnlyList<Window> Dialogs => _host.OwnedWindows;
 
-        public Harness()
+        public Harness(IIntelliSenseService? intelliSense = null)
         {
             Folder = Directory.CreateTempSubdirectory("Invoklet-external-reload").FullName;
             Path = System.IO.Path.Combine(Folder, "demo.inv");
             File.WriteAllText(Path, MdRunWriter.NewFile(Original + "\n"));
 
-            var prefs = new Mock<IPreferencesService>();
+            var prefs = Preferences;
             prefs.Setup(p => p.Layout).Returns(new LayoutSettings());
             prefs.Setup(p => p.Keyboard).Returns(new KeyboardSettings());
             prefs.Setup(p => p.Editor).Returns(new EditorSettings());
             prefs.Setup(p => p.CSharp).Returns(new CSharpLanguageSettings());
             prefs.Setup(p => p.Session).Returns(new SessionSettings());
             prefs.Setup(p => p.Debugger).Returns(new DebuggerSettings());
+            prefs.Setup(p => p.Secrets).Returns(new SecretsSettings());
 
             var fileSystem = new Mock<IFileSystemService>();
             fileSystem.Setup(f => f.Folder).Returns(Folder);
@@ -68,7 +72,7 @@ public class ExternalFileChangeReloadTests
 
             MainVm = new MainWindowViewModel([], fileSystem.Object, Windows.Object, prefs.Object, new LanguageHostRegistry());
             Tabs = new EditorTabsControl(theme.Object, Windows.Object,
-                new Mock<ILanguageHostRegistry>().WithCSharpIntelliSense(() => new Mock<IIntelliSenseService>().Object),
+                new Mock<ILanguageHostRegistry>().WithCSharpIntelliSense(() => intelliSense ?? new Mock<IIntelliSenseService>().Object),
                 prefs.Object, new Mock<IBuildCacheService>().Object);
             _host = new Window { Content = Tabs };
             _host.Show();
@@ -85,6 +89,8 @@ public class ExternalFileChangeReloadTests
 
         public void AnswerReload(bool reload) =>
             Windows.Setup(w => w.ShowReloadChangedFileDialogAsync(It.IsAny<string>())).ReturnsAsync(reload);
+
+        public void PressRename() => _host.KeyPress(Key.F2, RawInputModifiers.None, PhysicalKey.F2, null);
 
         public void AssertAskedToReload(int times) =>
             Windows.Verify(w => w.ShowReloadChangedFileDialogAsync("demo.inv"), Times.Exactly(times));
@@ -108,6 +114,74 @@ public class ExternalFileChangeReloadTests
     private static void WriteExternally(string path, string code, MdRunKind kind = MdRunKind.Statements,
         MdRunLanguage language = MdRunLanguage.CSharp)
         => File.WriteAllText(path, MdRunWriter.NewFile(code + "\n", kind: kind, language: language));
+
+    private sealed record RenameSpan(int Start, int Length) : IDocumentHighlightSpan;
+
+    [AvaloniaTheory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task RenameSymbol_Should_CancelWhenTheFileReloads(bool reloadDuringConflictCheck, bool headerOnly)
+    {
+        var intelliSense = new Mock<IIntelliSenseService>();
+        using var h = new Harness(intelliSense.Object);
+        const string originalCode = "int value = 1;\nConsole.WriteLine(value);";
+        const string updatedCode = "int other = 2;\nConsole.WriteLine(other);";
+        WriteExternally(h.Path, originalCode);
+        var (vm, ctrl) = await h.OpenAsync();
+        var editor = ctrl.State.Editor;
+        await TestWait.EventuallyAsync(() =>
+        {
+            Assert.Same(intelliSense.Object, ctrl.IntelliSenseForTests);
+            Assert.Equal(originalCode, editor.Text.TrimEnd());
+            Assert.True(editor.TextArea.Focus());
+        });
+        var code = editor.Text;
+        var caret = code.IndexOf("value", StringComparison.Ordinal);
+        var rename = new Mock<IRenameInfo>();
+        rename.SetupGet(r => r.CurrentName).Returns("value");
+        rename.SetupGet(r => r.Spans).Returns([
+            new RenameSpan(caret, 5), new RenameSpan(code.LastIndexOf("value", StringComparison.Ordinal), 5)]);
+        intelliSense.Setup(s => s.GetRenameInfoAsync(code, caret, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rename.Object);
+        var checking = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishCheck = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        intelliSense.Setup(s => s.CheckRenameAsync(It.IsAny<string>(), caret, "count", It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                checking.TrySetResult();
+                return reloadDuringConflictCheck ? finishCheck.Task : Task.FromResult<string?>(null);
+            });
+        var expectedCode = headerOnly ? originalCode : updatedCode;
+
+        editor.TextArea.Caret.Offset = caret;
+        h.PressRename();
+        await TestWait.WhileAsync(() => h.Dialogs.Count == 0);
+        var dialog = Assert.IsType<RenameSymbolDialog>(Assert.Single(h.Dialogs));
+        dialog.FindControl<TextBox>("NameBox")!.Text = "count";
+        var confirm = dialog.FindControl<Button>("OkButton")!;
+        if (reloadDuringConflictCheck)
+        {
+            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await checking.Task.WaitAsync(TestWait.DefaultTimeout, TestContext.Current.CancellationToken);
+        }
+
+        WriteExternally(h.Path, expectedCode, headerOnly ? MdRunKind.Program : MdRunKind.Statements);
+        await h.Tabs.CheckFilesChangedOnDiskAsync();
+        if (reloadDuringConflictCheck)
+            finishCheck.SetResult(null);
+        else
+            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        const string cancelled = "Rename cancelled because the script changed. Try again.";
+        var status = ctrl.FindControl<TextBlock>("ExecStatusBlock")!;
+        await TestWait.WhileAsync(() => !vm.IsDirty && status.Text != cancelled);
+        Assert.Equal(expectedCode, editor.Text.TrimEnd());
+        Assert.False(vm.IsDirty);
+        Assert.Equal(cancelled, status.Text);
+        intelliSense.Verify(s => s.CheckRenameAsync(It.IsAny<string>(), caret, "count", It.IsAny<CancellationToken>()),
+            reloadDuringConflictCheck ? Times.Once() : Times.Never());
+    }
 
     [AvaloniaFact]
     public async Task ACleanTab_Should_ReloadQuietly_AsOneUndoableEdit()
@@ -143,6 +217,46 @@ public class ExternalFileChangeReloadTests
 
         h.Windows.Verify(w => w.ShowSaveConflictDialogAsync(It.IsAny<string>()), Times.Never);
         Assert.Equal(EditedHere, MdRunParser.TryParse(File.ReadAllText(h.Path))!.RunCode.Trim());
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Save_Should_CarrySecretPermissionOnlyFromAnAllowedBaseline(bool reloadExternalVersion)
+    {
+        using var h = new Harness();
+        var (vm, ctrl) = await h.OpenAsync();
+        var answer = SecretAccessChoice.Always;
+        var gate = new SecretAccessGate(h.Preferences.Object, (_, _, _, _) => Task.FromResult(answer));
+        var request = new SecretAccess(h.Path, "billing", IsSave: false);
+        void Report(string path, string baseline, string saved)
+        {
+            if (path == h.Path) gate.ScriptWritten(path, baseline, saved);
+        }
+
+        Assert.True(await gate.MayAccessAsync(request, CancellationToken.None));
+        answer = SecretAccessChoice.Deny;
+        ScriptFileWrites.Written += Report;
+        try
+        {
+            if (reloadExternalVersion)
+            {
+                WriteExternally(h.Path, External);
+                await h.Tabs.CheckFilesChangedOnDiskAsync();
+                Assert.Equal(External, ctrl.State.Editor.Text.Trim());
+            }
+
+            ctrl.State.Editor.Text = EditedHere + "\n";
+            await ctrl.SaveAsync();
+
+            Assert.False(vm.IsDirty);
+            Assert.Equal(EditedHere, MdRunParser.TryParse(File.ReadAllText(h.Path))!.RunCode.Trim());
+            Assert.Equal(!reloadExternalVersion, await gate.MayAccessAsync(request, CancellationToken.None));
+        }
+        finally
+        {
+            ScriptFileWrites.Written -= Report;
+        }
     }
 
     [AvaloniaFact]

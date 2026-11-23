@@ -18,17 +18,17 @@
                     <ContextMenu>
                         <MenuItem Header="Save As..." Command="{Binding SaveAsCommand}">
                             <MenuItem.Icon>
-                                <PathIcon Data="{StaticResource Icon.Save}" Width="16" Height="16"/>
+                                <PathIcon Data="{DynamicResource Icon.Save}" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="Duplicate" Command="{Binding DuplicateCommand}" IsEnabled="{Binding HasFilePath}">
                             <MenuItem.Icon>
-                                <PathIcon Data="{StaticResource Icon.Duplicate}" Width="16" Height="16"/>
+                                <PathIcon Data="{DynamicResource Icon.Duplicate}" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="Open Containing Folder" Command="{Binding OpenContainingFolderCommand}" IsEnabled="{Binding HasFilePath}">
                             <MenuItem.Icon>
-                                <PathIcon Data="{StaticResource Icon.FolderOpen}" Width="16" Height="16"/>
+                                <PathIcon Data="{DynamicResource Icon.FolderOpen}" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="Move to New Window" Command="{Binding MoveToNewWindowCommand}"/>
@@ -43,7 +43,7 @@
                     <Button Classes="TabClose"
                             Command="{Binding CloseCommand}"
                             VerticalAlignment="Center">
-                        <PathIcon Data="{StaticResource Icon.Close}"
+                        <PathIcon Data="{DynamicResource Icon.Close}"
                                   Width="10" Height="10"/>
                     </Button>
                     <Panel Classes="TabStatus" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -51,16 +51,16 @@
                                  IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.None}}"/>
                         <Ellipse Width="7" Height="7" Fill="{DynamicResource Invoklet.Tab.DirtyBrush}"
                                  IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Unsaved}}"/>
-                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Play}"
+                        <PathIcon Width="10" Height="10" Data="{DynamicResource Icon.Play}"
                                   Foreground="{DynamicResource Invoklet.Status.RunningBrush}"
                                   IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Running}}"/>
-                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Play}"
+                        <PathIcon Width="10" Height="10" Data="{DynamicResource Icon.Play}"
                                   Foreground="{DynamicResource Invoklet.Status.RunningBrush}"
                                   IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Debugging}}"/>
-                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Pause}"
+                        <PathIcon Width="10" Height="10" Data="{DynamicResource Icon.Pause}"
                                   Foreground="{DynamicResource Invoklet.Status.PausedBrush}"
                                   IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Paused}}"/>
-                        <PathIcon Width="10" Height="10" Data="{StaticResource Icon.Warning}"
+                        <PathIcon Width="10" Height="10" Data="{DynamicResource Icon.Warning}"
                                   Foreground="{DynamicResource Invoklet.Status.ErrorBrush}"
                                   IsVisible="{Binding Status, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:TabStatus.Failed}}"/>
                     </Panel>
@@ -108,13 +108,13 @@
                             Classes="Toolbar"
                             VerticalAlignment="Center">
                     <tc:IconButton
-                        IconData="{StaticResource Icon.Play}"
+                        IconData="{DynamicResource Icon.Play}"
                         Foreground="{DynamicResource Invoklet.Icon.PlayBrush}"
                         IsEnabled="{Binding EnableRunOrContinueButton}"
                         Click="RunOrContinueButton_Click"
                         ToolTip.Tip="{Binding TooltipRunOrContinue}"/>
                     <tc:IconButton
-                        IconData="{StaticResource Icon.Stop}"
+                        IconData="{DynamicResource Icon.Stop}"
                         Foreground="{DynamicResource Invoklet.Icon.StopBrush}"
                         IsEnabled="{Binding EnableCancelButton}"
                         Click="CancelButton_Click"
@@ -157,7 +157,7 @@
                             Margin="4,0"/>
 
                     <tc:IconToggleButton
-                        IconData="{StaticResource Icon.Bug}"
+                        IconData="{DynamicResource Icon.Bug}"
                         CheckedBrush="{DynamicResource Invoklet.Icon.PlayBrush}"
                         IsChecked="{Binding DebugModeEnabled}"
                         IsVisible="{Binding HasDebugger}"
@@ -166,7 +166,7 @@
 
                     <tc:IconToggleButton
                         x:Name="PreviewButton"
-                        IconData="{StaticResource Icon.PreviewSide}"
+                        IconData="{DynamicResource Icon.PreviewSide}"
                         CheckedBrush="{DynamicResource Invoklet.Icon.PlayBrush}"
                         IsChecked="{Binding PreviewShown}"
                         ToolTip.Tip="Show or hide the Markdown preview"
@@ -174,7 +174,7 @@
                         />
 
                     <tc:IconButton
-                        IconData="{StaticResource Icon.PanelBottom}"
+                        IconData="{DynamicResource Icon.PanelBottom}"
                         Command="{Binding OutputPanel.ToggleCommand}"
                         ToolTip.Tip="Toggle output panel"
                         />
@@ -187,7 +187,7 @@
                             Margin="4,0"
                             IsVisible="{Binding IsDebugging}"/>
                     <tc:IconButton
-                        IconData="{StaticResource Icon.DebugStepOver}"
+                        IconData="{DynamicResource Icon.DebugStepOver}"
                         Foreground="{DynamicResource Invoklet.Icon.StepBrush}"
                         IsEnabled="{Binding IsPaused}"
                         IsVisible="{Binding IsDebugging}"
@@ -195,7 +195,7 @@
                         ToolTip.Tip="{Binding TooltipStepOver}"
                         Width="24" Height="24"/>
                     <tc:IconButton
-                        IconData="{StaticResource Icon.DebugStepInto}"
+                        IconData="{DynamicResource Icon.DebugStepInto}"
                         Foreground="{DynamicResource Invoklet.Icon.StepBrush}"
                         IsEnabled="{Binding IsPaused}"
                         IsVisible="{Binding IsDebugging}"
@@ -203,7 +203,7 @@
                         ToolTip.Tip="{Binding TooltipStepIn}"
                         Width="24" Height="24"/>
                     <tc:IconButton
-                        IconData="{StaticResource Icon.DebugStepOut}"
+                        IconData="{DynamicResource Icon.DebugStepOut}"
                         Foreground="{DynamicResource Invoklet.Icon.StepBrush}"
                         IsEnabled="{Binding IsPaused}"
                         IsVisible="{Binding IsDebugging}"
@@ -211,14 +211,14 @@
                         ToolTip.Tip="{Binding TooltipStepOut}"
                         Width="24" Height="24"/>
                     <tc:IconButton
-                        IconData="{StaticResource Icon.Pause}"
+                        IconData="{DynamicResource Icon.Pause}"
                         Foreground="{DynamicResource Invoklet.Icon.DebugBrush}"
                         IsVisible="{Binding IsDebugging}"
                         Click="DbgPause_Click"
                         ToolTip.Tip="Pause"
                         Width="24" Height="24"/>
                     <tc:IconButton
-                        IconData="{StaticResource Icon.RunToCursor}"
+                        IconData="{DynamicResource Icon.RunToCursor}"
                         Foreground="{DynamicResource Invoklet.Icon.StepBrush}"
                         IsEnabled="{Binding IsPaused}"
                         IsVisible="{Binding IsDebugging}"
@@ -268,7 +268,7 @@
         <!-- Row 3: Output tabs -->
         <TabControl x:Name="OutputTabsControl" Grid.Row="3" Classes="OutputTabs panel tool">
             <TabControl.Tag>
-                            <tc:IconButton x:Name="OutputSettingsButton" Width="24" Height="24" Padding="6" Margin="0,0,8,0" IconData="{StaticResource Icon.Settings}"
+                            <tc:IconButton x:Name="OutputSettingsButton" Width="24" Height="24" Padding="6" Margin="0,0,8,0" IconData="{DynamicResource Icon.Settings}"
                                     Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}" ToolTip.Tip="Output settings" AutomationProperties.Name="Output settings">
                                 <tc:IconButton.Resources>
                                     <x:Double x:Key="Invoklet.Size.ToolbarIcon">12</x:Double>

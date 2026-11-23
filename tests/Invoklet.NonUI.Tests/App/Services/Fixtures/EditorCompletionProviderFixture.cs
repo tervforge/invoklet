@@ -13,6 +13,8 @@ internal sealed class EditorCompletionProviderFixture
 
     public Mock<ICompletionItemFactory> Items { get; } = new();
 
+    public Func<Task> ContextRefresh { get; set; } = () => Task.CompletedTask;
+
     public void SetupSignatureHelp(bool argumentSlotEmpty)
     {
         var help = new Mock<ISignatureHelpResult>();
@@ -22,7 +24,7 @@ internal sealed class EditorCompletionProviderFixture
     }
 
     /// <summary>Makes the language service offer these items and the factory turn each into a row.</summary>
-    public List<ICompletionData> SetupCompletions(int count)
+    public List<ICompletionData> SetupCompletions(int count, bool initiallyUnresolved = false)
     {
         var rows = new List<ICompletionData>();
         var items = new List<ICompletionItem>();
@@ -37,10 +39,12 @@ internal sealed class EditorCompletionProviderFixture
 
         var list = new Mock<ICompletionList>();
         list.SetupGet(l => l.Items).Returns(items);
-        IntelliSense.Setup(i => i.GetCompletionsAsync(Text, It.IsAny<int>(), It.IsAny<CompletionTrigger>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(list.Object);
+        var completions = IntelliSense.SetupSequence(i =>
+            i.GetCompletionsAsync(Text, It.IsAny<int>(), It.IsAny<CompletionTrigger>(), It.IsAny<CancellationToken>()));
+        if (initiallyUnresolved) completions.ReturnsAsync((ICompletionList?)null);
+        completions.ReturnsAsync(list.Object);
         return rows;
     }
 
-    public EditorCompletionProvider CreateSut() => new(IntelliSense.Object, () => Text, Items.Object);
+    public EditorCompletionProvider CreateSut() => new(IntelliSense.Object, () => Text, Items.Object, () => ContextRefresh());
 }

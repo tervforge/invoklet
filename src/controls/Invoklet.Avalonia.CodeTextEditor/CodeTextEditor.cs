@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.CodeCompletion;
+using AvaloniaEdit.Document;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.TextMate;
@@ -20,6 +21,7 @@ using Invoklet.Avalonia.CodeTextEditor.Highlighting;
 using Invoklet.Avalonia.CodeTextEditor.Margins;
 using Invoklet.Avalonia.Themes.Scrolling;
 using TextMateSharp.Grammars;
+using TextMateSharp.Themes;
 using static AvaloniaEdit.TextMate.TextMate;
 using FoldingMargin = Invoklet.Avalonia.CodeTextEditor.Margins.FoldingMargin;
 
@@ -1018,9 +1020,6 @@ public class CodeTextEditor : TextEditor, IDisposable
     internal static bool IsMemberAccessContext(
         string text, int offset, IReadOnlySet<char> identifierChars, IReadOnlySet<char> triggerChars)
     {
-        // offset can be stale relative to text — ShowCompletion captures the caret offset before an
-        // await, and the document may have since changed (fast typing/backspacing during that gap) —
-        // clamp instead of indexing past the current end.
         var pos = Math.Clamp(offset, 0, text.Length);
         while (pos > 0 && (char.IsLetterOrDigit(text[pos - 1]) || identifierChars.Contains(text[pos - 1])))
             pos--;
@@ -1212,6 +1211,14 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     private async Task ShowCompletionAsync(char trigger, bool explicitInvoke)
     {
+        if (Document is not { } document) return;
+
+        // A member-access request may legitimately return no items when Roslyn cannot resolve the
+        // receiver yet. Do not leave an older, general-scope popup visible in that case: it looks
+        // like completion is suggesting unrelated symbols for `q.`.
+        if (CompletionTriggers.Contains(trigger) || IsMemberAccessContext(TextArea.Caret.Offset))
+            _completionWindow?.Hide();
+
         // Fast typing can start a new completion request before the previous one has resolved (e.g.
         // 'C' triggers the 24/7 auto-invoke, then '.' triggers again before that first request comes
         // back) — cancelling the previous request's token here means a provider that threads it
@@ -1227,6 +1234,7 @@ public class CodeTextEditor : TextEditor, IDisposable
         var cts = new CancellationTokenSource();
         _completionCts = cts;
 
+        var version = document.Version;
         var args = new CompletionRequestedEventArgs(trigger, TextArea.Caret.Offset, explicitInvoke, cts.Token);
 
         try
@@ -1245,12 +1253,14 @@ public class CodeTextEditor : TextEditor, IDisposable
         // Belt-and-suspenders: a provider that doesn't observe the token (a test double, or the
         // synchronous CompletionRequested event) can still return normally after being superseded.
         if (cts.IsCancellationRequested) return;
+        if (!IsCompletionContextCurrent(document, version, args.CaretOffset)) return;
 
         // The provider found the caret in a fresh, not-yet-typed call argument — the
         // user's Ctrl+Space is really asking for parameter info there, not a completion list.
         if (args.RedirectToOverloads)
         {
-            ShowOverloads(trigger);
+            if (TextArea.Caret.Offset == args.CaretOffset)
+                ShowOverloads(trigger);
             return;
         }
 
@@ -1321,6 +1331,25 @@ public class CodeTextEditor : TextEditor, IDisposable
             if (window.CompletionList.ListBox.ItemCount == 0)
                 window.Hide();
         }
+    }
+
+    private bool IsCompletionContextCurrent(TextDocument document, ITextSourceVersion version, int requestedOffset)
+    {
+        if (!ReferenceEquals(Document, document)) return false;
+
+        // The only edits that can reuse this list are identifier characters typed at the request
+        // position. An edit elsewhere can change the symbols even if the caret offset stays put.
+        var prefixEnd = requestedOffset;
+        foreach (var change in version.GetChangesTo(document.Version))
+        {
+            if (change.Offset != prefixEnd || change.RemovalLength != 0
+                || !change.InsertedText.Text.All(ch => char.IsLetterOrDigit(ch) || IdentifierChars.Contains(ch)))
+                return false;
+
+            prefixEnd += change.InsertionLength;
+        }
+
+        return TextArea.Caret.Offset == prefixEnd;
     }
 
     private int GetWordStart(int offset) => GetWordStart(Document.Text, offset, IdentifierChars);
@@ -1427,15 +1456,20 @@ public class CodeTextEditor : TextEditor, IDisposable
     }
 
     /// <summary>
-    /// <see cref="SetLanguage"/> for an arbitrary file extension: false (plain text, nothing installed)
-    /// when TextMate has no grammar for it — <see cref="SetLanguage"/> itself throws then.
+    /// Tries to install a grammar for an arbitrary file extension.
     /// </summary>
-    public bool TrySetLanguage(ThemeName theme, string fileExtension)
+    public bool TrySetLanguage(ThemeName theme, string fileExtension) =>
+        TrySetLanguage(new RegistryOptions(theme), null, fileExtension);
+
+    public bool TrySetLanguage(IRawTheme theme, string fileExtension) =>
+        TrySetLanguage(new RegistryOptions(ThemeName.DarkPlus), theme, fileExtension);
+
+    private bool TrySetLanguage(RegistryOptions options, IRawTheme? theme, string fileExtension)
     {
         if (string.IsNullOrEmpty(fileExtension)
-            || new RegistryOptions(theme).GetLanguageByExtension(fileExtension) is null)
+            || options.GetLanguageByExtension(fileExtension) is null)
             return false;
-        SetLanguage(theme, fileExtension);
+        SetLanguage(options, theme, fileExtension);
         return true;
     }
 
@@ -1453,18 +1487,24 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     public void ResumeHighlighting() => _textMateInstallation?.Resume();
 
-    public string SetLanguage(ThemeName theme, string languageExtension)
+    public string SetLanguage(ThemeName theme, string languageExtension) =>
+        SetLanguage(new RegistryOptions(theme), null, languageExtension);
+
+    public string SetLanguage(IRawTheme theme, string languageExtension) =>
+        SetLanguage(new RegistryOptions(ThemeName.DarkPlus), theme, languageExtension);
+
+    private string SetLanguage(RegistryOptions options, IRawTheme? theme, string languageExtension)
     {
-        _registryOptions = new RegistryOptions(theme);
+        _registryOptions = options;
         _textMateInstallation?.Dispose();
-        _textMateInstallation = this.InstallTextMate(new IlAwareRegistryOptions(_registryOptions));
+        _textMateInstallation = this.InstallTextMate(new IlAwareRegistryOptions(options, theme));
         GrammarScope = null; // the new installation has no grammar yet
         return SetGrammarByExtension(languageExtension);
     }
 
     /// <summary>
     /// Switches the installed highlighting to another language of the bundled grammars without
-    /// reinstalling TextMate (the theme stays); a no-op before <see cref="SetLanguage"/>.
+    /// reinstalling TextMate (the theme stays); a no-op before a language is installed.
     /// </summary>
     public string SetGrammarByExtension(string languageExtension)
     {
@@ -1490,11 +1530,9 @@ public class CodeTextEditor : TextEditor, IDisposable
 
     internal Installation? TextMateInstallation => _textMateInstallation;
 
-    public void SetTheme(ThemeName theme)
-    {
-        if (_textMateInstallation is null || _registryOptions is null) return;
-        _textMateInstallation.SetTheme(_registryOptions.LoadTheme(theme));
-    }
+    public void SetTheme(ThemeName theme) => SetTheme(new RegistryOptions(theme).GetDefaultTheme());
+
+    public void SetTheme(IRawTheme theme) => _textMateInstallation?.SetTheme(theme);
 
     private sealed class OverloadProvider(IReadOnlyList<(object Header, object? Content)> items)
         : IOverloadProvider

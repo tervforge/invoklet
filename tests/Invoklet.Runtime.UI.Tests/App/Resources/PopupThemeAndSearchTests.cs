@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.App.Resources;
@@ -17,7 +18,7 @@ public class PopupThemeAndSearchTests
     public void OpenSurfaces_Should_FollowEveryInterfacePalette_WithoutRecreatingControls()
     {
         var app = Application.Current!;
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         var styles = new Invoklet.Resources.PopupStyles();
         app.Styles.Add(theme);
         app.Styles.Add(styles);
@@ -39,9 +40,7 @@ public class PopupThemeAndSearchTests
             Assert.True(editor.SearchPanel.MatchCase);
             Assert.True(editor.SearchPanel.WholeWords);
             Assert.True(editor.SearchPanel.UseRegex);
-            foreach (var variant in new[] { InvokletThemeVariants.InvokletMidnight, InvokletThemeVariants.InvokletWarmLight,
-                InvokletThemeVariants.RiderDark, InvokletThemeVariants.RiderLight, InvokletThemeVariants.VsCodeDark,
-                InvokletThemeVariants.VsCodeLight, InvokletThemeVariants.Vs2022Dark, InvokletThemeVariants.Vs2022Light })
+            foreach (var variant in TestInterfaceThemes.All.Select(theme => theme.Variant))
             {
                 host.RequestedThemeVariant = variant;
                 Dispatcher.UIThread.RunJobs();

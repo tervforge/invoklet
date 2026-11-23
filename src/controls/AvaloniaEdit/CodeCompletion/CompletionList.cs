@@ -241,8 +241,11 @@ public class CompletionList : TemplatedControl
 
     private void OnPointerPressed(object sender, PointerPressedEventArgs e)
     {
-        var visual = e.Source as Visual;
-        if (!e.GetCurrentPoint(visual).Properties.IsLeftButtonPressed)
+        // The list also receives handled presses from its scrollbar and scroll buttons.
+        // Only a press on a completion row is an acceptance gesture.
+        if (e.Source is not Visual visual
+            || visual.FindAncestorOfType<ListBoxItem>(includeSelf: true) is null
+            || !e.GetCurrentPoint(visual).Properties.IsLeftButtonPressed)
             return;
 
         RequestInsertion(e);
@@ -263,7 +266,8 @@ public class CompletionList : TemplatedControl
 
     private void OnDoubleTapped(object sender, TappedEventArgs e)
     {
-        RequestInsertion(e);
+        if (e.Source is Visual visual && visual.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not null)
+            RequestInsertion(e);
     }
 
     /// <summary>

@@ -16,6 +16,7 @@ internal sealed class AnalysisScheduler(
     private readonly object _gate = new();
     private CancellationTokenSource? _current;
     private Task? _pass;
+    private Func<string>? _getCode;
     private bool _stopped;
     private long _generation;
 
@@ -52,6 +53,18 @@ internal sealed class AnalysisScheduler(
     /// </param>
     public void Notify(Func<string> getCode, Func<string, CancellationToken, Task<bool>> analyze) => Start(getCode, analyze, repeatOf: null);
 
+    public void Refresh(Func<string, CancellationToken, Task<bool>> analyze)
+    {
+        Func<string>? getCode;
+        long generation;
+        lock (_gate)
+        {
+            getCode = _getCode;
+            generation = _generation;
+        }
+        if (getCode is not null) Repeat(generation, getCode, analyze);
+    }
+
     /// <summary>
     /// Analyses again the text of the pass of <paramref name="generation"/>, whose result was stale — unless a newer notification
     /// has come since. That is checked under the lock a notification takes: the pass's own look at its token comes earlier, and a
@@ -74,6 +87,7 @@ internal sealed class AnalysisScheduler(
             // resources, so the superseded one is left to the collector; Stop disposes the last one.
             _current?.Cancel();
             _current = new CancellationTokenSource();
+            _getCode = getCode;
             token = _current.Token;
             generation = ++_generation;
         }
@@ -115,6 +129,7 @@ internal sealed class AnalysisScheduler(
         lock (_gate)
         {
             _stopped = true;
+            _getCode = null;
             source = _current;
             pass = _pass;
         }

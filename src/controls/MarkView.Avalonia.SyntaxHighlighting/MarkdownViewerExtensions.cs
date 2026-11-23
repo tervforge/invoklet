@@ -3,6 +3,7 @@
 
 using MarkView.Avalonia.Extensions;
 using TextMateSharp.Grammars;
+using TextMateSharp.Themes;
 
 namespace MarkView.Avalonia.SyntaxHighlighting;
 
@@ -11,6 +12,12 @@ namespace MarkView.Avalonia.SyntaxHighlighting;
 /// </summary>
 public static class MarkdownViewerSyntaxHighlightingExtensions
 {
+    public static MarkdownViewer UseTextMateHighlighting(this MarkdownViewer viewer, IRawTheme theme)
+    {
+        viewer.Extensions.Add(new SyntaxHighlighting.TextMateExtension(theme));
+        return viewer;
+    }
+
     /// <summary>
     /// Adds <see cref="SyntaxHighlighting.TextMateExtension"/> to the extension list.
     /// </summary>

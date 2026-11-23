@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <InvokletBundledPluginsSource>$(MSBuildProjectDirectory)/../fixtures/plugins/theme-palettes</InvokletBundledPluginsSource>
+    <InvokletBundledPluginsBuildSubdirectory>theme-fixtures</InvokletBundledPluginsBuildSubdirectory>
   </PropertyGroup>
   <ItemGroup>
     <!-- Avalonia.Headless.XUnit depends on xunit v3 (xunit.v3.extensibility.core), not the
@@ -30,6 +32,11 @@
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.MacOS\Invoklet.Desktop.MacOS.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Connection drivers for the application's own tests: the connectors are plugins of their own. -->
+    <Compile Include="../fixtures/connections/*.cs" Link="Fixtures/Connections/%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Import Project="..\..\build\BundledPlugins.targets" />
 </Project>

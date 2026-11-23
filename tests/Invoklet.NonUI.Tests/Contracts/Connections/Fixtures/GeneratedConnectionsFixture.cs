@@ -18,7 +18,7 @@ internal sealed class GeneratedConnectionsFixture
         Driver.SetupGet(d => d.DisplayName).Returns("Fake");
         Driver.SetupGet(d => d.Packages).Returns(new Dictionary<string, string>());
         Driver.Setup(d => d.Validate(It.IsAny<MdRunConnection>())).Returns([]);
-        Driver.Setup(d => d.CreateClient(It.IsAny<MdRunConnection>(), It.IsAny<ConnectionCodeContext>()))
+        Driver.As<ICSharpClientSource>().Setup(d => d.CreateClient(It.IsAny<MdRunConnection>(), It.IsAny<ConnectionCodeContext>()))
             .Returns((MdRunConnection _, ConnectionCodeContext context) => new ConnectionClientCode($"public sealed class {context.ClassName} {{ }}"));
     }
 
@@ -30,7 +30,7 @@ internal sealed class GeneratedConnectionsFixture
 
     /// <summary>The driver's clients bring these namespaces to the script.</summary>
     public void ClientsUse(params string[] namespaces) =>
-        Driver.Setup(d => d.CreateClient(It.IsAny<MdRunConnection>(), It.IsAny<ConnectionCodeContext>()))
+        Driver.As<ICSharpClientSource>().Setup(d => d.CreateClient(It.IsAny<MdRunConnection>(), It.IsAny<ConnectionCodeContext>()))
             .Returns((MdRunConnection _, ConnectionCodeContext context) => new ConnectionClientCode($"public sealed class {context.ClassName} {{ }}", namespaces));
 
     /// <summary>The last read of <paramref name="connection"/>'s schema failed, for this reason.</summary>

@@ -1,8 +1,12 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Document;
 using Invoklet.Avalonia.CodeTextEditor;
 using Invoklet.Avalonia.CodeTextEditor.Completions;
@@ -57,6 +61,36 @@ public class CodeTextEditorCompletionIntegrationTests
         editor.TextArea.Focus();
         editor.TextArea.Caret.Offset = editor.Document.TextLength;
         return (window, editor);
+    }
+
+    [AvaloniaFact]
+    public void CompletionWindow_Should_StayOpenWhileDraggingItsScrollbar()
+    {
+        var (window, editor) = CreateEditor("");
+        var completion = new CompletionWindow(editor.TextArea);
+        foreach (var index in Enumerable.Range(0, 100))
+            completion.CompletionList.CompletionData.Add(new CompletionData($"Item{index}"));
+        completion.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var scrollbar = completion.CompletionList.GetVisualDescendants().OfType<ScrollBar>()
+            .Single(bar => bar.Orientation == global::Avalonia.Layout.Orientation.Vertical && bar.IsVisible);
+        var thumb = Assert.Single(scrollbar.GetVisualDescendants().OfType<Thumb>());
+        var root = Assert.IsAssignableFrom<TopLevel>(TopLevel.GetTopLevel(thumb));
+        var start = thumb.TranslatePoint(new global::Avalonia.Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), root)!.Value;
+
+        root.MouseDown(start, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(completion.IsOpen, "The scrollbar press closed the completion popup.");
+        var end = start + new global::Avalonia.Vector(0, 30);
+        root.MouseMove(end, RawInputModifiers.LeftMouseButton);
+        root.MouseUp(end, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(completion.IsOpen);
+        Assert.True(scrollbar.Value > scrollbar.Minimum);
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        Assert.False(completion.IsOpen);
     }
 
     [AvaloniaFact]
@@ -287,6 +321,56 @@ public class CodeTextEditorCompletionIntegrationTests
         // Assert — only the newer request's window should ever exist; accepting it must insert
         // "Rhino2" after "C.", not have the stale "Zzz1" response clobber it.
         Assert.Equal("C.Rhino2", editor.Document.Text);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShowCompletion_Should_DiscardPendingMemberList_WhenItsContextChanges(bool editReceiver)
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (window, editor) = CreateEditorWithProvider("\nx", async e =>
+        {
+            await release.Task;
+            e.Items.Add(new CompletionData("Length"));
+        });
+
+        window.KeyTextInput(".");
+        var request = editor.CompletionTask;
+        Assert.False(request.IsCompleted);
+        if (editReceiver)
+            editor.Document.Replace(1, 1, "y");
+        else
+            editor.TextArea.Caret.Offset = 0;
+
+        release.SetResult();
+        await request;
+
+        Assert.False(editor.IsCompletionWindowOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task ShowCompletion_Should_UseTheTypedMemberPrefix_WhenTheResponseArrives()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (window, editor) = CreateEditorWithProvider("x", async e =>
+        {
+            await release.Task;
+            e.Items.Add(new CompletionData("Length"));
+            e.Items.Add(new CompletionData("Count"));
+        });
+
+        window.KeyTextInput(".");
+        var request = editor.CompletionTask;
+        Assert.False(request.IsCompleted);
+        window.KeyTextInput("L");
+        window.KeyTextInput("e");
+        release.SetResult();
+        await request;
+
+        Assert.True(editor.IsCompletionWindowOpen);
+        window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null);
+        Assert.Equal("x.Length", editor.Document.Text);
     }
 
     // User-reported bug: snippets still showed up while typing inside a comment/string. The

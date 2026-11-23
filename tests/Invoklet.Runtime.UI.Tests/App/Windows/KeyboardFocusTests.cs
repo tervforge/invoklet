@@ -71,14 +71,14 @@ public class KeyboardFocusTests
         Themed(window, theme);
         foreach (var x in new[] { "TemplatedControls/IconButton.axaml", "TemplatedControls/IconToggleButton.axaml", "TemplatedControls/ToolbarComboBox.axaml" })
             window.Styles.Add(new StyleInclude(new Uri("avares://Invoklet/")) { Source = new Uri("avares://Invoklet/" + x) });
-        window.Resources.MergedDictionaries.Add(new ResourceInclude(new Uri("avares://Invoklet/")) { Source = new Uri("avares://Invoklet/Resources/Icons.axaml") });
+        window.Resources.MergedDictionaries.Add(new ResourceInclude(new Uri("avares://Invoklet/")) { Source = new Uri("avares://Invoklet.Avalonia.Themes/Icons.axaml") });
         return window;
     }
 
     private static T Themed<T>(T window, string theme) where T : Window
     {
-        window.Styles.Add(new InvokletTheme());
-        window.RequestedThemeVariant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(theme)!.GetValue(null)!;
+        window.Styles.Add(TestInterfaceThemes.CreateStyle());
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant(theme);
         return window;
     }
 
@@ -130,14 +130,14 @@ public class KeyboardFocusTests
     // Tab goes through the side panel's sections and trees, the document tab and the toolbar: every stop shows
     // exactly one frame in the theme's focus colour, and nothing draws a second one.
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
-    [InlineData("InvokletWarmLight")]
-    [InlineData("RiderDark")]
-    [InlineData("RiderLight")]
-    [InlineData("Vs2022Dark")]
-    [InlineData("Vs2022Light")]
-    [InlineData("InvokletMidnight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
+    [InlineData("invoklet.theme.warm-light")]
+    [InlineData("invoklet.theme.rider-dark")]
+    [InlineData("invoklet.theme.rider-light")]
+    [InlineData("invoklet.theme.vs2022-dark")]
+    [InlineData("invoklet.theme.vs2022-light")]
+    [InlineData("invoklet.theme.midnight")]
     public async Task EveryKeyboardStop_InTheMainWindow_Should_ShowOneFrame(string theme)
     {
         var window = MainWindow(theme, out var vm);
@@ -188,7 +188,7 @@ public class KeyboardFocusTests
     [AvaloniaFact]
     public async Task Clicking_Should_NotShowTheFrame()
     {
-        var window = MainWindow("VsCodeDark", out var vm);
+        var window = MainWindow("invoklet.theme.vscode-dark", out var vm);
         window.Show();
         vm.OpenExample(vm.Examples[0]);
         await SettleAsync();
@@ -219,7 +219,7 @@ public class KeyboardFocusTests
     [AvaloniaFact]
     public void DialogControls_Should_ShowTheFrameOnlyFromTheKeyboard()
     {
-        var dialog = Themed(new Window { Content = new StackPanel { Children = { new CheckBox { Content = "Enabled" }, new TextBox { Text = "count > 10" }, new TextBox { Text = "= 5" }, new Button { Content = "Done" }, new Button { Content = "Cancel" } } } }, "VsCodeDark");
+        var dialog = Themed(new Window { Content = new StackPanel { Children = { new CheckBox { Content = "Enabled" }, new TextBox { Text = "count > 10" }, new TextBox { Text = "= 5" }, new Button { Content = "Done" }, new Button { Content = "Cancel" } } } }, "invoklet.theme.vscode-dark");
         dialog.Show();
         Dispatcher.UIThread.RunJobs();
         var check = dialog.GetVisualDescendants().OfType<CheckBox>().Single();
@@ -250,8 +250,8 @@ public class KeyboardFocusTests
     // An ordinary combo box (dialogs, Preferences): the same frame from the keyboard, no accent fill
     // over its text, nothing on a click.
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
     public void AComboBox_Should_ShowTheSameFrame_WithoutTheAccentFill(string theme)
     {
         var before = new Button { Content = "Before" };
@@ -276,14 +276,14 @@ public class KeyboardFocusTests
         window.Close();
     }
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
-    [InlineData("RiderDark")]
-    [InlineData("RiderLight")]
-    [InlineData("Vs2022Dark")]
-    [InlineData("Vs2022Light")]
-    [InlineData("InvokletMidnight")]
-    [InlineData("InvokletWarmLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
+    [InlineData("invoklet.theme.rider-dark")]
+    [InlineData("invoklet.theme.rider-light")]
+    [InlineData("invoklet.theme.vs2022-dark")]
+    [InlineData("invoklet.theme.vs2022-light")]
+    [InlineData("invoklet.theme.midnight")]
+    [InlineData("invoklet.theme.warm-light")]
     public void Controls_Should_ShareThemeGeometry_AndKeepTheRingVisible(string theme)
     {
         var controls = new Control[]
@@ -339,12 +339,12 @@ public class KeyboardFocusTests
     public void FocusedControls_Should_FollowThemeChangesAndResourceOverrides()
     {
         var button = new Button { Content = "Action" };
-        var window = Themed(new Window { Width = 400, Height = 200, Content = button }, "VsCodeLight");
+        var window = Themed(new Window { Width = 400, Height = 200, Content = button }, "invoklet.theme.vscode-light");
         window.Show();
         button.Focus(NavigationMethod.Tab);
         Dispatcher.UIThread.RunJobs();
         var light = FrameColor(button);
-        window.RequestedThemeVariant = InvokletThemeVariants.RiderDark;
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark");
         Dispatcher.UIThread.RunJobs();
         Assert.NotEqual(light, FrameColor(button));
         window.TryFindResource("Invoklet.Focus.BorderBrush", window.ActualThemeVariant, out var themed);
@@ -362,8 +362,8 @@ public class KeyboardFocusTests
     }
 
     [AvaloniaTheory]
-    [InlineData("VsCodeDark")]
-    [InlineData("VsCodeLight")]
+    [InlineData("invoklet.theme.vscode-dark")]
+    [InlineData("invoklet.theme.vscode-light")]
     public async Task GridCells_Should_UseTheSameRing_WithoutSquareFocusRectangles(string theme)
     {
         var grid = new DataGrid

@@ -13,7 +13,7 @@ public sealed class ConnectionSchemaCacheTests : IDisposable
     public void Dispose() => Directory.Delete(_folder, true);
 
     // Holds every read until released, and counts them.
-    private sealed class SlowDriver : IConnectionSchemaDriver
+    private sealed class SlowDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Fetches;

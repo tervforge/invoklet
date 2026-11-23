@@ -21,3 +21,4 @@ bin
 
 # Local tool settings (machine-specific paths)
 .claude/
+artifacts/

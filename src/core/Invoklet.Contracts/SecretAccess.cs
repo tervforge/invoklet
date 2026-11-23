@@ -2,7 +2,11 @@ namespace Invoklet.Contracts;
 
 /// <summary>A running script asking for a secret: the script's file (null for one not saved yet), the secret's name, whether it saves one,
 /// and whether that save replaces or removes a secret already kept.</summary>
-public sealed record SecretAccess(string? ScriptPath, string Name, bool IsSave, SecretChange Change = SecretChange.None);
+public sealed record SecretAccess(string? ScriptPath, string Name, bool IsSave, SecretChange Change = SecretChange.None)
+{
+    /// <summary>Identity shared by requests from one execution, including scripts without a saved file.</summary>
+    public object? RunIdentity { get; init; }
+}
 
 /// <summary>What a script's save does to a secret already in the store.</summary>
 public enum SecretChange

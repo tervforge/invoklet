@@ -22,15 +22,15 @@ public class ExampleScriptsTests
 
         Assert.Equal(
             ["quick-start.inv", "expression-kind.inv", "program-kind.inv", "vb-quick-start.inv", "vb-program-kind.inv",
-             "products-overview.inv", "live-output.inv", "debugging-loop.inv"],
+             "products-overview.inv", "live-output.inv", "debugging-loop.inv", "formatted-code.inv"],
             examples.Select(e => e.Id));
         Assert.Equal(
             ["Quick start", "Expression kind", "Program kind", "Visual Basic quick start", "Visual Basic program",
-             "Products overview", "Live output", "Debugging loop"],
+             "Products overview", "Live output", "Debugging loop", "Formatted code output"],
             examples.Select(e => e.Title));
         // Each in its Samples folder, whatever separator the build kept in the resource name.
         Assert.Equal(
-            ["getting-started", "getting-started", "getting-started", "getting-started", "getting-started", "output", "output", "debugging"],
+            ["getting-started", "getting-started", "getting-started", "getting-started", "getting-started", "output", "output", "debugging", "output"],
             examples.Select(e => e.Folder));
         Assert.DoesNotContain(examples, e => e.Id.Contains("analyzer", StringComparison.Ordinal)); // the broken-on-purpose demo
     }

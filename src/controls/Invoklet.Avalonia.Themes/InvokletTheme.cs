@@ -8,5 +8,7 @@ public class InvokletTheme : Styles
     public InvokletTheme()
     {
         AvaloniaXamlLoader.Load(this);
+        Resources.MergedDictionaries.Add(ThemeBuilder.BuildMetrics());
+        BuiltInInterfaceThemes.RegisterPalettes(Resources);
     }
 }

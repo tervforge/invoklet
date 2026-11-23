@@ -43,6 +43,12 @@ public sealed partial class MainWindow : Window, IDisposable, IStartupWindow
     private bool _closeConfirmationInProgress;
     private bool _disposed;
 
+    internal void ShowPluginDevelopmentWarning()
+    {
+        PluginDevelopmentWarning.IsVisible = true;
+        Title = "Invoklet (Plugin development mode)";
+    }
+
     public MainWindow(
         IPreferencesService prefs,
         EditorTabsControl editorTabsCtrl,

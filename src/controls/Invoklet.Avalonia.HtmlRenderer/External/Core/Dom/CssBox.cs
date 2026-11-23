@@ -721,6 +721,122 @@ internal class CssBox : CssBoxProperties, IDisposable
         }
     }
 
+    internal void ApplyAbsolutePositions(CssBox containingBlock)
+    {
+        if (Display == CssConstants.None) return;
+        if (Position == CssConstants.Absolute && IsBlock)
+            PositionAbsoluteBox(containingBlock);
+
+        // Traverse top-down after layout so the anchor has its final size and location.
+        if (Position is "relative" or CssConstants.Absolute or CssConstants.Fixed)
+            containingBlock = this;
+        foreach (var child in Boxes)
+            child.ApplyAbsolutePositions(containingBlock);
+    }
+
+    private void PositionAbsoluteBox(CssBox containingBlock)
+    {
+        // The padding edge is just inside the border of the positioned ancestor.
+        var bounds = containingBlock.Bounds;
+        var paddingLeft = bounds.Left + containingBlock.ActualBorderLeftWidth;
+        var paddingRight = bounds.Right - containingBlock.ActualBorderRightWidth;
+        var paddingTop = bounds.Top + containingBlock.ActualBorderTopWidth;
+        var paddingBottom = bounds.Bottom - containingBlock.ActualBorderBottomWidth;
+        var paddingWidth = paddingRight - paddingLeft;
+        var paddingHeight = paddingBottom - paddingTop;
+        var left = Location.X;
+        if (Left != CssConstants.Auto)
+        {
+            left = paddingLeft
+                   + CssValueParser.ParseLength(Left, paddingWidth, this)
+                   + ActualMarginLeft;
+        }
+        else if (Right != CssConstants.Auto)
+        {
+            left = paddingRight
+                   - CssValueParser.ParseLength(Right, paddingWidth, this)
+                   - ActualWidth
+                   - ActualMarginRight;
+        }
+
+        var top = Location.Y;
+        if (Top != CssConstants.Auto)
+        {
+            top = paddingTop
+                  + CssValueParser.ParseLength(Top, paddingHeight, this)
+                  + ActualMarginTop;
+        }
+        else if (Bottom != CssConstants.Auto)
+        {
+            top = paddingBottom
+                  - CssValueParser.ParseLength(Bottom, paddingHeight, this)
+                  - ActualHeight
+                  - ActualMarginBottom;
+        }
+
+        var previousLocation = Location;
+        var delta = new RPoint(left - previousLocation.X, top - previousLocation.Y);
+        OffsetLayout(delta);
+
+        // Some inline descendants keep their line-box baseline from the normal-flow
+        // pass. Align the rendered content with the absolute box's content edge after
+        // moving the box, without changing the containing block or its other children.
+        var contentTop = GetContentTop();
+        if (contentTop < double.MaxValue)
+        {
+            var contentDelta = Location.Y + ActualBorderTopWidth + ActualPaddingTop - contentTop;
+            if (Math.Abs(contentDelta) > 0.01)
+                OffsetContent(new RPoint(0, contentDelta));
+        }
+    }
+
+    private void OffsetLayout(RPoint delta)
+    {
+        if (delta.X == 0 && delta.Y == 0)
+            return;
+
+        Location = new RPoint(Location.X + delta.X, Location.Y + delta.Y);
+
+        foreach (var lineBox in Rectangles.Keys.ToArray())
+        {
+            var rectangle = Rectangles[lineBox];
+            Rectangles[lineBox] = new RRect(rectangle.X + delta.X, rectangle.Y + delta.Y, rectangle.Width, rectangle.Height);
+        }
+
+        foreach (var word in Words)
+        {
+            var rectangle = word.Rectangle;
+            word.Rectangle = new RRect(rectangle.X + delta.X, rectangle.Y + delta.Y, rectangle.Width, rectangle.Height);
+        }
+
+        foreach (var childBox in Boxes)
+            childBox.OffsetLayout(delta);
+    }
+
+    private double GetContentTop()
+    {
+        var top = double.MaxValue;
+        foreach (var word in Words)
+            top = Math.Min(top, word.Top);
+
+        foreach (var childBox in Boxes)
+            top = Math.Min(top, childBox.GetContentTop());
+
+        return top;
+    }
+
+    private void OffsetContent(RPoint delta)
+    {
+        foreach (var word in Words)
+        {
+            var rectangle = word.Rectangle;
+            word.Rectangle = new RRect(rectangle.X + delta.X, rectangle.Y + delta.Y, rectangle.Width, rectangle.Height);
+        }
+
+        foreach (var childBox in Boxes)
+            childBox.OffsetLayout(delta);
+    }
+
     /// <summary>
     /// Assigns words its width and height
     /// </summary>

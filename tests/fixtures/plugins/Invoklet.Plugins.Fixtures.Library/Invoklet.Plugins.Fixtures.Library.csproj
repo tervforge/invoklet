@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A library plugin another fixture plugin depends on: proves a dependant loads the types its dependency loaded, not a copy. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Invoklet.Plugins.Fixtures.Library</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\core\Invoklet.Plugins\Invoklet.Plugins.csproj" />
+  </ItemGroup>
+</Project>

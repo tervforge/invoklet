@@ -76,6 +76,29 @@ public sealed class CompiledDotnetLanguageHostDebugAttachTests
     }
 
     [Fact]
+    public async Task RunDebugAsync_ConnectionSettings_ArriveWithTheReleaseLine()
+    {
+        using var fixture = new CompiledDotnetLanguageHostDebugAttachFixture
+        {
+            ConnectionStartupValues = ["Host=localhost;Password=debug-test"],
+        };
+        await using var sut = fixture.CreateSut();
+        var ct = TestContext.Current.CancellationToken;
+        var run = sut.RunDebugAsync("int x = 1;", outputHandler: static (_, _) => { }, ct);
+        fixture.DebuggerInitialized();
+        await fixture.SentToDebuggerAsync("\"command\":\"attach\"", ct);
+        Assert.Equal(0, fixture.Script.Input.Length);
+
+        fixture.DebuggerConfigured();
+        var sent = await fixture.SentToScriptAsync(ct);
+        fixture.Script.Exit.TrySetResult();
+        await run.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+        var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(fixture.ConnectionStartupValues[0]));
+        Assert.Equal($"invoklet-connections:{encoded}\n", sent);
+    }
+
+    [Fact]
     public async Task RunDebugAsync_TheScriptEnds_EndsTheRun()
     {
         // Arrange

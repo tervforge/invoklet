@@ -18,14 +18,6 @@
         Foreground="{DynamicResource Invoklet.Text.PrimaryBrush}"
         >
 
-    <Window.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Metrics.axaml"/>
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </Window.Resources>
-
     <Window.Styles>
         <Style Selector="TextBlock.settings-heading">
             <Setter Property="FontSize" Value="{DynamicResource Invoklet.Type.Body}"/>
@@ -136,10 +128,12 @@
                               HorizontalAlignment="Stretch">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="models:InterfaceTheme">
-                                <TextBlock Text="{Binding Name}"/>
+                                <TextBlock Text="{Binding DisplayName}"/>
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
+                    <TextBlock IsVisible="{Binding HasMissingInterfaceTheme}"
+                               Text="{Binding MissingInterfaceThemeMessage}" TextWrapping="Wrap"/>
 
                     <!-- Editor theme -->
                     <TextBlock Text="Editor theme:" Margin="0,8,0,2" FontWeight="SemiBold"/>
@@ -148,7 +142,7 @@
                               HorizontalAlignment="Stretch">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="models:EditorTheme">
-                                <TextBlock Text="{Binding Name}"/>
+                                <TextBlock Text="{Binding DisplayName}"/>
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
@@ -251,6 +245,92 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <StackPanel x:Name="PluginsSettingsPage" Tag="plugins" IsVisible="{Binding IsPluginsSelected}" Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Classes="settings-heading" Text="Plugins" VerticalAlignment="Center"/>
+                        <Button x:Name="InstallPluginButton" Grid.Column="1" Content="Install package…" IsVisible="{Binding PluginsPage.CanInstall}" Click="InstallPlugin_Click"/>
+                        <Button x:Name="RefreshPluginsButton" Grid.Column="2" Content="Refresh" Click="RefreshPlugins_Click"/>
+                    </Grid>
+                    <StackPanel IsVisible="{Binding PluginsPage.HasPendingRestart}" Spacing="6">
+                        <TextBlock Text="Plugin changes will take effect after restarting Invoklet." TextWrapping="Wrap"/>
+                        <Button x:Name="RestartForPluginsButton" Content="Restart now" Click="RestartForPlugins_Click"/>
+                    </StackPanel>
+                    <TextBlock IsVisible="{Binding PluginsPage.IsEmpty}" Text="No plugins were discovered for this session."
+                               Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}" TextWrapping="Wrap"/>
+                    <ItemsControl ItemsSource="{Binding PluginsPage.Diagnostics}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding .}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl x:Name="InstalledPluginsList" ItemsSource="{Binding PluginsPage.Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:PluginStatusRow">
+                                <Border BorderBrush="{DynamicResource Invoklet.Separator.BackgroundBrush}" BorderThickness="0,0,0,1"
+                                        Padding="0,0,0,8" Margin="0,0,0,8">
+                                    <StackPanel Spacing="3">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Status}" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Content="{Binding ToggleLabel}" IsVisible="{Binding CanToggle}"
+                                                    AutomationProperties.Name="{Binding ToggleAutomationName}" Click="TogglePlugin_Click"/>
+                                            <Button Grid.Column="3" Content="Remove" IsVisible="{Binding CanRemove}" Click="RemovePlugin_Click"/>
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding IsContentVerified}"
+                                                    ToolTip.Tip="Package contents matched the recorded hash at startup.">
+                                            <PathIcon Width="12" Height="12" Data="{DynamicResource Icon.CheckCircle}"
+                                                      Foreground="{DynamicResource Invoklet.Status.SuccessBrush}"/>
+                                            <TextBlock Text="Content verified" Foreground="{DynamicResource Invoklet.Status.SuccessBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Id}" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+                                        <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+                                        <ItemsControl ItemsSource="{Binding Diagnostics}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{Binding .}" TextWrapping="Wrap"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel x:Name="PluginFeedSection" IsVisible="{Binding PluginsPage.CanBrowse}" Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Classes="settings-heading" Text="Available plugins" VerticalAlignment="Center"/>
+                            <Button x:Name="BrowsePluginsButton" Grid.Column="1" Content="Check the plugin feed"
+                                    IsEnabled="{Binding !PluginsPage.IsFeedBusy}" Click="BrowsePlugins_Click"/>
+                        </Grid>
+                        <TextBlock Text="{Binding PluginsPage.FeedStatus}" IsVisible="{Binding PluginsPage.FeedStatus, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   TextWrapping="Wrap"/>
+                        <ItemsControl ItemsSource="{Binding PluginsPage.FeedPackages}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:PluginFeedRow">
+                                    <Border BorderBrush="{DynamicResource Invoklet.Separator.BackgroundBrush}" BorderThickness="0,0,0,1"
+                                            Padding="0,0,0,8" Margin="0,0,0,8">
+                                        <StackPanel Spacing="3">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                <Button Grid.Column="1" Content="Install" IsVisible="{Binding CanInstall}"
+                                                        AutomationProperties.Name="{Binding InstallAutomationName}" Click="InstallFeedPlugin_Click"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding Metadata}" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+                                            <TextBlock Text="{Binding Package.Description}" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding State}" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Invoklet.Text.SecondaryBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
 
                 <StackPanel Tag="logging" IsVisible="{Binding IsLoggingSelected}" Spacing="6">
                     <TextBlock Text="Logging:" FontWeight="SemiBold"

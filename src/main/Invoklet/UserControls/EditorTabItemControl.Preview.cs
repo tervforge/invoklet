@@ -7,7 +7,7 @@ using Invoklet.UserControls.Models;
 using MarkView.Avalonia;
 using MarkView.Avalonia.SyntaxHighlighting;
 using ReactiveUI;
-using TextMateSharp.Grammars;
+using TextMateSharp.Themes;
 
 namespace Invoklet.UserControls;
 
@@ -17,7 +17,7 @@ namespace Invoklet.UserControls;
 public partial class EditorsTabItemControl
 {
     private MarkdownViewer? _preview;
-    private ThemeName _previewTheme;
+    private IRawTheme? _previewTheme;
     private CancellationTokenSource? _previewUpdateCts;
     private IDisposable? _previewModeSub;
     private ScriptPreviewMode _lastPreviewMode;
@@ -27,7 +27,7 @@ public partial class EditorsTabItemControl
 
     private void SetupPreview()
     {
-        _previewTheme = _themeService.CurrentTheme.Editor.TextMateName;
+        _previewTheme = _themeService.CurrentTheme.Editor.RawTheme;
         State.Editor.TextChanged += OnEditorTextChangedForPreview;
         _previewModeSub = _vm.WhenAnyValue(x => x.PreviewMode).Subscribe(ApplyPreviewMode);
         SetupPreviewScrollSync();
@@ -147,7 +147,7 @@ public partial class EditorsTabItemControl
 
     private void ApplyPreviewThemeNow(ActiveTheme theme)
     {
-        _previewTheme = theme.Editor.TextMateName;
+        _previewTheme = theme.Editor.RawTheme;
         if (_preview is null) return;
         ApplyPreviewTheme();
         if (!PreviewShown) return;
@@ -180,6 +180,6 @@ public partial class EditorsTabItemControl
     {
         _preview!.Background = _themeService.GetBrush("Invoklet.Editor.BackgroundBrush");
         _preview.Extensions.Clear();
-        _preview.UseTextMateHighlighting(darkTheme: _previewTheme, lightTheme: _previewTheme);
+        if (_previewTheme is { } theme) _preview.UseTextMateHighlighting(theme);
     }
 }

@@ -27,6 +27,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Moq" />
+    <!-- Brings the native SQLite library the plugin native-load tests copy into a plugin folder and load. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
@@ -36,6 +38,16 @@
     <!-- Pure managed code, so their tests build on every OS although each OS's Invoklet ships only its own. -->
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.Linux\Invoklet.Desktop.Linux.csproj" />
     <ProjectReference Include="..\..\src\desktop\Invoklet.Desktop.MacOS\Invoklet.Desktop.MacOS.csproj" />
+    <ProjectReference Include="..\..\src\core\Invoklet.Plugins.Hosting\Invoklet.Plugins.Hosting.csproj" />
+    <!-- Plugin fixtures: built, and their assemblies copied here, but not referenced, so the test process never loads them itself;
+         the loader tests copy them into temporary plugin folders and load them through the plugin host. -->
+    <ProjectReference Include="..\fixtures\plugins\Invoklet.Plugins.Fixtures.Sample\Invoklet.Plugins.Fixtures.Sample.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\fixtures\plugins\Invoklet.Plugins.Fixtures.Library\Invoklet.Plugins.Fixtures.Library.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\fixtures\plugins\Invoklet.Plugins.Fixtures.Dependent\Invoklet.Plugins.Fixtures.Dependent.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Connection drivers for the application's own tests: the connectors are plugins of their own. -->
+    <Compile Include="../fixtures/connections/*.cs" Link="Fixtures/Connections/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />

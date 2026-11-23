@@ -40,7 +40,8 @@ internal static partial class ResultsBoxes
     /// Only what a table of the results offers takes part.</summary>
     public static string? NextLink(IEnumerable<string> links, string? current, bool forward)
     {
-        var own = links.Where(l => ToggleOf(l) is not null || TableLinkOf(l) is not null || ResultsTables.TableOf(l) is not null).ToList();
+        var own = links.Where(l => ToggleOf(l) is not null || TableLinkOf(l) is not null
+            || ResultsTables.TableOf(l) is not null || l.StartsWith(CodeOutputHighlighter.CopyPrefix, StringComparison.Ordinal)).ToList();
         if (own.Count == 0) return null;
         if (current is null || own.IndexOf(current) is var at && at < 0) return forward ? own[0] : own[^1];
         var next = at + (forward ? 1 : -1);

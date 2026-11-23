@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/core/Invoklet.Plugins/Invoklet.Plugins.csproj" />
+    <ProjectReference Include="../../../../src/core/Invoklet.Contracts/Invoklet.Contracts.csproj" />
+    <ProjectReference Include="../../../../src/core/Invoklet.Format.MdRun/Invoklet.Format.MdRun.csproj" />
+  </ItemGroup>
+</Project>

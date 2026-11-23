@@ -11,6 +11,7 @@ internal sealed class ConnectionSchemaCacheRefreshFixture : IDisposable
     private readonly string _folder = Directory.CreateTempSubdirectory("Invoklet-schema-cache").FullName;
 
     public Mock<IConnectionSchemaDriver> Driver { get; } = new();
+    public string? SecretValue { get; set; }
 
     public MdRunConnection Connection { get; } = new()
     {
@@ -34,11 +35,28 @@ internal sealed class ConnectionSchemaCacheRefreshFixture : IDisposable
         Driver.Setup(d => d.FetchSchemaAsync(It.IsAny<IReadOnlyDictionary<string, MdRunValue>>(), It.IsAny<ConnectionTools>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException(why));
 
+    public (Task Started, TaskCompletionSource<ConnectionSchema> Result) HoldRead(string resolvedAddress)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = new TaskCompletionSource<ConnectionSchema>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Driver.Setup(d => d.FetchSchemaAsync(
+                It.Is<IReadOnlyDictionary<string, MdRunValue>>(p => p["address"].Text == resolvedAddress),
+                It.IsAny<ConnectionTools>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                started.TrySetResult();
+                return result.Task;
+            });
+        return (started.Task, result);
+    }
+
+    public void ResolveAddressFromSecret() => Connection.Params["address"] = MdRunValue.Of("${secret:address}");
+
     public ConnectionSchemas CreateSut()
     {
         var drivers = new ConnectionDriverRegistry();
         drivers.Register(Driver.Object);
-        return new ConnectionSchemas(drivers, _folder, new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => null);
+        return new ConnectionSchemas(drivers, _folder, new ConnectionTools { GetPackageFolderAsync = (_, _, _) => Task.FromResult("") }, _ => SecretValue);
     }
 
     public void Dispose() => Directory.Delete(_folder, recursive: true);

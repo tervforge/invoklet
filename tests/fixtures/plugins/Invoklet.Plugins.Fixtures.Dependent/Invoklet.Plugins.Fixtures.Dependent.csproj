@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A plugin that depends on the library fixture: its entry type derives from the library's. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Invoklet.Plugins.Fixtures.Dependent</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\core\Invoklet.Plugins\Invoklet.Plugins.csproj" />
+    <ProjectReference Include="..\Invoklet.Plugins.Fixtures.Library\Invoklet.Plugins.Fixtures.Library.csproj" />
+  </ItemGroup>
+</Project>

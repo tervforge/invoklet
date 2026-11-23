@@ -75,6 +75,8 @@ public sealed class CompiledDotnetLanguageHostOptions : ILanguageHostOptions
     /// <summary>Files the connections' schemas add (a gRPC server's messages and clients), cached as a separate assembly when source sharing is unnecessary.</summary>
     public IReadOnlyList<Contracts.Connections.GeneratedSourceFile> ConnectionFiles { get; init; } = [];
 
+    internal IReadOnlyList<string> ConnectionStartupValues { get; init; } = [];
+
     /// <summary>Why the script's connections can't be built; any of them fails the build.</summary>
     public IReadOnlyList<string> ConnectionErrors { get; init; } = [];
 
@@ -110,6 +112,7 @@ public sealed class CompiledDotnetLanguageHostOptions : ILanguageHostOptions
             ConnectionSource = request.Connections is { Source.Length: > 0 } connections ? connections.Source : null,
             ConnectionErrors = request.Connections?.Errors ?? [],
             ConnectionFiles = request.Connections?.Files ?? [],
+            ConnectionStartupValues = request.Connections?.StartupValues ?? [],
             Usings = request.Usings,
             AssemblyReferences = references.Assemblies,
             ProjectReferences = references.Projects,

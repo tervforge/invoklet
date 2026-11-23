@@ -114,4 +114,44 @@ public sealed class EditorCompletionProviderTests
         // Assert
         fixture.IntelliSense.Verify(i => i.GetCompletionsAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CompletionTrigger>(), cancellation.Token), Times.Once);
     }
+
+    [Fact]
+    public async Task ProvideAsync_UnresolvedMemberWithPendingRefresh_RetriesAfterRefresh()
+    {
+        var fixture = new EditorCompletionProviderFixture();
+        var rows = fixture.SetupCompletions(1, initiallyUnresolved: true);
+        var refresh = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.ContextRefresh = () => refresh.Task;
+        var request = new CompletionRequestedEventArgs('.', 8);
+        var sut = fixture.CreateSut();
+
+        var provide = sut.ProvideAsync(request);
+        Assert.False(provide.IsCompleted);
+        refresh.SetResult();
+
+        await provide;
+
+        Assert.Equal(rows, request.Items);
+        fixture.IntelliSense.Verify(i => i.GetCompletionsAsync(EditorCompletionProviderFixture.Text, 8,
+            CompletionTrigger.Insertion('.'), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task ProvideAsync_ResolvedMemberWithPendingRefresh_ReturnsImmediately()
+    {
+        var fixture = new EditorCompletionProviderFixture();
+        var rows = fixture.SetupCompletions(1);
+        var refresh = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.ContextRefresh = () => refresh.Task;
+        var request = new CompletionRequestedEventArgs('.', 8);
+        var sut = fixture.CreateSut();
+
+        var provide = sut.ProvideAsync(request);
+        var completedBeforeRefresh = provide.IsCompleted;
+        refresh.SetResult();
+        await provide;
+
+        Assert.True(completedBeforeRefresh);
+        Assert.Equal(rows, request.Items);
+    }
 }

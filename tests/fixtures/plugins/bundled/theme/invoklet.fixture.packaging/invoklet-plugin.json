@@ -1,0 +1,6 @@
+{
+  "id": "invoklet.fixture.packaging",
+  "version": "1.0.0",
+  "displayName": "Bundled packaging fixture",
+  "roles": { "theme": 1 }
+}

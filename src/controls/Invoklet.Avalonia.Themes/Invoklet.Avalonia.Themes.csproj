@@ -11,4 +11,9 @@
         <PackageReference Include="TextMateSharp.Grammars" />
     </ItemGroup>
 
+    <ItemGroup>
+        <EmbeddedResource Include="Themes/*.json" LogicalName="Themes/%(Filename)%(Extension)" />
+        <EmbeddedResource Include="Metrics.json" LogicalName="Metrics.json" />
+    </ItemGroup>
+
 </Project>

@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Windows;
 using Xunit;
 
@@ -35,7 +36,7 @@ public class DialogButtonHeightTests
     [MemberData(nameof(Dialogs))]
     public void EveryButtonOfADialog_Should_BeAsTallAsTheThemesControlHeight(string kind)
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         global::Avalonia.Application.Current!.Styles.Add(theme);
         var window = Create(kind);
         try
@@ -64,7 +65,7 @@ public class DialogButtonHeightTests
     [MemberData(nameof(Dialogs))]
     public void EveryButtonOfADialog_Should_CentreItsLabelBothWays(string kind)
     {
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         global::Avalonia.Application.Current!.Styles.Add(theme);
         var window = Create(kind);
         try
@@ -111,8 +112,8 @@ public class DialogButtonHeightTests
     [MemberData(nameof(Variants))]
     public void TheEdgeOfASecondaryButton_Should_StandOutFromThePanel_InEveryTheme(string variantName)
     {
-        var theme = new InvokletTheme();
-        var variant = (global::Avalonia.Styling.ThemeVariant)typeof(InvokletThemeVariants).GetField(variantName)!.GetValue(null)!;
+        var theme = TestInterfaceThemes.CreateStyle();
+        var variant = TestInterfaceThemes.GetVariant(variantName);
 
         theme.TryGetResource("Invoklet.Button.Secondary.BorderBrush", variant, out var border);
         theme.TryGetResource("Invoklet.Panel.BackgroundBrush", variant, out var panel);
@@ -122,6 +123,5 @@ public class DialogButtonHeightTests
         Assert.True(contrast >= 1.9, $"{variantName}: {contrast:0.00}");
     }
 
-    public static TheoryData<string> Variants => new("InvokletMidnight", "InvokletWarmLight", "RiderDark", "RiderLight",
-        "Vs2022Dark", "Vs2022Light", "VsCodeDark", "VsCodeLight");
+    public static TheoryData<string> Variants => new(TestInterfaceThemes.All.Select(theme => (string)theme.Variant.Key));
 }

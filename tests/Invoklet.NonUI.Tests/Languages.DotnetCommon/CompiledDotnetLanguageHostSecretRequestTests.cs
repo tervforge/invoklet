@@ -126,7 +126,9 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         // Assert
         Assert.Equal("3\n", answer);
         Assert.Empty(fixture.Read);
-        Assert.Equal([new SecretAccess(null, "db", false)], fixture.Asked);
+        var request = Assert.Single(fixture.Asked);
+        Assert.NotNull(request.RunIdentity);
+        Assert.Equal(new SecretAccess(null, "db", false), request with { RunIdentity = null });
     }
 
     [Fact]
@@ -143,7 +145,7 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         // Assert
         Assert.Equal("3\n", answer);
         Assert.Empty(fixture.Saved);
-        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.Replace)], fixture.Asked);
+        Assert.Equal(new SecretAccess(null, "db", true, SecretChange.Replace), Assert.Single(fixture.Asked) with { RunIdentity = null });
     }
 
     // A secret already kept is replaced only with the user's say: the request tells the approver so.
@@ -159,7 +161,7 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         await fixture.AnswerAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.Replace)], fixture.Asked);
+        Assert.Equal(new SecretAccess(null, "db", true, SecretChange.Replace), Assert.Single(fixture.Asked) with { RunIdentity = null });
     }
 
     [Fact]
@@ -174,7 +176,7 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         await fixture.AnswerAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal([new SecretAccess(null, "db", true, SecretChange.Remove)], fixture.Asked);
+        Assert.Equal(new SecretAccess(null, "db", true, SecretChange.Remove), Assert.Single(fixture.Asked) with { RunIdentity = null });
     }
 
     [Fact]
@@ -189,6 +191,6 @@ public sealed class CompiledDotnetLanguageHostSecretRequestTests
         await fixture.AnswerAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal([new SecretAccess(null, "db", true)], fixture.Asked);
+        Assert.Equal(new SecretAccess(null, "db", true), Assert.Single(fixture.Asked) with { RunIdentity = null });
     }
 }

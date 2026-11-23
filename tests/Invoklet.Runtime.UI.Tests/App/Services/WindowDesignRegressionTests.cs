@@ -6,17 +6,17 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Invoklet.Avalonia.Themes;
-using Invoklet.Connectors.Http;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Runtime.UI.Tests.App.Windows;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Invoklet.Secrets;
 using Invoklet.Services.Connections;
 using Invoklet.TemplatedControls;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Windows;
 using Invoklet.Windows.Models;
 using Moq;
@@ -47,7 +47,7 @@ public class WindowDesignRegressionTests
             },
         }], "v1"));
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var vm = new ConnectionsWindowViewModel(store.Object, drivers, Secrets().Object);
         return (new ConnectionsWindow(vm), vm);
     }
@@ -248,9 +248,9 @@ public class WindowDesignRegressionTests
     public void SecondaryActions_Should_FollowThePaletteInEveryState(string themeName)
     {
         var (window, _) = Connections();
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         window.Styles.Add(theme);
-        window.RequestedThemeVariant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant(themeName);
         window.Show();
         try
         {
@@ -293,9 +293,9 @@ public class WindowDesignRegressionTests
     public void FormInputs_Should_ShareTheButtonBorder_WithoutLosingFocusFeedback(string themeName)
     {
         var (window, _) = Connections();
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         window.Styles.Add(theme);
-        window.RequestedThemeVariant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant(themeName);
         window.Show();
         try
         {
@@ -322,9 +322,9 @@ public class WindowDesignRegressionTests
     public void Save_Should_UsePrimaryStatesWithoutEnterSavingTheForm(string themeName)
     {
         var (window, _) = Connections();
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         window.Styles.Add(theme);
-        window.RequestedThemeVariant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
+        window.RequestedThemeVariant = TestInterfaceThemes.GetVariant(themeName);
         window.Show();
         try
         {

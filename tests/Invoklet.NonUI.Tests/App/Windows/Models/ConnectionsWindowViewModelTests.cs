@@ -1,11 +1,11 @@
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Windows.Input;
-using Invoklet.Connectors.Http;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
 using Invoklet.Services.Connections;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Windows.Models;
 using Moq;
 using Xunit;
@@ -66,7 +66,7 @@ public sealed class FileConnectionStoreTests : IDisposable
 // saved only by Save (the window's OK), and Test uses the Secret Store's values.
 public class ConnectionsWindowViewModelTests
 {
-    private sealed class FakeDriver : IConnectionDriver
+    private sealed class FakeDriver : IConnectionDriver, ICSharpClientSource
     {
         public IReadOnlyDictionary<string, MdRunValue>? Tested { get; private set; }
         public Exception? Failure { get; set; }
@@ -126,7 +126,7 @@ public class ConnectionsWindowViewModelTests
         var secretStore = new Mock<ISecretStore>();
         secretStore.Setup(s => s.LoadSnapshot()).Returns(new SecretStoreSnapshot(secrets ?? [new Secret("billing", "t0k"), new Secret("db", "pw")], null));
         var registry = new ConnectionDriverRegistry();
-        registry.Register(new HttpConnectionDriver());
+        registry.Register(new HttpTestDriver());
         var fake = new FakeDriver();
         registry.Register(fake);
         return (new ConnectionsWindowViewModel(store.Object, registry, secretStore.Object), store, fake);
@@ -152,6 +152,7 @@ public class ConnectionsWindowViewModelTests
 
         var future = vm.Connections[1];
         Assert.Equal("snowflake (not available in this Invoklet)", future.DriverName);
+        Assert.Equal("Driver 'snowflake' is not installed or is disabled.", future.Problems);
         Assert.Empty(future.Fields);
         Assert.False(((ICommand)vm.TestCommand).CanExecute(null) && vm.SelectedConnection == future);
     }
@@ -447,7 +448,7 @@ public class ConnectionsWindowViewModelTests
     }
 
     // Connects, then fails to describe itself.
-    private sealed class DescriptionFailsDriver : IConnectionSchemaDriver
+    private sealed class DescriptionFailsDriver : IConnectionSchemaDriver, ICSharpClientSource
     {
         public string Id => "described";
         public string DisplayName => "Described";

@@ -11,7 +11,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using Invoklet.Avalonia.Themes;
-using Invoklet.Connectors.Http;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.IntelliSense;
@@ -23,6 +22,7 @@ using Invoklet.Services.BuildCache;
 using Invoklet.Services.Connections;
 using Invoklet.Services.Examples;
 using Invoklet.Services.Preferences;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.UserControls;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows;
@@ -75,7 +75,7 @@ public sealed class NavigationSidebarTests : IDisposable
 
         var windowService = new Mock<IWindowService>();
         var drivers = new ConnectionDriverRegistry();
-        drivers.Register(new HttpConnectionDriver());
+        drivers.Register(new HttpTestDriver());
         var store = new FileConnectionStore(Path.Combine(_dataFolder, "connections.json"));
         MdRunConnection Http(string name) => new()
         {
@@ -101,9 +101,9 @@ public sealed class NavigationSidebarTests : IDisposable
         {
             Width = 1000,
             Height = 600,
-            RequestedThemeVariant = installTheme ? InvokletThemeVariants.RiderDark : null,
+            RequestedThemeVariant = installTheme ? TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark") : null,
         };
-        if (installTheme) window.Styles.Insert(0, new InvokletTheme());
+        if (installTheme) window.Styles.Insert(0, TestInterfaceThemes.CreateStyle());
         window.Show();
         Settle();
         return (window, vm, windowService);

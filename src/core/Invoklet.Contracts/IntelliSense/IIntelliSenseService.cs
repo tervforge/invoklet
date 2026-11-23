@@ -5,6 +5,9 @@ namespace Invoklet.Contracts.IntelliSense;
 
 public interface IIntelliSenseService : IDisposable
 {
+    /// <summary>Changes when the analysis context changes without an edit to the script text.</summary>
+    int ContextVersion => 0;
+
     Task<ICompletionList?> GetCompletionsAsync(
         string code,
         int position,

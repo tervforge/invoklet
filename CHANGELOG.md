@@ -3,6 +3,63 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
+## [0.13.0] — 2026-11-23
+
+Install connectors and themes on demand from **Preferences → Plugins**. If an existing script
+uses a connector, install that connector and its dependencies before running the script.
+
+### Added
+
+- `Util.Code(...).Dump()` displays C#, SQL, JSON, XML, and plain text as code blocks with a copy action.
+- Added `--plugins-dev <directory>` for plugin development, with a visible warning when enabled.
+- Added a Plugins page in Preferences for startup diagnostics and changes that require a restart.
+- Added interface theme packages and VS Code TextMate themes to Preferences → Appearance.
+- Added theme package installation, removal, enable/disable controls, and content verification status to Preferences → Plugins.
+- Grouped the light and dark palettes of VS Code, Rider, and VS 2022 into one plugin per theme family.
+- Added standard .NET packing for theme NuGet packages and local installation of theme `.nupkg` files.
+- VS Code, Rider, and VS 2022 themes are available from the Invoklet plugins repository.
+- Install and remove third-party connector packages in Preferences → Plugins with explicit approval before code runs.
+- Disable dependent plugins when their dependency is disabled in Preferences.
+- Show a "Content changed" state in Preferences → Plugins when installed plugin files no longer match their approval, and block removal of a plugin that other installed plugins depend on, naming them.
+- Install plugins in Preferences → Plugins from NuGet packages (`.nupkg`) with the **Install package…** button.
+- List the plugins of the public Invoklet plugin feed (no sign-in) in Preferences → Plugins → Available plugins and install the newest version that works with this Invoklet, through the same review and approval as a package file.
+- When installing from the plugin feed, offer missing dependencies and ask for approval of each package before installing.
+- The plugin feed accepts package IDs with a publisher prefix, such as `tervforge.invoklet.connector.postgres` for the `invoklet.connector.postgres` plugin.
+- Avoid loading plugins for CLI help and version commands, enforce archive size limits during extraction, and preserve successful removal if staging cleanup fails.
+
+### Fixed
+
+- Show when a saved interface theme is unavailable while keeping it selected in settings.
+- Loaded plugin dependencies when the plugin folder is reached through a symbolic link, such as `/var` on macOS or `/home` on some Linux systems.
+
+- Asked for Secret Store access again after an externally changed script is reloaded and saved.
+- Rejected malformed Windows stream paths in Path Store while accepting valid NTFS streams.
+- Cancelled Rename Symbol if the script changes before the edit can be applied.
+- Passed PostgreSQL and SQL Server connection strings to the script at startup without embedding their values in the generated assembly.
+- Passed HTTP and OpenAPI header values and gRPC metadata values through the same startup channel.
+- Kept connection schema refreshes visible and prevented an older read from replacing a newer result after a credential change.
+- Rejected new wildcard patterns in Windows Path Store entries while allowing older entries to be repaired.
+- Kept parallel `Util.GetPath` calls from receiving each other's responses and rejected duplicate names in `paths.json`.
+- Kept concurrent secret reads from restoring old values after an update or removal.
+- Scoped unsaved-script secret permissions to one run and required a new permission after external edits.
+- Preserved unrelated files when cleaning up interrupted store writes and rejected duplicate secret names in JSON.
+- Accepted extended Windows paths with forward slashes and rejected invalid Windows path characters.
+- Prioritized C# import fixes over type generation and refreshed analysis after imports.
+- Kept member completion scoped to the receiver, including queries against generated connections.
+- Kept editor suggestions open while dragging their scrollbar.
+- Discarded pending completion results after moving the caret or editing their context.
+- Counted distinct diagnostics when deciding whether to show Fix All in the lightbulb menu.
+- Applied Fix All to Roslyn analyzer diagnostics in the selected method, class, or script.
+- Applied accessibility style changes to live Roslyn diagnostics and refreshed analysis on existing code.
+- Rejected stale code actions after a context change and showed when a script change cancelled Fix All.
+- Refreshed lightbulb actions when references or other analysis context changed without an edit.
+- Applied script warning suppression from the start of the script and hid suppression for compiler errors.
+
+### Changed
+
+- C# accessibility diagnostics now honor the configured style. With the default `omit_if_default`, IDE0040 suggests removing redundant access modifiers.
+- The HTTP, gRPC, SQLite, PostgreSQL and SQL Server connectors are installed separately as NuGet plugins through Preferences → Plugins. The installer also accepts shared library packages and packages up to 256 MB.
+
 ## [0.12.2] — 2026-11-10
 
 ### Added
@@ -1305,3 +1362,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.12.0]: https://github.com/tervforge/invoklet/releases/tag/v0.12.0
 [0.12.1]: https://github.com/tervforge/invoklet/releases/tag/v0.12.1
 [0.12.2]: https://github.com/tervforge/invoklet/releases/tag/v0.12.2
+[0.13.0]: https://github.com/tervforge/invoklet/releases/tag/v0.13.0

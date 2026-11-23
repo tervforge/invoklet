@@ -2,19 +2,17 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform;
 using Avalonia.Threading;
-using Invoklet.Connectors.Grpc;
-using Invoklet.Connectors.Http;
-using Invoklet.Connectors.Postgres;
-using Invoklet.Connectors.Sqlite;
-using Invoklet.Connectors.SqlServer;
+using Invoklet.Avalonia.Themes;
+using Invoklet.BuiltIns;
 using Invoklet.Contracts;
 using Invoklet.Contracts.Connections;
 using Invoklet.Languages.CSharp;
 using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
-using Invoklet.Languages.VB;
 using Invoklet.Logging;
+using Invoklet.Plugins.Hosting;
 using Invoklet.Secrets;
 using Invoklet.Services;
 using Invoklet.Services.BuildCache;
@@ -82,7 +80,16 @@ public class App : Application
         // App-wide setup of this OS's desktop integration (macOS's Control-click, Linux's UI font, …).
         DesktopIntegration.Current.OnApplicationStarted(this);
         WindowChrome.Install(this, DesktopIntegration.Current);
-        var serviceProvider = ConfigureServices();
+        var args = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Args ?? [];
+        string? pluginArgumentError = null;
+        PluginDevelopmentOptions plugins;
+        try { plugins = PluginStartup.ParseArguments(args); }
+        catch (ArgumentException ex)
+        {
+            pluginArgumentError = ex.Message;
+            plugins = new PluginDevelopmentOptions(null, args);
+        }
+        var serviceProvider = ConfigureServices(plugins, pluginArgumentError);
         _serviceProvider = serviceProvider;
 
         // Preferences → Logging takes effect at once.
@@ -91,6 +98,7 @@ public class App : Application
         preferences.Changed += () => logSwitch.Apply(preferences.Logging.Level);
 
         ILogger logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<App>();
+        if (pluginArgumentError is not null) logger.LogWarning("{PluginArgumentError}", pluginArgumentError);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             logger.LogCritical(e.ExceptionObject as Exception, "Unhandled exception (IsTerminating: {IsTerminating})", e.IsTerminating);
         TaskScheduler.UnobservedTaskException += (_, e) =>
@@ -101,16 +109,14 @@ public class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // ThemeService is a singleton, so it's only ever constructed (and applies
-            // RequestedThemeVariant) once something actually depends on IThemeService — which
-            // MainWindow does via MainWindowViewModel, but SetupWizardWindow doesn't. Left implicit,
-            // a first run with a missing SDK/debugger showed the wizard BEFORE the theme was ever
-            // applied: every "Invoklet.*" DynamicResource lookup came back empty (Invoklet's palettes are
-            // keyed by custom ThemeVariants like "VsCodeDark", not just "Dark"/"Light", so nothing
-            // matches the still-default variant), so the window fell back to a plain black/white
-            // background instead of the intended panel color. Resolving it here — before either
-            // branch below shows a window — guarantees the theme is always applied first.
-            serviceProvider.GetRequiredService<IThemeService>();
+            RequestedThemeVariant = PreferencesService.ReadForStartup().Appearance.Mode switch
+            {
+                ThemeMode.Light => BuiltInInterfaceThemes.GetVariant("invoklet.theme.warm-light"),
+                ThemeMode.Dark => BuiltInInterfaceThemes.GetVariant("invoklet.theme.midnight"),
+                _ => PlatformSettings?.GetColorValues().ThemeVariant == PlatformThemeVariant.Light
+                    ? BuiltInInterfaceThemes.GetVariant("invoklet.theme.warm-light")
+                    : BuiltInInterfaceThemes.GetVariant("invoklet.theme.midnight"),
+            };
 
             // Before any window exists, so each one is first laid out at the interface scale.
             var viewScale = ViewScale.For(serviceProvider.GetRequiredService<IPreferencesService>());
@@ -120,10 +126,13 @@ public class App : Application
             desktop.MainWindow = splash;
 
             ApplicationExit.Attach(() => desktop.MainWindow, serviceProvider.GetRequiredService<IPreferencesService>(), desktop);
+            var restart = serviceProvider.GetRequiredService<ApplicationRestart>();
             desktop.Exit += (_, _) =>
             {
                 viewScale.Flush();
+                // The recovery store releases its session lock when the provider is disposed.
                 serviceProvider.Dispose();
+                restart.StartReplacementAfterExit();
             };
 
             base.OnFrameworkInitializationCompleted();
@@ -134,7 +143,11 @@ public class App : Application
                 () =>
                 {
                     var prerequisites = serviceProvider.GetRequiredService<IPrerequisiteService>();
-                    return Task.Run(() => prerequisites.Check().IsComplete);
+                    return Task.Run(() =>
+                    {
+                        serviceProvider.GetRequiredService<PluginSession>();
+                        return prerequisites.Check().IsComplete;
+                    });
                 },
                 complete => CreateStartupWindow(complete, desktop, serviceProvider, logger), logger), DispatcherPriority.Background);
             return;
@@ -171,12 +184,14 @@ public class App : Application
     private static Window CreateStartupWindow(bool complete,
         IClassicDesktopStyleApplicationLifetime desktop, ServiceProvider services, ILogger logger)
     {
-        if (complete) return services.GetRequiredService<Windows_MainWindow>();
+        // The startup plugin snapshot is ready before the workspace or setup wizard needs its palette.
+        services.GetRequiredService<IThemeService>();
+        if (complete) return CreateMainWindow();
 
         var wizard = services.GetRequiredService<Windows_SetupWizardWindow>();
         wizard.Continued += () =>
         {
-            try { ShowStartupWindow(services.GetRequiredService<Windows_MainWindow>(), desktop); }
+            try { ShowStartupWindow(CreateMainWindow(), desktop); }
             catch (Exception ex)
             {
                 // The same error window as a failure before the wizard, instead of a wizard that seems to do nothing.
@@ -189,6 +204,14 @@ public class App : Application
             }
         };
         return wizard;
+
+        Windows_MainWindow CreateMainWindow()
+        {
+            var window = services.GetRequiredService<Windows_MainWindow>();
+            if (services.GetRequiredService<PluginDevelopmentOptions>().Directory is not null)
+                window.ShowPluginDevelopmentWarning();
+            return window;
+        }
     }
 
     internal static void ShowStartupWindow(Window window, IClassicDesktopStyleApplicationLifetime desktop,
@@ -244,14 +267,29 @@ public class App : Application
         }, DispatcherPriority.Background);
     }
 
-    private ServiceProvider ConfigureServices()
+    private ServiceProvider ConfigureServices(PluginDevelopmentOptions plugins, string? pluginArgumentError)
     {
         var services = new ServiceCollection();
+        services.AddSingleton(plugins);
+        services.AddSingleton<ThemeCatalog>();
+        services.AddSingleton<IThemeCatalog>(sp => sp.GetRequiredService<ThemeCatalog>());
+        services.AddSingleton(sp => PluginStartup.Load(plugins.Directory, sp.GetRequiredService<ILoggerFactory>(),
+            [new ConnectionPluginRoleHandler(sp.GetRequiredService<ConnectionDriverRegistry>()), sp.GetRequiredService<ThemeCatalog>()]));
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            services.AddSingleton(desktop);
+            services.AddSingleton<ApplicationRestart>();
+        }
 
         services.AddSingleton<Application>(this);
         services.AddSingleton<IPreferencesService, PreferencesService>();
         services.AddSingleton(DesktopIntegration.Current);
-        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IThemeService>(sp =>
+        {
+            _ = sp.GetRequiredService<PluginSession>();
+            var catalog = sp.GetRequiredService<IThemeCatalog>();
+            return new ThemeService(this, sp.GetRequiredService<IPreferencesService>(), catalog.Interfaces, catalog.Editors);
+        });
         services.AddSingleton<IFileSystemService, FileSystemService>();
         services.AddSingleton<ISdkProvider, DotnetSdkProvider>();
         services.AddSingleton<IRuntimeReferenceLocator, DotnetRuntimeReferenceLocator>();
@@ -309,8 +347,7 @@ public class App : Application
                 PathReader = paths.Read,
             };
             var runtimeReferences = sp.GetRequiredService<IRuntimeReferenceLocator>();
-            registry.Register(new CSharpLanguageHostFactory(loggerFactory, runtimeReferences));
-            registry.Register(new VbLanguageHostFactory(loggerFactory, runtimeReferences));
+            BuiltInCatalog.RegisterLanguages(registry, loggerFactory, runtimeReferences);
             return registry;
         });
 
@@ -322,6 +359,12 @@ public class App : Application
         services.AddSingleton<ISessionSnapshotLoader, DiskSessionSnapshotLoader>();
         services.AddTransient<ISessionRecoveryCoordinator, SessionRecoveryCoordinator>();
         services.AddTransient<MainWindowViewModel>();
+        // A rejected --plugins-dev is told on the Plugins page too, not only in the log: the window started without the mode.
+        services.AddTransient(sp => new PluginsPageViewModel(sp.GetRequiredService<PluginSession>(), PluginStartup.ReadUserInventory,
+            () => sp.GetService<ApplicationRestart>()?.RequestAsync() ?? Task.CompletedTask,
+            pluginArgumentError is null ? null : "Plugin development mode could not be enabled. Check --plugins-dev or INVOKLET_PLUGINS_DEV.",
+            Directory.Exists, (id, enabled) => PluginStartup.SetPluginEnabled(id, enabled, sp.GetRequiredService<PluginSession>()),
+            PluginStartup.CreatePluginInstaller, PluginStartup.CreatePluginFeed));
         services.AddTransient<PreferencesWindowViewModel>();
         services.AddTransient<DependenciesWindowViewModel>();
         services.AddTransient<Windows_PreferencesWindow>();
@@ -332,18 +375,7 @@ public class App : Application
         services.AddTransient<Windows_SecretStoreWindow>();
         services.AddTransient<PathStoreWindowViewModel>();
         services.AddTransient<Windows_PathStoreWindow>();
-        // Connection drivers are part of Invoklet for now, registered here like the languages above.
-        services.AddSingleton(_ =>
-        {
-            var registry = new ConnectionDriverRegistry();
-            registry.Register(new HttpConnectionDriver());
-            registry.Register(new OpenApiConnectionDriver());
-            registry.Register(new GrpcConnectionDriver());
-            registry.Register(new SqliteConnectionDriver());
-            registry.Register(new PostgresConnectionDriver());
-            registry.Register(new SqlServerConnectionDriver());
-            return registry;
-        });
+        services.AddSingleton(_ => BuiltInCatalog.CreateConnectionDrivers());
         // What some drivers read from the endpoint before a build (a gRPC server's services), kept
         // on disk; secrets for reading it come from the Secret Store.
         services.AddSingleton(sp => new ConnectionSchemas(sp.GetRequiredService<ConnectionDriverRegistry>(),

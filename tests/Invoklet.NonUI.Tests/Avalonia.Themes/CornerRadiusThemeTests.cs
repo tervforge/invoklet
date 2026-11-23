@@ -4,7 +4,7 @@ using Xunit;
 namespace Invoklet.NonUI.Tests.Avalonia.Themes;
 
 // Every corner radius comes from the theme's metrics (Invoklet.Radius.* in
-// src/controls/Invoklet.Avalonia.Themes/Metrics.axaml), so windows, dialogs, popups and controls stay
+// src/controls/Invoklet.Avalonia.Themes/Metrics.json), so windows, dialogs, popups and controls stay
 // alike and are changed in one place. Square corners (0) and shapes whose radius follows their own
 // size are the exceptions.
 public class CornerRadiusThemeTests
@@ -40,8 +40,7 @@ public class CornerRadiusThemeTests
             .SelectMany(r => Directory.EnumerateFiles(Path.Combine(root, r), "*.*", SearchOption.AllDirectories))
             .Where(f => f.EndsWith(".axaml", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                        && Path.GetFileName(f) != "Metrics.axaml")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
             .SelectMany(f => Literal.Matches(File.ReadAllText(f))
                 .Where(m => m.Groups["v"].Value.Split(',').Any(part => double.Parse(part.Trim()) != 0))
                 .Select(m => $"{Path.GetFileName(f)}: {m.Value}"))

@@ -3,10 +3,6 @@
         xmlns:iconButton="clr-namespace:Invoklet.TemplatedControls">
     <Styles.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Metrics.axaml"/>
-            </ResourceDictionary.MergedDictionaries>
-
             <ControlTheme x:Key="{x:Type iconButton:IconButton}" TargetType="iconButton:IconButton">
                 <Setter Property="Background"      Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="0"/>

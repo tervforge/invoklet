@@ -251,7 +251,7 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
     }
 
     // The Dependencies window's own package draft, which connections add their packages to.
-    internal void UsePackages(Func<IReadOnlySet<string>> scriptPackages, Action<string, string> addPackage,
+    public void UsePackages(Func<IReadOnlySet<string>> scriptPackages, Action<string, string> addPackage,
         Action<string>? removePackage = null, Func<string?>? targetFramework = null)
     {
         _targetFramework = targetFramework ?? (() => null);
@@ -263,13 +263,13 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
     // After the script's packages change: a missing package is a problem of the connection.
     internal void OnPackagesChanged() => Refresh();
 
-    internal void SetScriptPath(string? path)
+    public void SetScriptPath(string? path)
     {
         _scriptDirectory = path is null ? null : Path.GetDirectoryName(path);
         Refresh();
     }
 
-    internal void Load(MdRunFrontMatter? frontMatter)
+    public void Load(MdRunFrontMatter? frontMatter)
     {
         SelectedItem = null;
         CancelAddConfirmation();
@@ -616,7 +616,7 @@ public sealed class ScriptConnectionsViewModel : ReactiveObject, IDisposable
             if (driver is null)
             {
                 // Without a driver id, Validate has already said so.
-                if (!string.IsNullOrWhiteSpace(connection.Driver)) problems.Add($"This Invoklet has no '{connection.Driver}' driver.");
+                if (!string.IsNullOrWhiteSpace(connection.Driver)) problems.Add(ConnectionDriverRegistry.MissingDriverMessage(connection.Driver));
             }
             else
             {

@@ -443,7 +443,7 @@ public partial class AssemblyExplorerWindow : Window
         // A shown window: a theme change recolours its code at once.
         void OnThemeChanged(ActiveTheme theme)
         {
-            editor.SetTheme(theme.Editor.TextMateName);
+            editor.SetTheme(theme.Editor.RawTheme);
             editor.Background = themeService.GetBrush("Invoklet.Editor.BackgroundBrush");
         }
         themeService.ThemeChanged += OnThemeChanged;
@@ -454,7 +454,7 @@ public partial class AssemblyExplorerWindow : Window
         onAttached = (_, _) =>
         {
             editor.AttachedToVisualTree -= onAttached;
-            editor.SetLanguage(themeService.CurrentTheme.Editor.TextMateName, ".cs");
+            editor.SetLanguage(themeService.CurrentTheme.Editor.RawTheme, ".cs");
             if (_pendingInitialResult is { } initial)
             {
                 // decompiled as default C#; the row and target may already be known
@@ -1224,15 +1224,13 @@ public partial class AssemblyExplorerWindow : Window
             _ => null,
         };
         var icons = new AssemblyTreeNodeIcons(
-            Geometry("AsmIcon." + iconKey),
+            "AsmIcon." + iconKey,
             new SolidColorBrush(color),
-            accessKey is null ? null : Geometry("AsmOverlay." + accessKey),
-            isStatic ? Geometry("AsmOverlay.Static") : null);
+            accessKey is null ? null : "AsmOverlay." + accessKey,
+            isStatic ? "AsmOverlay.Static" : null);
         return new AssemblyTreeNode(
             kind, text, access, icons, isStatic, isAbstract, assemblyPath, type, member, location, reference,
             isUnavailable, resource);
-
-        Geometry? Geometry(string key) => this.TryFindResource(key, out var resource) ? resource as Geometry : null;
     }
 
     // internal (not private): lets tests drive a navigation directly without simulating a real F12

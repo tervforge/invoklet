@@ -191,6 +191,37 @@ public class HtmlControlRenderScalingTests
             }
         }, CancellationToken.None);
 
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(true, 8)]
+    public Task AbsoluteElement_Should_UseTopAndRightWithinItsPositionedAncestor(bool nestedInStaticBlock, int padding)
+        => _fixture.Session.Dispatch(() =>
+        {
+            const string copyHtml = "<a id='copy' href='#' style='display:block;position:absolute;top:4px;right:7px;width:16px;height:16px;background-color:#ff0000'></a>";
+            var content = nestedInStaticBlock ? $"<div style='width:55px;margin-top:20px'>{copyHtml}</div>" : copyHtml;
+            var html = $"<div id='shell' style='position:relative;width:120px;height:60px;padding:{padding}px;background-color:#ffffff'>{content}</div>";
+            var (window, panel) = Show(html, 1.0);
+            try
+            {
+                window.CaptureRenderedFrame();
+
+                var shell = panel.GetElementRectangle("shell");
+                var copy = panel.GetElementRectangle("copy");
+
+                Assert.NotNull(shell);
+                Assert.NotNull(copy);
+                Assert.InRange(copy.Value.X, shell.Value.Right - 24, shell.Value.Right - 22);
+                Assert.InRange(copy.Value.Y, shell.Value.Y + 3, shell.Value.Y + 5);
+                Assert.InRange(copy.Value.Width, 15, 17);
+                Assert.InRange(copy.Value.Height, 15, 17);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
     private static (Window Window, HtmlPanel Panel) Show(string html, double scaling)
     {
         var panel = new HtmlPanel { Background = Brushes.White, Text = html };

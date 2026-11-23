@@ -45,16 +45,16 @@ public sealed class CodeFixCacheSupersededPassTests
     {
         var engine = new RoslynCodeFixEngine(InvokletRoslynHost.CompositionHost, NullLogger.Instance);
         var listed = Document(WithFix);
-        var fixes = await engine.ComputeFixesAsync(listed, await DiagnosticsAsync(listed), WithFix, 0, TestContext.Current.CancellationToken);
+        var fixes = await engine.ComputeFixesAsync(listed, await DiagnosticsAsync(listed), WithFix, 0, 0, TestContext.Current.CancellationToken);
         var usingFix = Assert.Single(fixes, f => f.Title == "using System.Text.RegularExpressions;");
 
         // The next keystroke's pass started: this one is cancelled, but runs to its end.
         using var superseded = new CancellationTokenSource();
         superseded.Cancel();
         var stale = Document(NothingToFix);
-        await IgnoringCancellation(engine.ComputeFixesAsync(stale, [], NothingToFix, 0, superseded.Token));
+        await IgnoringCancellation(engine.ComputeFixesAsync(stale, [], NothingToFix, 0, 0, superseded.Token));
 
-        var applied = await engine.MaterializeAsync(usingFix.Key, WithFix, 0, TestContext.Current.CancellationToken);
+        var applied = await engine.MaterializeAsync(usingFix.Key, WithFix, 0, 0, TestContext.Current.CancellationToken);
         Assert.NotNull(applied);
         // No preamble in this document, so the directive is part of the code itself.
         Assert.StartsWith("using System.Text.RegularExpressions;", applied.Value.NewCode, StringComparison.Ordinal);
@@ -67,14 +67,14 @@ public sealed class CodeFixCacheSupersededPassTests
         const string code = "class C { int M() { return 1 + 2; } }";
         var listed = Document(code);
         var position = code.IndexOf("1 + 2", StringComparison.Ordinal);
-        var refactorings = await engine.ComputeRefactoringsAsync(listed, new TextSpan(position, 0), code, 0, 1, TestContext.Current.CancellationToken);
+        var refactorings = await engine.ComputeRefactoringsAsync(listed, new TextSpan(position, 0), code, 0, 1, 0, TestContext.Current.CancellationToken);
         var first = Assert.IsAssignableFrom<IEnumerable<Invoklet.Contracts.IntelliSense.ICodeFixInfo>>(refactorings).First();
 
         using var superseded = new CancellationTokenSource();
         superseded.Cancel();
         // userLine 0: the request's caret is before the user's code — the early path.
-        await IgnoringCancellation(engine.ComputeRefactoringsAsync(Document(code), new TextSpan(0, 0), code, 0, 0, superseded.Token));
+        await IgnoringCancellation(engine.ComputeRefactoringsAsync(Document(code), new TextSpan(0, 0), code, 0, 0, 0, superseded.Token));
 
-        Assert.NotNull(await engine.MaterializeAsync(first.Key, code, 0, TestContext.Current.CancellationToken));
+        Assert.NotNull(await engine.MaterializeAsync(first.Key, code, 0, 0, TestContext.Current.CancellationToken));
     }
 }

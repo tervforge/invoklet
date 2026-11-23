@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Invoklet.Avalonia.Themes;
+using Invoklet.Runtime.UI.Tests.Infrastructure;
 using Xunit;
 
 namespace Invoklet.Runtime.UI.Tests.Avalonia.Themes;
@@ -11,7 +12,7 @@ namespace Invoklet.Runtime.UI.Tests.Avalonia.Themes;
 public sealed class DiagnosticColoursTests
 {
     public static TheoryData<string> Themes =>
-        new(typeof(InvokletThemeVariants).GetFields().Where(f => f.FieldType == typeof(ThemeVariant)).Select(f => f.Name));
+        new(TestInterfaceThemes.All.Select(theme => (string)theme.Variant.Key));
 
     private static Color ColourOf(InvokletTheme theme, ThemeVariant variant, string key)
     {
@@ -37,8 +38,8 @@ public sealed class DiagnosticColoursTests
     public void TableColours_OfATheme_AreABlueStripAndGreyColumnHeaders(string themeName)
     {
         // Arrange
-        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
-        var theme = new InvokletTheme();
+        var variant = TestInterfaceThemes.GetVariant(themeName);
+        var theme = TestInterfaceThemes.CreateStyle();
 
         // Act
         var strip = ColourOf(theme, variant, "Invoklet.Dump.TableHeaderBrush");
@@ -56,9 +57,9 @@ public sealed class DiagnosticColoursTests
     public void Stylesheet_OfATable_ColoursItsPartsFromTheirOwnBrushes()
     {
         // Arrange
-        var variant = InvokletThemeVariants.RiderDark;
+        var variant = TestInterfaceThemes.GetVariant("invoklet.theme.rider-dark");
         var app = Application.Current!;
-        var theme = new InvokletTheme();
+        var theme = TestInterfaceThemes.CreateStyle();
         var requested = app.RequestedThemeVariant;
         app.Styles.Add(theme);
         app.RequestedThemeVariant = variant;
@@ -83,8 +84,8 @@ public sealed class DiagnosticColoursTests
     public void DiagnosticColours_OnTheEditorOfATheme_ReadAndDiffer(string themeName)
     {
         // Arrange
-        var variant = (ThemeVariant)typeof(InvokletThemeVariants).GetField(themeName)!.GetValue(null)!;
-        var theme = new InvokletTheme();
+        var variant = TestInterfaceThemes.GetVariant(themeName);
+        var theme = TestInterfaceThemes.CreateStyle();
 
         // Act
         var background = ColourOf(theme, variant, "Invoklet.Editor.BackgroundBrush");

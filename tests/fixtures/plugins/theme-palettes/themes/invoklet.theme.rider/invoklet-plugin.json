@@ -1,0 +1,14 @@
+{
+  "id": "invoklet.theme.rider",
+  "version": "1.0.0",
+  "displayName": "Rider",
+  "roles": {
+    "theme": 1
+  },
+  "assets": {
+    "themes": [
+      "rider-dark.json",
+      "rider-light.json"
+    ]
+  }
+}

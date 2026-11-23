@@ -59,6 +59,16 @@ internal static class DumpRenderer
 
         var type = value.GetType();
 
+        if (value is CodeBlock code)
+        {
+            sb.Append("<pre class=\"dp-code\" data-language=\"")
+                .Append(Encode(LanguageId(code.Language)))
+                .Append("\">")
+                .Append(Encode(code.Source))
+                .Append("</pre>");
+            return;
+        }
+
         if (IsPrimitiveLike(type))
         {
             RenderPrimitive(sb, value, type, options);
@@ -101,6 +111,15 @@ internal static class DumpRenderer
 
         RenderObject(sb, value, type, depth, options);
     }
+
+    private static string LanguageId(CodeLanguage language) => language switch
+    {
+        CodeLanguage.CSharp => "csharp",
+        CodeLanguage.Sql => "sql",
+        CodeLanguage.Json => "json",
+        CodeLanguage.Xml => "xml",
+        _ => "plaintext",
+    };
 
     private static void RenderWrapper(StringBuilder sb, DumpWrapper wrapper, int depth, DumpOptions options)
     {

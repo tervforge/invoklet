@@ -10,14 +10,6 @@
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Invoklet.Panel.BackgroundBrush}"
         Foreground="{DynamicResource Invoklet.Text.PrimaryBrush}">
-    <Window.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Invoklet.Avalonia.Themes/Metrics.axaml"/>
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </Window.Resources>
-
 
     <StackPanel Margin="24" Spacing="{DynamicResource Invoklet.Space.Tight}">
 

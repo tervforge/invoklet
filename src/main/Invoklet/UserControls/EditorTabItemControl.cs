@@ -85,8 +85,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     private readonly WatchEvaluator _watchEvaluator;
     // Schema warm-up is owned by this tab; closing or superseding it must stop the read.
     private CancellationTokenSource? _connectionSchemaWarmupCts;
-    private int _connectionSchemaRefreshPosted;
-    private string? _connectionSchemaRefreshKey;
+    private readonly object _connectionSchemaRefreshLock = new();
+    private HashSet<string>? _pendingConnectionSchemaKeys;
     private readonly IBuildCacheService _buildCache;
     private IDisposable? _selectedKindSub;
     private IDisposable? _filePathSub;
@@ -173,6 +173,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         State = new EditorTabState(editor);
         _watchEvaluator = new WatchEvaluator(() => State.CurrentDebugCtx, w => _vm.DebugPanel.WatchExpressions.Contains(w));
         ResultsOutput.DataContext = State.Output;
+        ResultsOutput.SetEditorTheme(themeService.CurrentTheme.Editor.RawTheme);
         // A change of the output makes a snapshot of it that is being written to disk out of date (see ContentRelease).
         State.Output.PropertyChanged += (_, e) =>
         {
@@ -273,7 +274,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             // plain text when its profile names no source extension the editor has a grammar for.
             // The palette current when the tab is first shown — not the one when it was created: a
             // tab restored at startup may only be opened after the theme changed.
-            editor.TrySetLanguage(_themeService!.CurrentTheme.Editor.TextMateName,
+            editor.TrySetLanguage(_themeService!.CurrentTheme.Editor.RawTheme,
                 _registry.GetEditorProfile(ResolveLanguageId())?.SourceFileExtension ?? "");
             EditorSettingsApplier.ApplySelectionColor(editor);
         };
@@ -355,8 +356,9 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
     private void ApplyThemeNow(ActiveTheme theme)
     {
-        State.Editor.SetTheme(theme.Editor.TextMateName);
-        _ilHighlighting?.SetTheme(theme.Editor.TextMateName);
+        State.Editor.SetTheme(theme.Editor.RawTheme);
+        ResultsOutput.SetEditorTheme(theme.Editor.RawTheme);
+        _ilHighlighting?.SetTheme(theme.Editor.RawTheme);
         _analysis?.SetDark(theme.Editor.IsDark);
         var editorBg = _themeService!.GetBrush("Invoklet.Editor.BackgroundBrush");
 
@@ -409,9 +411,11 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var written = _documentWriter.Serialize(State.MdRunDocument, State.Editor.Text, path, _vm.FilePath, _vm.ReferenceAnchorPath);
         // A write that fails leaves the file as it was (and so the tab's idea of it): the ID and the state are taken only after it.
         AtomicFile.WriteAllBytes(path, written.Bytes);
-        ScriptFileWrites.Report(path, written.Bytes);
+        var saved = ScriptFileState.Of(written.Bytes);
+        if (path == _vm.FilePath && !_vm.RequiresBaselineConfirmation && _vm.DiskState?.Hash is { } baselineHash)
+            ScriptFileWrites.Report(path, baselineHash, saved.Hash!);
         if (written.DocumentId is { } id) _writtenId = (path, id);
-        _vm.LastWrite = (path, ScriptFileState.Of(written.Bytes));
+        _vm.LastWrite = (path, saved);
     }
 
     // Save As rebinds the tab to its new file: the references written there become its own, and
@@ -1074,24 +1078,44 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         var owner = TopLevel.GetTopLevel(this) as Window;
         if (owner is null) return;
 
+        var document = editor.Document;
+        var version = document.Version;
+        var script = State.MdRunDocument;
+        var code = document.Text;
         var caretOffset = editor.TextArea.Caret.Offset;
-        var info = await intelliSense.GetRenameInfoAsync(State.Editor.Text, caretOffset, CancellationToken.None);
+        var info = await intelliSense.GetRenameInfoAsync(code, caretOffset, CancellationToken.None);
+        if (!IsRenameCurrent()) return;
         if (info is null || info.Spans.Count == 0) return; // nothing renameable at the caret
 
         var dialog = new Windows.RenameSymbolDialog(info.CurrentName);
         var newName = await dialog.ShowDialog<string?>(owner);
         if (string.IsNullOrEmpty(newName) || newName == info.CurrentName) return;
+        if (!IsRenameCurrent()) return;
 
-        var conflict = await intelliSense.CheckRenameAsync(State.Editor.Text, caretOffset, newName, CancellationToken.None);
+        var conflict = await intelliSense.CheckRenameAsync(code, caretOffset, newName, CancellationToken.None);
+        if (!IsRenameCurrent()) return;
         if (conflict is not null)
         {
             SetStatus(conflict, "Invoklet.Status.ErrorBrush");
+            UpdateOutputUi();
             editor.Focus();
             return;
         }
 
-        ApplyRenameEdits(editor.Document, info.Spans, newName);
+        ApplyRenameEdits(document, info.Spans, newName);
         editor.Focus();
+
+        bool IsRenameCurrent()
+        {
+            if (_disposed) return false;
+            // Reload can edit the document in place or replace only the script header.
+            if (ReferenceEquals(editor.Document, document) && ReferenceEquals(document.Version, version)
+                && ReferenceEquals(State.MdRunDocument, script)) return true;
+
+            SetStatus("Rename cancelled because the script changed. Try again.", "Invoklet.Status.CancelledBrush");
+            UpdateOutputUi();
+            return false;
+        }
     }
 
     // Split out from ShowRenameSymbolAsync so the actual edit-application logic (order-of-operations
@@ -1307,22 +1331,10 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         _ = ApplyFixAllAsync(State.Editor, _intelliSense, fix, scope);
     }
 
-    private void OnSuppressInScriptRequested(string diagnosticId, int line)
+    private void OnSuppressInScriptRequested(string diagnosticId, int _)
     {
         if (_disposed) return;
-        var editor = State.Editor;
-        var doc = editor.Document;
-        var docLine = doc.GetLineByNumber(Math.Min(line, doc.LineCount));
-        var insertOffset = docLine.Offset;
-        var indent = "";
-        var lineText = doc.GetText(docLine);
-        foreach (var ch in lineText)
-        {
-            if (ch is ' ' or '\t') indent += ch;
-            else break;
-        }
-        var pragma = $"{indent}#pragma warning disable {diagnosticId}\n";
-        doc.Insert(insertOffset, pragma);
+        State.Editor.Document.Insert(0, $"#pragma warning disable {diagnosticId}\n");
     }
 
     private void OnSuppressGloballyRequested(string diagnosticId)
@@ -1558,7 +1570,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         if (_disposed || _ilHighlighting is not null || !IlOutput.IsAttachedToVisualTree()) return;
         _ilHighlighting = IlHighlighting.Install(
-            IlOutput, _themeService?.CurrentTheme.Editor.TextMateName ?? ThemeName.DarkPlus);
+            IlOutput, _themeService?.CurrentTheme.Editor.RawTheme ?? EditorTheme.GetBuiltIn(ThemeName.DarkPlus));
     }
 
     internal string? IlGrammarScope => _ilHighlighting?.GrammarScope;
@@ -1828,7 +1840,8 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         };
 
         editor.AsyncCompletionProvider = new EditorCompletionProvider(
-            intelliSense, () => State.Editor.Text, new CompletionRowFactory(this, editor)).ProvideAsync;
+            intelliSense, () => State.Editor.Text, new CompletionRowFactory(this, editor),
+            () => ContextRefreshTask).ProvideAsync;
 
         editor.AsyncOverloadProvider = new EditorParameterInfo(
             intelliSense, editor, () => _themeService.CurrentTheme.Editor.IsDark).ProvideAsync;
@@ -1847,11 +1860,17 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         // Two sources feed the lightbulb: these diagnostic-driven fixes, pushed by every analysis of the text, and the
         // refactorings at the caret below, pulled on caret moves. Each keeps its last list in _lightbulb, so a change of
         // the code-fix preferences re-filters both at once (OnPreferencesChanged).
+        var refactoringsContextVersion = intelliSense.ContextVersion;
         var analysis = _analysis = new EditorAnalysisView(editor, intelliSense, _themeService.CurrentTheme.Editor.IsDark,
             _prefs.CSharp.InlayHintsEnabled, fixes =>
             {
                 if (_disposed) return;
                 _lightbulb.SetDiagnosticFixes(fixes);
+                if (refactoringsContextVersion != intelliSense.ContextVersion)
+                {
+                    _lightbulb.SetRefactorings(null);
+                    _refactoringCaretHandler?.Invoke(editor.TextArea.Caret, EventArgs.Empty);
+                }
                 UpdateLightbulb();
             });
 
@@ -1860,6 +1879,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
         _refactoringCaretHandler = (_, _) =>
         {
+            var contextVersion = refactoringsContextVersion = intelliSense.ContextVersion;
             // The master "show code fixes" switch skips even asking for refactorings, not just hiding them
             // once listed: a caret move fires on every arrow key and click, and Roslyn's own providers do real
             // syntax and semantic work just to decide whether they apply, whether or not the result is shown.
@@ -1885,7 +1905,7 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
 
                     await Dispatcher.InvokeAsync(() =>
                     {
-                        if (_disposed || !refactoringRequests.IsCurrent(result)) return;
+                        if (_disposed || !refactoringRequests.IsCurrent(result) || intelliSense.ContextVersion != contextVersion) return;
                         if (!ReferenceEquals(editor.Text, text) && editor.Text != text) return;
                         _lightbulb.SetRefactorings(result.Refactorings);
                         UpdateLightbulb();
@@ -2210,16 +2230,18 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
                 // Roslyn context update. Cancellation remains owned by this captured refresh.
                 await Task.Delay(_timings.ContextRefreshCoalesce, token).ConfigureAwait(false);
                 token.ThrowIfCancellationRequested();
-                var shouldReanalyze = Interlocked.Exchange(ref _contextRefreshReanalyzePending, 0) == 1;
                 var generated = frontMatter is null ? null
-                    : GeneratedConnections.For(connections, language, packageIds, _connectionDrivers, _connectionSchemas?.Cache, scriptDirectory);
+                    : GeneratedConnections.For(connections, language, packageIds, _connectionDrivers, _connectionSchemas?.Cache, scriptDirectory,
+                        includeStartupValues: false);
                 token.ThrowIfCancellationRequested();
                 await intelliSense.ApplyExecutionContextAsync(baseRequest with { Connections = generated }, token);
-                if (shouldReanalyze)
+                if (Volatile.Read(ref _contextRefreshReanalyzePending) == 1)
                     await Dispatcher.InvokeAsync(() =>
                     {
                         // The classes the script's code refers to are new: analyse it again now rather than at the next keystroke.
-                        if (!_disposed && !token.IsCancellationRequested) _intelliSense?.NotifyTextChanged(State.Editor.Text);
+                        if (!_disposed && !token.IsCancellationRequested
+                            && Interlocked.Exchange(ref _contextRefreshReanalyzePending, 0) == 1)
+                            _intelliSense?.NotifyTextChanged(State.Editor.Text);
                     });
             }
             catch (OperationCanceledException) { }
@@ -2242,23 +2264,28 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     {
         // Cache updates can arrive in a burst (one event per generated source). One queued UI
         // callback is enough: it reads the cache after the burst and refreshes the newest context.
-        Volatile.Write(ref _connectionSchemaRefreshKey, key);
-        if (Interlocked.Exchange(ref _connectionSchemaRefreshPosted, 1) != 0) return;
+        lock (_connectionSchemaRefreshLock)
+        {
+            if (_pendingConnectionSchemaKeys is { } pending)
+            {
+                pending.Add(key);
+                return;
+            }
+            _pendingConnectionSchemaKeys = new HashSet<string>(StringComparer.Ordinal) { key };
+        }
         _ui.Post(() =>
         {
-            try
+            HashSet<string> changedKeys;
+            lock (_connectionSchemaRefreshLock)
             {
-                if (_disposed || _connectionSchemas is not { } schemas
-                    || State.MdRunDocument?.FrontMatter.Connections is not { Count: > 0 } connections) return;
-                var scriptDirectory = ScriptDirectory;
-                var pendingKey = Volatile.Read(ref _connectionSchemaRefreshKey);
-                if (pendingKey is null || !connections.Any(c => schemas.Cache.KeyOf(c, scriptDirectory) == pendingKey)) return;
+                changedKeys = _pendingConnectionSchemaKeys!;
+                _pendingConnectionSchemaKeys = null;
+            }
+            if (_disposed || _connectionSchemas is not { } schemas
+                || State.MdRunDocument?.FrontMatter.Connections is not { Count: > 0 } connections) return;
+            var scriptDirectory = ScriptDirectory;
+            if (connections.Any(c => changedKeys.Contains(schemas.Cache.KeyOf(c, scriptDirectory))))
                 RefreshIntelliSenseContext(reanalyze: true);
-            }
-            finally
-            {
-                Volatile.Write(ref _connectionSchemaRefreshPosted, 0);
-            }
         });
     }
 
@@ -2486,15 +2513,12 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
     // FixApplyRequested path — see EditorsTabItemControl's own SetupEditor comment on the merged
     // list). MaterializeFixAsync only now does the expensive work (GetOperationsAsync + diffing) that
     // used to run eagerly for every candidate on every keystroke/caret-move; null means the key no
-    // longer resolves (the code changed enough since this entry was listed that the underlying
-    // RoslynCodeFixEngine cache moved on) — silently do nothing, same "gracefully degrade" contract
-    // as every other IntelliSense failure path in this codebase, not worth surfacing as an error for
-    // what's really just "you clicked something that's since gone stale".
+    // longer resolves (the code or its context changed, or a newer analysis replaced its key).
     private async Task ApplyCodeFixAsync(CodeTextEditor editor, IIntelliSenseService intelliSense, CodeFixEntry fix)
     {
         var code = editor.Text;
+        var contextVersion = intelliSense.ContextVersion;
         var materialized = await intelliSense.MaterializeFixAsync(code, fix.Key, CancellationToken.None);
-        if (materialized is null) return;
 
         // MaterializeFixAsync's own Task.Run (CSharpIntelliSenseService) means this continuation
         // isn't guaranteed to resume on the UI thread — same not-implicit-by-default rationale as
@@ -2503,7 +2527,18 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
         await Dispatcher.InvokeAsync(() =>
         {
             if (_disposed) return;
-            if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
+            if (intelliSense.ContextVersion != contextVersion || editor.Text != code)
+            {
+                SetStatus("Code fix cancelled because the script or its context changed. Try again.", "Invoklet.Status.CancelledBrush");
+                UpdateOutputUi();
+                return;
+            }
+            if (materialized is null)
+            {
+                SetStatus("Code fix could not be applied. Reopen the lightbulb menu to try again.", "Invoklet.Status.ErrorBrush");
+                UpdateOutputUi();
+                return;
+            }
 
             // Usings go to the .inv front matter's `namespaces:` list (a project file, per
             // docs/ImplementationPlanRPad.md), not the visible script — except for a plain script
@@ -2529,23 +2564,36 @@ public partial class EditorsTabItemControl : UserControl, IDisposable
             CodeFixAllScope.Document => FixAllScope.Document,
             _ => FixAllScope.Document,
         };
-        var code = editor.Text;
-        var materialized = await intelliSense.MaterializeFixAllAsync(code, fix.Key, contractScope, CancellationToken.None);
-        if (materialized is null) return;
+        var document = editor.Document;
+        var version = document.Version;
+        var script = State.MdRunDocument;
+        var contextVersion = intelliSense.ContextVersion;
+        var materialized = await intelliSense.MaterializeFixAllAsync(document.Text, fix.Key, contractScope, CancellationToken.None);
 
         await Dispatcher.InvokeAsync(() =>
         {
             if (_disposed) return;
-            if (!ReferenceEquals(editor.Text, code) && editor.Text != code) return;
+            if (!ReferenceEquals(editor.Document, document) || !ReferenceEquals(document.Version, version)
+                || !ReferenceEquals(State.MdRunDocument, script) || intelliSense.ContextVersion != contextVersion)
+            {
+                SetStatus("Fix All cancelled because the script or its context changed. Try again.", "Invoklet.Status.CancelledBrush");
+                UpdateOutputUi();
+                return;
+            }
+            if (materialized is null)
+            {
+                SetStatus("Fix All could not be applied. Reopen the lightbulb menu to try again.", "Invoklet.Status.ErrorBrush");
+                UpdateOutputUi();
+                return;
+            }
 
-            var hasProjectFile = State.MdRunDocument is not null;
-            var newCode = hasProjectFile
+            var newCode = script is not null
                 ? materialized.NewCode
                 : PrependUsings(materialized.UsingsToAdd, materialized.NewCode);
 
-            if (editor.Document.Text != newCode)
-                editor.Document.Text = newCode;
-            if (hasProjectFile && materialized.UsingsToAdd.Count > 0)
+            if (document.Text != newCode)
+                document.Text = newCode;
+            if (script is not null && materialized.UsingsToAdd.Count > 0)
                 AddGlobalUsings(materialized.UsingsToAdd);
         });
     }

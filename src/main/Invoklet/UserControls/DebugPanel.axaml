@@ -230,10 +230,10 @@
             <TabItem Header="Watch"><Grid RowDefinitions="Auto,*">
                 <StackPanel Grid.Row="0" Orientation="Horizontal"
                             Background="{DynamicResource Invoklet.Panel.BackgroundBrush}">
-                    <tc:IconButton Width="24" Height="24" Padding="6" Command="{Binding AddWatchCommand}" IconData="{StaticResource Icon.Plus}" ToolTip.Tip="Add watch" AutomationProperties.Name="Add watch">
+                    <tc:IconButton Width="24" Height="24" Padding="6" Command="{Binding AddWatchCommand}" IconData="{DynamicResource Icon.Plus}" ToolTip.Tip="Add watch" AutomationProperties.Name="Add watch">
                         <tc:IconButton.Resources><x:Double x:Key="Invoklet.Size.ToolbarIcon">12</x:Double></tc:IconButton.Resources>
                     </tc:IconButton>
-                    <tc:IconButton Width="24" Height="24" Padding="6" Command="{Binding RemoveWatchCommand}" IconData="{StaticResource Icon.Minus}" ToolTip.Tip="Remove watch" AutomationProperties.Name="Remove watch">
+                    <tc:IconButton Width="24" Height="24" Padding="6" Command="{Binding RemoveWatchCommand}" IconData="{DynamicResource Icon.Minus}" ToolTip.Tip="Remove watch" AutomationProperties.Name="Remove watch">
                         <tc:IconButton.Resources><x:Double x:Key="Invoklet.Size.ToolbarIcon">12</x:Double></tc:IconButton.Resources>
                     </tc:IconButton>
                 </StackPanel>

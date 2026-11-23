@@ -66,7 +66,7 @@ public sealed class EditorLanguageProfile
     // (main UI project) — same class of problem as FoldingRegionsProvider above, same fix: the
     // language plugin names its own icon instead of the UI layer knowing about every language by name.
     // A resource key into src/main/Invoklet/Resources/Icons.axaml (StreamGeometry, resolved at bind time
-    // via ResourceKeyToGeometryConverter); null means "no icon for this language yet" — the file tree
+    // via a dynamic theme resource binding); null means "no icon for this language yet" — the file tree
     // falls back to its generic file icon (FileTreeViewNode.ShowGenericFileIcon).
     public string? IconResourceKey { get; init; }
 

@@ -22,9 +22,11 @@ public sealed class LanguageHostRegistry : ILanguageHostRegistry
     public void Register(ILanguageHostFactory factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        // Registering a language again replaces its factory in place.
-        if (!_factories.ContainsKey(factory.Language)) _order.Add(factory.Language);
-        _factories[factory.Language] = factory;
+        // A language is registered once: a plugin can't replace a built-in language or another plugin's. Unregister first to
+        // replace one on purpose.
+        if (!_factories.TryAdd(factory.Language, factory))
+            throw new InvalidOperationException($"A language '{factory.Language}' is already registered.");
+        _order.Add(factory.Language);
     }
 
     public void Unregister(string language)
