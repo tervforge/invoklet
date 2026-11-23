@@ -67,8 +67,7 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
     }
 
     /// <summary>
-    /// Downloads the newest version of a feed package that works with this Invoklet and installs it through the same review and
-    /// approval as a package file.
+    /// Downloads compatible packages and asks for approval of every new dependency before installing any of them.
     /// </summary>
     internal async Task InstallFromFeedAsync(PluginFeedRow row, Func<PluginManifest, string, Task<bool>> confirm,
         CancellationToken cancellationToken = default)
@@ -76,38 +75,93 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
         if (!CanBrowse || IsFeedBusy || !row.CanInstall) return;
         SetFeed(busy: true, $"Finding a version of {row.Name} for this Invoklet…");
         string? staging = null;
+        var prepared = new List<PreparedPluginPackage>();
+        string? status = null;
         try
         {
-            var skipped = new List<string>();
-            if (await createFeed!().ChooseAsync(row.Package.Id, skipped, cancellationToken) is not { } choice)
-            {
-                SetFeed(busy: false, $"No version of {row.Name} works with this Invoklet. Newest: {skipped[0]}");
-                return;
-            }
+            PluginPackageInstaller? installer = null;
+            var feed = createFeed!();
+            var inventory = readInventory();
+            var pending = session.GetPendingRestart(inventory);
+
             staging = Directory.CreateTempSubdirectory("invoklet-plugin-").FullName;
-            var path = Path.Combine(staging, $"{choice.Id}.{choice.Version}.nupkg");
-            await File.WriteAllBytesAsync(path, choice.Package, cancellationToken);
-            SetFeed(busy: false, null);
-            await InstallAsync(path, manifest => confirm(manifest, path));
-            this.RaiseAndSetIfChanged(ref _feedPackages, _feedPackages.Select(item => FeedRow(item.Package)).ToArray(), nameof(FeedPackages));
+            var visiting = new HashSet<string>(StringComparer.Ordinal);
+            var ready = new HashSet<string>(StringComparer.Ordinal);
+            var installOrder = new List<(PreparedPluginPackage Package, string Path)>();
+            status = await PrepareAsync(row.Package.Id, row.Name);
+            if (status is not null) return;
+
+            foreach (var (package, path) in installOrder)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!await confirm(package.Manifest, path)) return;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Run(() =>
+            {
+                foreach (var (package, _) in installOrder) installer!.Install(package);
+            });
+            PackageChanged(null);
+
+            async Task<string?> PrepareAsync(string id, string name)
+            {
+                if (ready.Contains(id)) return null;
+                if (!visiting.Add(id)) return $"Plugin '{id}' has a circular dependency.";
+                if (prepared.Count >= 16) return "This installation requires more than 16 plugin packages.";
+                var skipped = new List<string>();
+                if (await feed.ChooseAsync(id, skipped, cancellationToken) is not { } choice)
+                    return $"No version of {name} works with this Invoklet. Newest: {skipped[0]}";
+
+                var path = Path.Combine(staging, $"{choice.Id}.{choice.Version}.nupkg");
+                await File.WriteAllBytesAsync(path, choice.Package, cancellationToken);
+                installer ??= createInstaller!();
+                var package = await Task.Run(() => installer.PrepareArchive(path));
+                prepared.Add(package);
+                foreach (var dependency in package.Manifest.DependsOn)
+                {
+                    if (DependencyAvailable(inventory, pending, dependency)) continue;
+                    if (inventory.Entries.Any(entry => entry.Id == dependency) || session.Rejected.Any(plugin => plugin.Id == dependency))
+                        return $"Enable or repair required plugin '{dependency}' in Preferences → Plugins first.";
+                    if (await PrepareAsync(dependency, dependency) is { } error) return error;
+                }
+                installOrder.Add((package, path));
+                visiting.Remove(id);
+                ready.Add(id);
+                return null;
+            }
         }
         catch (PluginFeedException ex)
         {
-            SetFeed(busy: false, ex.Message);
+            status = ex.Message;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or ArgumentException)
         {
-            SetFeed(busy: false, "The downloaded plugin package could not be saved for review.");
+            status = PackageError;
+            PackageChanged(status);
         }
         finally
         {
+            foreach (var package in prepared)
+            {
+                try { package.Dispose(); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
             if (staging is not null)
             {
                 try { Directory.Delete(staging, recursive: true); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
+            SetFeed(busy: false, status);
+            this.RaiseAndSetIfChanged(ref _feedPackages, _feedPackages.Select(item => FeedRow(item.Package)).ToArray(), nameof(FeedPackages));
         }
     }
+
+    private bool DependencyAvailable(PluginInventory inventory, IReadOnlyList<string> pending, string id) =>
+        inventory.Entries.FirstOrDefault(entry => entry.Id == id) is { } dependency
+            ? dependency.Enabled && dependency.Approved
+                && (!session.Rejected.Any(plugin => plugin.Id == id) || pending.Contains(id))
+            : session.Find(id) is { Trust: PluginTrust.Bundled or PluginTrust.Development };
 
     private PluginFeedRow FeedRow(PluginFeedPackage package)
     {
@@ -136,6 +190,16 @@ public sealed class PluginsPageViewModel(PluginSession session, Func<PluginInven
         {
             var installer = createInstaller();
             using var package = await Task.Run(() => installer.PrepareArchive(path));
+            var inventory = readInventory();
+            var pending = session.GetPendingRestart(inventory);
+            var unavailableDependencies = package.Manifest.DependsOn.Where(id => !DependencyAvailable(inventory, pending, id)).ToArray();
+            if (unavailableDependencies.Length > 0)
+            {
+                var message = $"Install or enable these required plugins in Preferences → Plugins first: {string.Join(", ", unavailableDependencies)}.";
+                PackageChanged(message);
+                SetFeed(busy: false, message);
+                return;
+            }
             if (!await confirm(package.Manifest)) return;
             await Task.Run(() => installer.Install(package));
             PackageChanged(null);

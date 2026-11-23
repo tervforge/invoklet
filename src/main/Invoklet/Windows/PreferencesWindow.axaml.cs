@@ -65,7 +65,8 @@ public partial class PreferencesWindow : Window
     {
         if (DataContext is PreferencesWindowViewModel model && sender is Button { DataContext: PluginFeedRow row })
             await model.PluginsPage.InstallFromFeedAsync(row,
-                (manifest, path) => PluginPackageConfirmationDialog.ForInstall(manifest, path).ShowDialog<bool>(this));
+                (manifest, path) => PluginPackageConfirmationDialog.ForInstall(manifest, path,
+                    manifest.Id == row.Package.Id ? null : row.Name).ShowDialog<bool>(this));
     }
 
     private async void RemovePlugin_Click(object? sender, RoutedEventArgs e)

@@ -1,5 +1,13 @@
+using System.Collections.Concurrent;
 using Avalonia.Headless.XUnit;
 using Invoklet.BuiltIns;
+using Invoklet.Contracts.Connections;
+using Invoklet.Contracts.Models;
+using Invoklet.Format.MdRun;
+using Invoklet.Languages.CSharp;
+using Invoklet.Languages.CSharp.IntelliSense;
+using Invoklet.Languages.DotnetCommon;
+using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.Plugins;
 using Invoklet.Plugins.Hosting;
 using Invoklet.Services;
@@ -10,9 +18,9 @@ using Xunit;
 namespace Invoklet.IntegrationTests;
 
 /// <summary>
-/// The whole Plugins page flow with real packages over HTTP: browse the feed, install a theme, restart, disable, enable, remove and
-/// restart again. The packages are the ones the plugins repository packs: set INVOKLET_PLUGIN_FEED to a feed that serves them (such as
-/// the static feed its build/static_feed.py writes), or INVOKLET_PLUGIN_PACKAGES to a folder that holds them (searched recursively).
+/// Exercises the Plugins page with real packages over HTTP. Set INVOKLET_PLUGIN_FEED to a feed that serves them.
+/// For the theme scenario, INVOKLET_PLUGIN_PACKAGES can point to a local package folder instead.
+/// The SQLite scenario uses sqlite3 to create the fixture and the .NET SDK to run a script.
 /// </summary>
 [Trait("Category", "Integration")]
 public sealed class PluginFeedScenarioTests : IDisposable
@@ -87,8 +95,91 @@ public sealed class PluginFeedScenarioTests : IDisposable
         Assert.DoesNotContain(catalog.Interfaces, palette => palette.Id == "invoklet.theme.vscode-dark");
     }
 
+    [AvaloniaFact]
+    public async Task FeedSqlite_OffersEfCoreAndRunsQueryAfterApprovalAndRestart()
+    {
+        const string sqlite = "invoklet.connector.sqlite";
+        const string efCore = "invoklet.connector.efcore";
+        var feed = Environment.GetEnvironmentVariable(PluginStartup.PluginFeedVariable);
+        Assert.SkipWhen(string.IsNullOrEmpty(feed), "INVOKLET_PLUGIN_FEED is not set.");
+        _feedUrl = feed!;
+        var cancel = TestContext.Current.CancellationToken;
+        var (before, _) = Start();
+        var page = Page(before);
+        await page.BrowseAsync(cancel);
+        Assert.Null(page.FeedStatus);
+        var approvals = new List<string>();
+        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == sqlite), (manifest, _) =>
+        {
+            approvals.Add(manifest.Id);
+            return Task.FromResult(manifest.Id == efCore);
+        }, cancel);
+        Assert.Equal([efCore, sqlite], approvals);
+        Assert.Empty(Store.Read().Entries);
+
+        approvals.Clear();
+        await page.InstallFromFeedAsync(page.FeedPackages.Single(row => row.Package.Id == sqlite), (manifest, _) =>
+        {
+            approvals.Add(manifest.Id);
+            return Task.FromResult(true);
+        }, cancel);
+        Assert.Equal([efCore, sqlite], approvals);
+        Assert.True(page.HasPendingRestart);
+        Assert.False(before.IsLoaded(sqlite));
+
+        var registry = BuiltInCatalog.CreateConnectionDrivers();
+        var (after, _) = Start(registry);
+        Assert.Empty(after.Rejected.SelectMany(plugin => plugin.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        Assert.True(after.IsLoaded(efCore));
+        Assert.True(after.IsLoaded(sqlite));
+        var driver = Assert.IsAssignableFrom<IConnectionDriver>(registry.Find("sqlite"));
+        var file = Path.Combine(_root, "sample.db");
+        using var setup = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("sqlite3")
+        {
+            ArgumentList = { file, "CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL); INSERT INTO products VALUES (1, 'Sample');" },
+            UseShellExecute = false,
+        })!;
+        await setup.WaitForExitAsync(cancel);
+        Assert.Equal(0, setup.ExitCode);
+
+        var connection = new MdRunConnection
+        {
+            Name = "shop",
+            Driver = "sqlite",
+            Params = new(StringComparer.Ordinal) { ["file"] = MdRunValue.Of(file) },
+        };
+        var schemas = new ConnectionSchemas(registry, Path.Combine(_root, "schemas"), DotnetConnectionTools.Default, _ => null);
+        await schemas.EnsureAsync([connection], _root, ConnectionSchemaRefresh.Missing, cancel);
+        var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, driver.Packages.Keys, registry, schemas.Cache, _root);
+        Assert.NotNull(generated);
+        Assert.Empty(generated.Errors);
+
+        var buildDirectory = Directory.CreateDirectory(Path.Combine(_root, "script-build")).FullName;
+        var options = CompiledDotnetLanguageHostOptions.From(new ExecutionRequest
+        {
+            Platform = new DotnetSdkProvider().Get().First(),
+            OutputDirectory = buildDirectory,
+            WorkingDirectory = _root,
+            CurrentQueryPath = Path.Combine(_root, "shop.inv"),
+            Packages = driver.Packages,
+            Connections = generated,
+        }, new CSharpReferenceService().GetExtensionReference());
+        await using var host = new CSharpLanguageHost(options, NullLoggerFactory.Instance);
+        var output = new ConcurrentQueue<string>();
+        var errors = new ConcurrentQueue<string>();
+        const string script = """
+            using Microsoft.EntityFrameworkCore;
+            var result = Connections.Shop.Database.SqlQueryRaw<int>("SELECT 1 AS Value FROM products").Single();
+            Console.WriteLine($"Query result: {result}");
+            """;
+        var run = await host.RunAsync(script, (data, kind) => (kind == OutputKind.StandardError ? errors : output).Enqueue(data), cancel)
+            .WaitAsync(TimeSpan.FromMinutes(2), cancel);
+        Assert.True(run.Succeeded, string.Join('\n', errors.Concat(output)));
+        Assert.Contains("Query result: 1", output);
+    }
+
     // What the next start of Invoklet loads from the user folder and inventory.
-    private (PluginSession Session, ThemeCatalog Catalog) Start()
+    private (PluginSession Session, ThemeCatalog Catalog) Start(ConnectionDriverRegistry? registry = null)
     {
         var catalog = new ThemeCatalog();
         var session = new PluginLoader(new PluginLoaderOptions
@@ -98,7 +189,7 @@ public sealed class PluginFeedScenarioTests : IDisposable
             Inventory = Store.Read(),
             LoadThemePackages = true,
             NativeLibraryCacheDirectory = Path.Combine(_root, "native"),
-        }, [catalog], NullLoggerFactory.Instance).Load();
+        }, [catalog, new ConnectionPluginRoleHandler(registry ?? BuiltInCatalog.CreateConnectionDrivers())], NullLoggerFactory.Instance).Load();
         return (session, catalog);
     }
 

@@ -27,16 +27,18 @@ internal sealed class PluginPackageConfirmationDialog : InvokletDialogWindow
         };
     }
 
-    public static PluginPackageConfirmationDialog ForInstall(PluginManifest manifest, string path)
+    public static PluginPackageConfirmationDialog ForInstall(PluginManifest manifest, string path, string? requiredFor = null)
     {
         var roles = string.Join(", ", manifest.Roles.Keys.Select(PluginRoles.Name).Order(StringComparer.Ordinal));
         var publisher = manifest.Publisher ?? "Not specified";
         var source = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         var message = $"{manifest.DisplayName}\nID: {manifest.Id}\nVersion: {manifest.Version}\nRole: {roles}\nPublisher: {publisher}\nSource: {source}\n\n";
+        if (requiredFor is not null)
+            message += $"Required by {requiredFor}.\n\n";
         if (manifest.RequiresCode)
             message += "This plugin runs with the same permissions as Invoklet. Approve it only if you trust its source.\n\n";
         message += "Approval applies to these package contents. The plugin will be available after restarting Invoklet.";
-        return new PluginPackageConfirmationDialog("Install plugin?", message, "Approve and install",
+        return new PluginPackageConfirmationDialog("Install plugin?", message, requiredFor is null ? "Approve and install" : "Approve dependency",
             manifest.RequiresCode ? DialogKind.Warning : DialogKind.Question);
     }
 }
