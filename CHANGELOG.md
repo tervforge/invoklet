@@ -3,7 +3,10 @@
 Notable changes in each Invoklet release. Downloads are on the
 [releases page](https://github.com/tervforge/invoklet/releases).
 
-## [Unreleased]
+## [0.13.0] — 2026-11-23
+
+Install connectors and themes on demand from **Preferences → Plugins**. If an existing script
+uses a connector, install that connector and its dependencies before running the script.
 
 ### Added
 
@@ -14,8 +17,7 @@ Notable changes in each Invoklet release. Downloads are on the
 - Added theme package installation, removal, enable/disable controls, and content verification status to Preferences → Plugins.
 - Grouped the light and dark palettes of VS Code, Rider, and VS 2022 into one plugin per theme family.
 - Added standard .NET packing for theme NuGet packages and local installation of theme `.nupkg` files.
-- Moved VS Code, Rider, and VS 2022 themes to the separate Invoklet custom themes repository.
-- Load bundled connection drivers through the plugin host in both the desktop app and CLI.
+- VS Code, Rider, and VS 2022 themes are available from the Invoklet plugins repository.
 - Install and remove third-party connector packages in Preferences → Plugins with explicit approval before code runs.
 - Disable dependent plugins when their dependency is disabled in Preferences.
 - Show a "Content changed" state in Preferences → Plugins when installed plugin files no longer match their approval, and block removal of a plugin that other installed plugins depend on, naming them.
@@ -27,7 +29,6 @@ Notable changes in each Invoklet release. Downloads are on the
 
 ### Fixed
 
-- Publish connector plugins for the release runtime and exclude unused EF Core design tools.
 - Show when a saved interface theme is unavailable while keeping it selected in settings.
 - Loaded plugin dependencies when the plugin folder is reached through a symbolic link, such as `/var` on macOS or `/home` on some Linux systems.
 
@@ -1361,3 +1362,4 @@ better choice. RunPad began as DotPad two days after the last commit to the fork
 [0.12.0]: https://github.com/tervforge/invoklet/releases/tag/v0.12.0
 [0.12.1]: https://github.com/tervforge/invoklet/releases/tag/v0.12.1
 [0.12.2]: https://github.com/tervforge/invoklet/releases/tag/v0.12.2
+[0.13.0]: https://github.com/tervforge/invoklet/releases/tag/v0.13.0
