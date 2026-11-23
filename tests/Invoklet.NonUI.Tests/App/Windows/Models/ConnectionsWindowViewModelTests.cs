@@ -1,11 +1,11 @@
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Windows.Input;
-using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
 using Invoklet.Services.Connections;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Windows.Models;
 using Moq;
 using Xunit;

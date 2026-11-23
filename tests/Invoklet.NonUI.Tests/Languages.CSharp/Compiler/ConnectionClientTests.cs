@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text;
-using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Contracts.IntelliSense;
 using Invoklet.Contracts.Models;
@@ -11,6 +10,7 @@ using Invoklet.Languages.DotnetCommon;
 using Invoklet.Languages.DotnetCommon.Sdk;
 using Invoklet.NonUI.Tests.Infrastructure;
 using Invoklet.Secrets;
+using Invoklet.Tests.Fixtures.Connections;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

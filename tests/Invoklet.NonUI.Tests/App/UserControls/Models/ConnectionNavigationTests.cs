@@ -1,9 +1,9 @@
-using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.Contracts.Connections;
 using Invoklet.Format.MdRun;
 using Invoklet.Secrets;
 using Invoklet.Services.Connections;
 using Invoklet.Services.Examples;
+using Invoklet.Tests.Fixtures.Connections;
 using Invoklet.UserControls.Models;
 using Invoklet.Windows.Models;
 using Moq;

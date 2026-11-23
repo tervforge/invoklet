@@ -89,7 +89,8 @@ public sealed class SampleConnectorLoadingTests
             Assert.IsAssignableFrom<ICSharpClientSource>(registry.Find("sample-http"));
             var connection = new MdRunConnection
             {
-                Name = "Sample", Driver = "sample-http",
+                Name = "Sample",
+                Driver = "sample-http",
                 Params = new() { ["baseAddress"] = MdRunValue.Of("https://example.test/") },
             };
             var generated = GeneratedConnections.For([connection], MdRunLanguage.CSharp, [], registry)!;
