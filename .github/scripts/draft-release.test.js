@@ -551,3 +551,28 @@ test('API failures propagate instead of being swallowed', async () =>
             new RegExp(`${method} exploded`));
     }
 });
+
+test('previewVersion previews the unreleased <Version>, or the next patch once it is released', async () =>
+{
+    const context = makeContext({ runNumber: 57 });
+    assert.equal(await helper.previewVersion({ github: makeGithub().github, context, version: '0.12.3' }), '0.12.3-preview.57');
+    const released = makeGithub({ tags: ['v0.12.2'] });
+    assert.equal(await helper.previewVersion({ github: released.github, context, version: '0.12.2' }), '0.12.3-preview.57');
+    await assert.rejects(helper.previewVersion({ github: makeGithub().github, context, version: '0.12.2-rc.1' }), /expected x\.y\.z/);
+});
+
+test('prepareDraft marks a preview draft as a pre-release, and a regular one not', async () =>
+{
+    for (const prerelease of [true, false])
+    {
+        const mock = makeGithub();
+        await helper.prepareDraft({ github: mock.github, context: makeContext(), core: makeCore(), version: VERSION, prerelease });
+        assert.equal(mock.state.calls.find((entry) => entry.name === 'createRelease').params.prerelease, prerelease);
+    }
+});
+
+test('readReleaseNotes reads the [Unreleased] section preview runs use', () =>
+{
+    const notes = helper.readReleaseNotes('# Changelog\n\n## [Unreleased]\n\n- Next.\n\n## [0.1.0]\n\n- Old.\n', 'Unreleased');
+    assert.equal(notes, '- Next.');
+});

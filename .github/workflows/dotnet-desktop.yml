@@ -10,17 +10,19 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  # A preview release (x.y.z-preview.N, marked pre-release) of dev, started by hand; refused on any other branch.
+  workflow_dispatch:
 
 # Jobs that touch the draft release ask for contents: write themselves.
 permissions:
   contents: read
 
-# Pushes to main share one group so two release runs never write drafts at the same time (queued,
+# Pushes to main (and preview runs on dev) share one group per branch so two release runs never write drafts at the same time (queued,
 # not cancelled — a cancelled run would leave its draft half-filled). GitHub keeps at most one
 # pending run per group, so a newer queued push replaces an older queued one. PR runs each get their
 # own group (the run id) and stay fully parallel, as before.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && format('release-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  group: ${{ github.workflow }}-${{ github.event_name != 'pull_request' && format('release-{0}', github.ref) || format('run-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -28,6 +30,12 @@ jobs:
     name: Code Format
     runs-on: ubuntu-latest
     steps:
+      - name: 🛑 Allow preview runs on dev only
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/dev'
+        run: |
+          echo "::error::Preview releases are built from dev only; this run is on ${GITHUB_REF}."
+          exit 1
+
       - name: 🚚 Checkout
         uses: actions/checkout@v5
 
@@ -192,25 +200,43 @@ jobs:
       # Invoklet.csproj's <Version>, tied to this commit and run, and reused if this run is retried;
       # the `release` job publishes it only after every platform uploaded its archives. A version
       # that is already published fails here — bump <Version> before merging to cut a new release.
-      # The version's section of CHANGELOG.md becomes the release notes.
+      # The version's section of CHANGELOG.md becomes the release notes. A preview run instead gets a
+      # computed x.y.z-preview.N, is marked pre-release and takes its notes from [Unreleased].
       - name: 📝 Prepare draft release
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         id: draft
         uses: actions/github-script@v7
         with:
           script: |
             const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/draft-release.js`);
-            const version = helper.readVersionFromFile('src/main/Invoklet/Invoklet.csproj');
-            const notes = helper.readReleaseNotesFromFile('CHANGELOG.md', version);
-            const release = await helper.prepareDraft({ github, context, core, version, notes });
+            const fs = require('fs');
+            const csproj = 'src/main/Invoklet/Invoklet.csproj';
+            const prerelease = context.eventName === 'workflow_dispatch';
+            let version = helper.readVersionFromFile(csproj);
+            let notes;
+            if (prerelease)
+            {
+              version = await helper.previewVersion({ github, context, version });
+              // The preview builds with its computed version in place of the one in the project file.
+              fs.writeFileSync(csproj, fs.readFileSync(csproj, 'utf8').replace(/<Version>[^<]*<\/Version>/, `<Version>${version}</Version>`));
+              try { notes = helper.readReleaseNotesFromFile('CHANGELOG.md', 'Unreleased'); }
+              catch { notes = `Preview build of dev at ${context.sha}.`; }
+            }
+            else
+            {
+              notes = helper.readReleaseNotesFromFile('CHANGELOG.md', version);
+            }
+            const release = await helper.prepareDraft({ github, context, core, version, notes, prerelease });
             core.setOutput('release-id', String(release.id));
             core.setOutput('version', version);
+            // Windows Installer accepts only a numeric version; a preview installs as its x.y.z.
+            core.setOutput('msi-version', version.split('-')[0]);
 
       # Release assets — only built on an actual merge to main, not on every PR. Ships both a portable
       # zip (unpack and run) and an MSI (Start Menu shortcut, uninstaller, upgrade-in-place on the
       # next version via the fixed UpgradeCode in installer/windows/Package.wxs).
       - name: 📦 Publish (win-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64
@@ -218,7 +244,7 @@ jobs:
           dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify publish/win-x64
 
       - name: 🗜️ Archive (win-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         shell: pwsh
         run: Compress-Archive -Path publish/win-x64/* -DestinationPath Invoklet-win-x64.zip
 
@@ -226,13 +252,13 @@ jobs:
       # (harmless for a $0-revenue project, the fee itself only applies above $10k/year, but v5 avoids
       # needing any EULA-acceptance mechanism in CI at all — see installer/windows/Package.wxs).
       - name: 📦 Install WiX Toolset
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           dotnet tool install --global wix --version 5.0.2
           wix extension add WixToolset.UI.wixext/5.0.2
 
       - name: 🧳 Build MSI (win-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         env:
           # Belt-and-suspenders: WiX ships targeting an older net TFM than the SDK version this repo
           # pins — LatestMajor makes sure it still resolves against whatever .NET setup-dotnet just
@@ -240,11 +266,11 @@ jobs:
           DOTNET_ROLL_FORWARD: LatestMajor
         run: >
           wix build installer/windows/Package.wxs -ext WixToolset.UI.wixext
-          -d InvokletVersion=${{ steps.draft.outputs.version }} -d PublishDir=publish/win-x64
+          -d InvokletVersion=${{ steps.draft.outputs.msi-version }} -d PublishDir=publish/win-x64
           -arch x64 -out Invoklet-win-x64.msi
 
       - name: ⬆️ Upload to draft release (win-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ steps.draft.outputs.release-id }}
@@ -307,21 +333,29 @@ jobs:
       # tar.gz (unpack and run), an AppImage (single executable, no unpack/install step, shows up with
       # a real icon in file managers/app launchers that support it), and a real .deb (apt/dpkg-tracked
       # install, Start Menu-equivalent .desktop entry).
+      # A preview builds with its computed version in place of the one in the project file.
+      - name: 🏷️ Set preview version
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+        run: perl -pi -e "s|<Version>[^<]*</Version>|<Version>$RELEASE_VERSION</Version>|" src/main/Invoklet/Invoklet.csproj
+
       - name: 📦 Publish (linux-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r linux-x64 --self-contained true -o publish/linux-x64
           dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify publish/linux-x64
 
       - name: 🗜️ Archive (linux-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: tar -czf Invoklet-linux-x64.tar.gz -C publish/linux-x64 .
 
       # Fixed releases with their checksums, so a release can be rebuilt with the tool it was built with: the
       # "continuous" build moves, and a change in it (stricter checks, 2026-10-29) failed a release build. The
       # tool downloads the latest AppImage runtime on its own, so the runtime is pinned too and handed to it.
       - name: ⬇️ Download appimagetool
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         env:
           APPIMAGETOOL_VERSION: 1.9.1
           APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
@@ -335,7 +369,7 @@ jobs:
           echo "${APPIMAGE_RUNTIME_SHA256}  /tmp/appimage-runtime" | sha256sum -c -
 
       - name: 🧳 Bundle AppImage (linux-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         env:
           APPIMAGETOOL: /tmp/appimagetool
           APPIMAGE_RUNTIME: /tmp/appimage-runtime
@@ -343,13 +377,13 @@ jobs:
 
       # Version comes from build-windows (the one the draft is tagged with), not re-read here.
       - name: 🧳 Bundle .deb (linux-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         env:
           RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
         run: bash scripts/make-linux-deb.sh publish/linux-x64 "$RELEASE_VERSION" dist
 
       - name: ⬆️ Upload to draft release (linux-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ needs.build-windows.outputs.release-id }}
@@ -453,38 +487,46 @@ jobs:
       # ad-hoc signed and verified by make-macos-app-bundle.sh
       # but has no Developer ID signature or notarization — the
       # ReadMe/README point to Gatekeeper's "Open Anyway" instead of any quarantine workaround.
+      # A preview builds with its computed version in place of the one in the project file.
+      - name: 🏷️ Set preview version
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.version }}
+        run: perl -pi -e "s|<Version>[^<]*</Version>|<Version>$RELEASE_VERSION</Version>|" src/main/Invoklet/Invoklet.csproj
+
       - name: 📦 Publish (osx-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r osx-x64 --self-contained true -o publish/osx-x64
 
       - name: 📦 Publish (osx-arm64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: dotnet publish src/main/Invoklet/Invoklet.csproj -c Release -r osx-arm64 --self-contained true -o publish/osx-arm64
 
       - name: 🧳 Bundle .app (osx-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: bash scripts/make-macos-app-bundle.sh publish/osx-x64 Invoklet-osx-x64
 
       - name: 🧳 Bundle .app (osx-arm64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: bash scripts/make-macos-app-bundle.sh publish/osx-arm64 Invoklet-osx-arm64
 
       - name: Verify bundled plugin catalogues in macOS applications
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify Invoklet-osx-x64/Invoklet.app/Contents/Resources
           dotnet build/Invoklet.PluginPackager/bin/Release/net10.0/Invoklet.PluginPackager.dll verify Invoklet-osx-arm64/Invoklet.app/Contents/Resources
 
       - name: 💿 Bundle DMG (osx-x64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: bash scripts/make-macos-dmg.sh Invoklet-osx-x64/Invoklet.app Invoklet-osx-x64.dmg
 
       - name: 💿 Bundle DMG (osx-arm64)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: bash scripts/make-macos-dmg.sh Invoklet-osx-arm64/Invoklet.app Invoklet-osx-arm64.dmg
 
       - name: ⬆️ Upload to draft release (macOS)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ needs.build-windows.outputs.release-id }}
@@ -569,7 +611,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [build-windows, build-linux, build-macos]
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write

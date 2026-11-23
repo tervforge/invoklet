@@ -150,6 +150,21 @@ async function tagExists(github, context, tag)
     }
 }
 
+// A preview of the next release: <Version> itself while it is unreleased, otherwise its next patch,
+// numbered by the workflow run so a retry of the same run reuses its draft.
+async function previewVersion({ github, context, version })
+{
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+    if (!match)
+    {
+        throw new Error(`Cannot derive a preview from <Version> '${version}'; expected x.y.z.`);
+    }
+    const base = await tagExists(github, context, releaseTag(version))
+        ? `${match[1]}.${match[2]}.${Number(match[3]) + 1}`
+        : version;
+    return `${base}-preview.${context.runNumber}`;
+}
+
 function versionPublishedError(version)
 {
     return new Error(
@@ -212,7 +227,8 @@ async function getOwnedDraft(github, context, releaseId, version)
 
 // Creates the draft for this run, with `notes` (Markdown) as its description, or reuses it when the
 // same run is retried.
-async function prepareDraft({ github, context, core, version, notes })
+// `prerelease` marks a preview: GitHub then keeps it out of /releases/latest, which the update check reads.
+async function prepareDraft({ github, context, core, version, notes, prerelease = false })
 {
     const { owner, repo } = context.repo;
     const tag = releaseTag(version);
@@ -248,6 +264,7 @@ async function prepareDraft({ github, context, core, version, notes })
         name: `Invoklet ${tag}`,
         body: notes ? `${absolutizeLinks(notes, context)}\n\n${ownershipMarker(context)}` : ownershipMarker(context),
         draft: true,
+        prerelease,
     });
     core.info(`Created draft release ${created.id} for ${tag}.`);
     return created;
@@ -372,6 +389,7 @@ module.exports = {
     ownershipMarker,
     publishDraft,
     prepareDraft,
+    previewVersion,
     readReleaseNotes,
     readReleaseNotesFromFile,
     readVersion,

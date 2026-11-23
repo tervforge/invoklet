@@ -31,6 +31,9 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
+# Bundle versions are numeric only, so a preview x.y.z-preview.N shows as x.y.z.
+BUNDLE_VERSION=${VERSION%%-*}
+
 if [[ -d "$PUBLISH_DIR/plugins" ]]; then
     dotnet "$PLUGIN_PACKAGER" verify "$PUBLISH_DIR"
 fi
@@ -53,9 +56,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>
     <string>com.coddwrench.invoklet</string>
     <key>CFBundleVersion</key>
-    <string>$VERSION</string>
+    <string>$BUNDLE_VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>$VERSION</string>
+    <string>$BUNDLE_VERSION</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

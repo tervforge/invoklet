@@ -35,7 +35,8 @@ cp src/main/Invoklet/Assets/invoklet.png "$STAGING/usr/share/icons/hicolor/256x2
 } > "$STAGING/usr/share/doc/invoklet/copyright"
 
 INSTALLED_SIZE_KB=$(du -sk "$STAGING/usr" | cut -f1)
-sed -e "s/__VERSION__/$VERSION/" src/main/Invoklet/Assets/invoklet.control > "$STAGING/DEBIAN/control"
+# A preview x.y.z-preview.N becomes x.y.z~preview.N, which dpkg orders before the x.y.z release.
+sed -e "s/__VERSION__/$VERSION/" -e '/^Version:/s/-/~/' src/main/Invoklet/Assets/invoklet.control > "$STAGING/DEBIAN/control"
 echo "Installed-Size: $INSTALLED_SIZE_KB" >> "$STAGING/DEBIAN/control"
 
 # The real .deb binary format: an `ar` archive of exactly debian-binary, control.tar.gz, data.tar.gz,
