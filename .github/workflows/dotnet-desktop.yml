@@ -60,8 +60,7 @@ jobs:
         run: dotnet format --verify-no-changes --verbosity diagnostic
 
       # The tests whose outcome cannot depend on the OS (marked Platform=Independent, see UNIT-TESTING-RULES.md) run here, in the first and
-      # cheapest job, before any Windows or macOS minute is paid for. Those two lanes leave them out; build-linux runs the whole suite, so its
-      # coverage report still has them.
+      # cheapest job, before any Windows or macOS minute is paid for. Those two lanes leave them out; build-linux runs the whole suite.
       - name: 📦 Cache NuGet packages
         uses: actions/cache@v5
         with:
@@ -314,20 +313,7 @@ jobs:
         run: dotnet build --no-restore --configuration Release -warnaserror
 
       - name: 🧪 Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
-
-      - name: 📊 Upload coverage
-        uses: actions/upload-artifact@v4
-        continue-on-error: true # a storage-quota/upload hiccup here is unrelated to code correctness — must not fail an otherwise-green PR
-        with:
-          name: coverage
-          path: ./coverage/**/coverage.cobertura.xml
-          if-no-files-found: warn
-          # Uploaded on every PR/push, not just merges — the default 90-day retention has no real
-          # value here (nothing re-reads an old run's coverage after a handful of days) and adds up
-          # fast across a busy PR history. Release archives no longer go through Actions artifacts at
-          # all (they were the bigger contributor to the storage-quota failure this was trimmed for).
-          retention-days: 7
+        run: dotnet test --no-build --configuration Release --verbosity normal
 
       # Release assets — only built on an actual merge to main, not on every PR. Ships a portable
       # tar.gz (unpack and run), an AppImage (single executable, no unpack/install step, shows up with
